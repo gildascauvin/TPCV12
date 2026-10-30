@@ -1880,8 +1880,17 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 // (séries/répétitions/%intensité) uniquement pour "volume"/"intensite" — c'est là que la
 // surcharge progressive a un sens réel ; technique/récupération/test restent du texte statique.
 function buildNotesFromBank(bank: string[], type: SessionType, cycleIndex: number, shape: Shape, phase: number): string {
-  const offset = (cycleIndex * 2) % bank.length;
-  const rotated = [...bank.slice(offset), ...bank.slice(0, offset)];
+  /* La rotation ne touche que le corps de la séance (2026-10-29) : l'échauffement reste en tête, le
+     finisher ou le retour au calme en fin. Avant, à partir du 2e bloc, le « WOD finisher » passait
+     avant le back squat (CrossFit), « Gammes + activation » au milieu d'un metcon, le retour au calme
+     avant le sparring (combat). */
+  const first = (e: string) => e.split("\n")[0];
+  const isWarmup = (e: string) => /^(échauffement|gammes|activation|mise en route|warm.?up)/i.test(first(e));
+  const isEnd = (e: string) => /finisher|retour au calme|cool.?down/i.test(first(e));
+  const head = bank.filter(isWarmup), tail = bank.filter(e => !isWarmup(e) && isEnd(e));
+  const main = bank.filter(e => !isWarmup(e) && !isEnd(e));
+  const offset = main.length ? (cycleIndex * 2) % main.length : 0;
+  const rotated = [...head, ...main.slice(offset), ...main.slice(0, offset), ...tail];
   if (type !== "volume" && type !== "intensite") return rotated.join("\n");
   return rotated.map(entry => entry.split("\n").map(line => formatBankLine(line, shape, phase)).join("\n")).join("\n");
 }

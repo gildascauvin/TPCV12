@@ -172,11 +172,15 @@ interface Props {
   /** Point forme saisi par le coach pour un sportif inscrit (2026-10-26) : questions à la 3e personne,
       historique lu via /api/coach/bilan (RLS), conseil figé pour ce sportif, pas d'écran de résultat
       (la carte Coach Control se met à jour). L'enregistrement reste à `onSave` (/api/coach/checkin). */
-  subject?: { athleteId: string; userId: string; name: string };
+  subject?: { athleteId: string; userId: string; name: string; /** Libellé gardé entier (« ton sportif »), pas réduit au prénom. */ label?: boolean; /** En-tête à la place de « Point forme de X ». */ heading?: string };
+  /** Check-in imaginé (onboarding coach, 2026-10-29) : aucun appel serveur, ni historique ni reco du matin. */
+  offline?: boolean;
 }
 
-export default function WellnessModal({ date, onSave, onClose, wizardHero, cancelLabel = "Annuler", onBack, wellnessHistory, askPlan = false, skipResult = false, embedded = false, scoreSlot, scoreSize = 200, footerOffset = 0, subject }: Props) {
-  const who = subject ? subject.name.split(" ")[0] : null;
+export default function WellnessModal({ date, onSave, onClose, wizardHero, cancelLabel = "Annuler", onBack, wellnessHistory, askPlan = false, skipResult = false, embedded = false, scoreSlot, scoreSize = 200, footerOffset = 0, subject, offline = false }: Props) {
+  const who = subject ? (subject.label ? subject.name : subject.name.split(" ")[0]) : null;
+  // En début de phrase : « Ton sportif a envie… ».
+  const Who = who ? who.charAt(0).toUpperCase() + who.slice(1) : null;
   const { isMd } = useBreakpoint();
   const heroOnLeft = !!wizardHero && isMd;
   const [step, setStep] = useState(0);
@@ -203,6 +207,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     (async () => {
       const since = new Date(`${date}T12:00:00`); since.setDate(since.getDate() - CONSEILS_HISTORY_DAYS);
       const sinceS = new Date(`${date}T12:00:00`); sinceS.setDate(sinceS.getDate() - 120);
+      if (offline) return;
       if (subject) {
         const r = await fetch(`/api/coach/bilan?athleteId=${encodeURIComponent(subject.athleteId)}&today=${date}`);
         if (!r.ok) return;
@@ -361,7 +366,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     await onSave({ sleep, stress, recovery, motivation: motivation_, behaviors, bedtime, base_score, score, plannedIntensity: askPlan ? plannedIntensity : null });
     /* Reco du matin figée côté serveur (2026-10-23) ; le coach lié est prévenu depuis elle si elle dit
        d'alléger. Remplace /api/push/event, qui recalculait la reco avec le moteur générique. */
-    fetch("/api/sessions/proposal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subject ? { date, athleteUserId: subject.userId } : { date }) })
+    if (!offline) fetch("/api/sessions/proposal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subject ? { date, athleteUserId: subject.userId } : { date }) })
       .then(r => { if (!r.ok) console.error("[reco du matin]", r.status); })
       .catch(e => console.error("[reco du matin]", e));
     setSaving(false);
@@ -433,7 +438,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         {((step === 0 && onBack) || who) && (
           <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 14 }}>
             {step === 0 && onBack && <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 18, padding: "2px 4px", borderRadius: 8, flexShrink: 0, marginLeft: -4 }}>←</button>}
-            {who && <div style={{ fontSize: 13, fontWeight: 700, color: "#172018" }}>Point forme de {who}</div>}
+            {who && <div style={{ fontSize: 13, fontWeight: 700, color: "#172018" }}>{subject?.heading ?? `Point forme de ${who}`}</div>}
           </div>
         )}
 
@@ -567,7 +572,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         )}
 
         {/* Step 4: Motivation — dernière question : le tap enregistre. */}
-        {q === 4 && renderScale("motivation", who ? `⚡ ${who} a envie de s'entraîner ?` : "⚡ As-tu envie de t'entraîner ?", "Motivation intrinsèque du moment", motivation, setMotivation, (n) => autoAdvance({ motivation: n }))}
+        {q === 4 && renderScale("motivation", who ? `⚡ ${Who} a envie de s'entraîner ?` : "⚡ As-tu envie de t'entraîner ?", "Motivation intrinsèque du moment", motivation, setMotivation, (n) => autoAdvance({ motivation: n }))}
 
     </>
   );

@@ -31,18 +31,18 @@ type Props = {
 };
 type AnySlide = BilanSlide | GroupSlide;
 
-const GLOW: Record<AnySlide["kind"], string> = {
+export const GLOW: Record<AnySlide["kind"], string> = {
   g_decroche: "rgba(212,64,0,0.45)", g_seances: "rgba(242,138,0,0.40)", g_appris: "rgba(168,85,247,0.38)", g_conseils: "rgba(47,158,68,0.38)", g_charge: "rgba(56,189,248,0.36)",
   regularite: "rgba(212,64,0,0.45)", charge: "rgba(47,158,68,0.40)", ressenti: "rgba(56,189,248,0.38)",
   predit: "rgba(212,64,0,0.40)", biais: "rgba(242,138,0,0.40)", fatigue: "rgba(168,85,247,0.38)",
   leviers: "rgba(47,158,68,0.38)", tendance: "rgba(56,189,248,0.36)", tests: "rgba(212,64,0,0.45)", conseils: "rgba(47,158,68,0.38)", suivre: "rgba(168,85,247,0.36)", partage: "rgba(56,189,248,0.20)",
 };
-const KICKER: Record<AnySlide["kind"], string> = {
+export const KICKER: Record<AnySlide["kind"], string> = {
   g_decroche: "QUI DÉCROCHE", g_seances: "TES SÉANCES", g_appris: "APPRIS SUR CHACUN", g_conseils: "CONSEILS VÉRIFIÉS", g_charge: "CHARGE",
   regularite: "RÉGULARITÉ", charge: "CHARGE", ressenti: "RESSENTI VS MONTRE", predit: "CE QUI TE PRÉDIT",
   biais: "TES BIAIS", fatigue: "CE QUI TE FATIGUE", leviers: "TES LEVIERS", tendance: "TENDANCE", tests: "TESTS", conseils: "CONSEILS VÉRIFIÉS", suivre: "SUIVRE OU PAS", partage: "EN UNE CARTE",
 };
-const KICKER_COACH: Partial<Record<BilanSlide["kind"], string>> = { predit: "CE QUI LE PRÉDIT", biais: "SES BIAIS", fatigue: "CE QUI LE FATIGUE", leviers: "SES LEVIERS" };
+export const KICKER_COACH: Partial<Record<BilanSlide["kind"], string>> = { predit: "CE QUI LE PRÉDIT", biais: "SES BIAIS", fatigue: "CE QUI LE FATIGUE", leviers: "SES LEVIERS" };
 const LEARNED = new Set<BilanSlide["kind"]>(["conseils", "ressenti", "predit", "biais", "fatigue", "suivre", "leviers"]);
 
 const card: React.CSSProperties = { background: "rgba(255,255,255,0.06)", borderRadius: 18, padding: 16, display: "flex", flexDirection: "column", gap: 10 };
@@ -88,7 +88,7 @@ type Recal = { state: "idle" | "saving" | "done" | "kept" | "error"; apply: (dir
 /* Bilan vu par le coach (2026-10-24) : `n` = prénom du sportif, tout passe à la 3e personne. Registre
    impersonnel des deux côtés (2026-10-24 soir) : ni « je » ni « l'app ». Le recalage reste au
    sportif : le coach voit l'état. */
-function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bilan: Bilan; onShare: () => void; shared: boolean; recal: Recal; n?: string }) {
+export function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bilan: Bilan; onShare: () => void; shared: boolean; recal: Recal; n?: string }) {
   const T = <A, B>(you: A, them: B): A | B => (n ? them : you);
   switch (s.kind) {
     case "conseils": {

@@ -147,7 +147,9 @@ export function decisionRingCenterY(size = 188) {
    largeur disponible (210 à 300 px, et ≤ 34 % de la hauteur d'écran), trait affiné, le titre de la décision AU CENTRE à la place de
    la flèche + verbe (déjà dits par le CTA, le titre ou la séance), halo de la couleur de sévérité.
    La carte décision disparaît : conseil, CTA et Phase sont posés sous l'anneau par l'appelant. */
-type BigRingProps = { fluid?: boolean; centerTitle?: string; titleLocked?: boolean; glow?: string };
+/* introFrom (2026-10-29) : l'animation d'arrivée part de cette valeur au lieu du bas de l'échelle —
+   l'anneau remonté après une décision (ou son annulation) glisse d'où il était vers sa destination. */
+type BigRingProps = { fluid?: boolean; centerTitle?: string; titleLocked?: boolean; glow?: string; introFrom?: number };
 
 export function RestDecisionRing({ size, light, hideHint, ...big }: { size?: number; light?: boolean; hideHint?: boolean } & BigRingProps) {
   return (
@@ -186,7 +188,7 @@ export function DoneDecisionRing({ rpe, planned, size, light, hideZone = false, 
 
 export default function DecisionRing({
   zoneLow, zoneHigh, recoDir, value, onChange, readOnly, plannedMarker, hint: hintOverride, size: sizeProp = 188, light, centerLabel, hideZone = false, hideHint = false, onHint,
-  fluid = false, centerTitle, titleLocked = false, glow,
+  fluid = false, centerTitle, titleLocked = false, glow, introFrom,
 }: BigRingProps & {
   /* Texte sous l'anneau masqué (2026-10-12, Gildas) : il devient le titre de la carte décision
      (Premium, /today + Coach Control), remonté par `onHint`. Le gratuit le garde sous l'anneau. */
@@ -247,7 +249,8 @@ export default function DecisionRing({
     return () => cancelAnimationFrame(raf);
   }, []);
   const introRunning = intro < 1;
-  const drawValue = introRunning ? MIN + (value - MIN) * (1 - Math.pow(1 - intro, 3)) : value;
+  const introStart = introFrom ?? MIN;
+  const drawValue = introRunning ? introStart + (value - introStart) * (1 - Math.pow(1 - intro, 3)) : value;
 
   const r = Math.round(size * 0.36), sw = Math.round(size * (fluid ? 0.055 : 0.085));
   const rOut = r + sw * 0.95, rIn = r - sw * 0.95;

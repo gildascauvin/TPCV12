@@ -25,7 +25,12 @@ import { PAYWALL_AVATARS } from "@/components/paywall/paywallAvatars";
 import Actions from "@/components/onboarding/Actions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, PROGRAM_QUESTION_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
-import { WHEN_OPTIONS, WHEN_OPTIONS_COACH, COUNT_OPTIONS, MirrorBody, mirrorTitle, mirrorTitleCoach, HealthStepBody, WeekStepBody, NotifStepBody, AppPushStepBody, ControlStepBody, StreakTitle, type ObWhen, type ObWhenCoach, type ObCount, type ControlSession, type WeekSession } from "@/components/onboarding/EliteSteps";
+import { COUNT_OPTIONS, HealthStepBody, WeekStepBody, PlannedWeekBody, NotifStepBody, AppPushStepBody, StreakTitle, type ObCount, type WeekSession } from "@/components/onboarding/EliteSteps";
+import { InsightStepBody, insightTitle, payHeadline, payHeadlineCoach, decideOptions, decideLead, decideOptionsCoach, decideLeadCoach, contrastTitle, contrastTitleCoach, pickWords, pickWordsCoach, lowestAnswer, lowWords, sportFamily, type Answers, type Pick, type PickCoach } from "@/components/onboarding/InsightSteps";
+import { SessionTemplateCard } from "@/components/programs/SessionTemplateCard";
+import AnalysisReveal, { type AnalysisStep } from "@/components/onboarding/AnalysisReveal";
+import { computeAutoregSuggestion } from "@/lib/autoregulation";
+import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import { APP_STORE_URL, PLAY_STORE_URL } from "@/lib/storeLinks";
 import { notificationSupport, enableNotifications } from "@/lib/notifications";
 import { withDeviceScore } from "@/lib/deviceWellnessDb";
@@ -42,6 +47,17 @@ type ObCustom =
   | { status: "matched"; sportLabel: string }
   | { status: "generated"; sportLabel: string; exercises: Record<string, string[]>; weaknessOptions: { key: string; label: string }[]; weaknessMeta: Record<string, { extraLine: string; typeHints: string[] }>; sessionLabels?: Record<string, string> }
   | { status: "failed"; text: string };
+
+/* Semaine 1 d'un modèle de programme, datée sur les 7 prochains jours (écran programme du coach, dont
+   les séances ne sont pas encore assignées ; mode test sans compte). */
+function templateWeekRows(tpl: ProgramTemplate): WeekSession[] {
+  const DOW = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return DOW.flatMap((d, k) => ((tpl.weeks[0]?.[d] ?? []) as SessionTemplate[]).map((x, j) => {
+    const day = new Date(); day.setDate(day.getDate() + ((k - (day.getDay() + 6) % 7 + 7) % 7));
+    return { id: `tpl-${k}-${j}`, date: iso(day), name: x.name, notes: x.notes ?? null, target_difficulty: x.target_difficulty };
+  })).sort((a, b) => a.date.localeCompare(b.date));
+}
 
 function localTodayStr(): string {
   const d = new Date();
@@ -374,7 +390,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [obError, setObError] = useState<string | null>(null);
   const savedProgramIdRef = useRef<string | null>(null);
   // Décision prise sur Thomas (démo) à l'écran Coach Control : null = continué sans décider.
-  const obControlPctRef = useRef<number | null>(null);
 
   /* Parcours Elite (2026-10-17, voir src/lib/onboardingPath.ts). */
   const [elite] = useState(readEliteFlag);
@@ -388,7 +403,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [webAndroid, setWebAndroid] = useState(false);
   const pushAvailable = notifMode !== null;
   useEffect(() => {
-    setHealthAvailable(isNativeApp());
+    // ?dbghealth=1 (dev, avec ?dbgstep) : l'écran Santé comme dans l'app iOS.
+    setHealthAvailable(isNativeApp() || new URLSearchParams(window.location.search).get("dbghealth") === "1");
     const n = notificationSupport();
     const ua = navigator.userAgent;
     setWebIphone(/iPhone|iPad|iPod/.test(ua));
@@ -401,17 +417,27 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     else if (android) setNotifMode(n === "web" ? "web" : null);
     else setNotifMode("app");
   }, []);
-  const [obWhen, setObWhen] = useState<ObWhen | null>(null);
-  // Lu par completeProfile(), qui peut tourner en arrière-plan après le clic sur ob_when.
-  const obWhenRef = useRef<ObWhen | null>(null);
-  // Parcours Elite coach (2026-10-19) : même question vécue côté coach, et taille du groupe.
-  const [obWhenCoach, setObWhenCoach] = useState<ObWhenCoach | null>(null);
-  const obWhenCoachRef = useRef<ObWhenCoach | null>(null);
+  /* Argumentaire avant paywall (2026-10-29) : réponses du check-in, puis sa décision (« Tu fais quoi ? »).
+     Côté coach : le check-in imaginé d'un de ses sportifs. La décision est lue par completeProfile()
+     (profiles.frustration), qui peut tourner en arrière-plan. */
+  const [obAnswers, setObAnswers] = useState<Answers | null>(null);
+  const [obPick, setObPick] = useState<Pick | PickCoach | null>(null);
+  const obPickRef = useRef<string | null>(null);
+  const [obAthleteName, setObAthleteName] = useState("");
+  /* Point forme passé : on illustre un matin de nuit courte (« Imaginons… ») plutôt que de prétendre
+     que tout va bien, et les écrans suivants restent ceux de tout le monde. */
+  const [obExample, setObExample] = useState(false);
+  /* Séance de la jauge, figée dès « Tu fais quoi ? » : la même jusqu'au paywall, même si le programme
+     finit d'arriver entre-temps. Remise à zéro à chaque nouveau point forme. */
+  const obRingRef = useRef<SessionTemplate | null>(null);
+  // Écrans « on analyse » (2026-10-29, qualité perçue) : joués une fois, avant le programme et avant le bilan.
+  const [obPlanRevealed, setObPlanRevealed] = useState(false);
+  const [obInsightRevealed, setObInsightRevealed] = useState(false);
   const [obCount, setObCount] = useState<ObCount | null>(null);
   const [obHealthBusy, setObHealthBusy] = useState(false);
   const [obHealthError, setObHealthError] = useState<string | null>(null);
   const [obCheckinBusy, setObCheckinBusy] = useState(false);
-  const [obCheckinOpen, setObCheckinOpen] = useState(true);
+  const [obCheckinOpen, setObCheckinOpen] = useState(false);
   // ?dbgcheckin=1 (dev, avec ?dbgstep) : simule un point forme déjà fait, pour voir l'écran notifications avec la série.
   const [obCheckinScore, setObCheckinScore] = useState<number | null>(() => {
     if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("dbgcheckin")) return 60;
@@ -537,10 +563,41 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep]);
 
+  /* ?dbgstep sans compte (dev, 2026-10-29) : les écrans Elite testables en local sans rien écrire ni
+     envoyer. Programme généré à la volée (?dbgsport=Trail, CrossFit par défaut), claimé si un
+     programme a été choisi sur /p/, aucun avec ?dbgprog=none. Jamais déclenché avec un compte. */
+  const dbgProgRef = useRef(false);
+  useEffect(() => {
+    const q = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    if (!q?.get("dbgstep") || userId || newUserId || !elite || !ELITE_STEPS.includes(currentStep) || dbgProgRef.current) return;
+    if (hasClaimedProgram === null || (hasClaimedProgram && !wizardTemplate)) return;
+    dbgProgRef.current = true;
+    // Code d'invitation factice : l'écran d'invitation coach montre son message WhatsApp, comme en prod.
+    // (Même idée au paywall : id factice pour que « Inviter mon coach » s'affiche comme avec un compte.)
+    if (role === "coach") setObInviteCode("tpc-demo");
+    (async () => {
+      let tpl: ProgramTemplate | null = null, progName = "", progSport = "";
+      if (hasClaimedProgram && wizardTemplate) { tpl = wizardTemplate; progName = claimedProgramName ?? "Programme"; progSport = sport; }
+      else if (q.get("dbgprog") !== "none") {
+        progSport = q.get("dbgsport") || "CrossFit"; progName = `Programme ${progSport}`;
+        const r = await fetch("/api/programs/generate", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sport: progSport, level: "intermediaire", days: ["Lun", "Mer", "Jeu", "Sam"], duration: 8, focus: "competition", weaknesses: [] }) }).catch(() => null);
+        tpl = r?.ok ? ((await r.json()).template ?? null) : null;
+      }
+      if (!tpl) { setObProgramOk(false); return; }
+      builtRef.current = { name: progName, sport: progSport, template: tpl };
+      setObWeekSessions(templateWeekRows(tpl));
+      setObProgramOk(true);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, hasClaimedProgram, wizardTemplate]);
+
   // Étape d'invitation : le lien a besoin du code d'invitation du coach.
   useEffect(() => {
     const uid = userId || newUserId;
     if (currentStep === "ob_invite" && !obInviteCode && uid) ensureInviteCode(uid);
+    // Le sportif qu'il vient d'imaginer : son prénom déjà rempli.
+    if (currentStep === "ob_invite" && obAthleteName.trim()) setObInvites(prev => prev[0]?.name.trim() ? prev : [{ name: obAthleteName.trim(), email: prev[0]?.email ?? "" }, ...prev.slice(1)]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep]);
 
@@ -805,7 +862,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       freq_target:        (obTrainingDays ?? trainingDays).length || null,
       training_days:      (obTrainingDays ?? trainingDays).length ? (obTrainingDays ?? trainingDays) : null,
       objective:          obGoal || goal || null,
-      frustration:        role === "athlete" ? (obWhenRef.current || frustration || null) : (obWhenCoachRef.current ? `coach_${obWhenCoachRef.current}` : null),
+      frustration:        role === "athlete" ? (obPickRef.current || frustration || null) : (obPickRef.current ? `coach_${obPickRef.current}` : null),
       coaching_challenge: role === "coach"   ? (coachingChallenge || null) : null,
     }, { onConflict: "user_id" });
 
@@ -1054,7 +1111,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     if (!weekRef.current) {
       weekRef.current = (async () => {
         let programId: string | null = null;
-        try { programId = await runPrepare(uid); } catch (e) { console.error("[ensureWeek] prepare", e); weekRef.current = null; return false; }
+        // Échec : « pas de programme » tout de suite (séance type), sinon l'écran d'analyse attendrait sans fin.
+        try { programId = await runPrepare(uid); } catch (e) { console.error("[ensureWeek] prepare", e); weekRef.current = null; setObProgramOk(false); return false; }
         if (!programId || role === "coach") { setObProgramOk(false); return false; }
         const { data, error } = await supabase.from("sessions")
           .select("id, date, name, notes, target_difficulty")
@@ -1786,7 +1844,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     const idx = Math.max(0, post.indexOf(currentStep));
     const matched = obCustom?.status === "matched" ? findCatalogEntry(obCustom.sportLabel) : null;
     /* Parcours Elite : jamais de retour d'un écran Elite vers les questions de programme (le
-       programme est déjà en cours de création à partir de ob_when). */
+       programme est déjà en cours de création à partir du 1er écran Elite). */
     const prevStep = idx > 0 ? post[idx - 1] : null;
     const backBlocked = !!prevStep && ELITE_STEPS.includes(currentStep) && PROGRAM_QUESTION_STEPS.includes(prevStep);
     const back = prevStep && !backBlocked ? () => setStepIdx(path.indexOf(prevStep)) : undefined;
@@ -1894,14 +1952,69 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     /* ───────── Parcours Elite (2026-10-17) ───────── */
     const eliteUid = userId || newUserId;
     const invitedAthlete = isInvitedAthlete({ role, invited: !!hasCoachInvite });
-    // Après le point forme (fait ou passé) : on attend le programme pour savoir si l'écran semaine existe.
-    const continueAfterCheckin = async () => {
-      if (!eliteUid) return;
-      setObCheckinBusy(true);
-      const ok = invitedAthlete ? false : await ensureWeek(eliteUid).catch(() => false);
-      setObCheckinBusy(false);
-      obAdvance(undefined, ok);
+    const today = localTodayStr();
+    /* Coach : pas de prénom demandé (2026-10-29, le champ était sous le pli) — « ton sportif » partout.
+       capS remet une majuscule quand il ouvre une phrase. */
+    const coachFirst = obAthleteName.trim() || "ton sportif";
+    const capS = (t: string) => t.replace(/(^|[.!?]\s+)ton sportif/g, (_m, p: string) => `${p}Ton sportif`);
+    // Check-in passé : on avance comme un matin sans signal (« tout est bon »).
+    const answers: Answers = obAnswers ?? { sleep: 8, stress: 2, recovery: 8, motivation: 8 };
+    const sportForCopy = obSportLabel() || builtRef.current?.sport || (hasClaimedProgram ? claimedProgramName ?? "" : "") || sport;
+    /* La séance de la jauge n'a pas à être celle d'aujourd'hui : une vraie séance de son programme
+       (hors tests, toutes semaines), sinon une séance type de son sport. Matin difficile : la plus dure
+       (là où alléger compte) ; tout va bien : la plus facile (seule où pousser s'applique). */
+    const ringSession = (): SessionTemplate => {
+      if (obRingRef.current && currentStep !== "ob_plan") return obRingRef.current;
+      const t = builtRef.current?.template;
+      const fromProgram = (t?.weeks ?? []).flatMap(w => Object.values(w).flat() as SessionTemplate[]).filter(x => (x.target_difficulty ?? 0) > 0 && x.type !== "test");
+      let pool = fromProgram.length ? fromProgram : sessionTuples.map(tupleToTemplate);
+      const low = lowestAnswer(answers) !== null;
+      // Jamais une séance à 10 (ni 9) : une séance au maximum de l'échelle n'est pas un exemple crédible.
+      const capped = pool.filter(x => x.target_difficulty <= 8);
+      if (capped.length) pool = capped;
+      const picked = pool.reduce((a, b) => ((b.target_difficulty - a.target_difficulty) * (low ? 1 : -1) > 0 ? b : a));
+      if (currentStep !== "ob_plan") obRingRef.current = picked;
+      return picked;
     };
+    const saveCheckin = async (data: { sleep: number; stress: number; recovery: number; motivation: number; behaviors: string[]; bedtime: string; base_score: number; score: number; plannedIntensity?: unknown }) => {
+      if (!eliteUid) {
+        // ?dbgstep sans compte : rien n'est enregistré, le parcours continue.
+        setObAnswers({ sleep: data.sleep, stress: data.stress, recovery: data.recovery, motivation: data.motivation });
+        setObExample(false); obRingRef.current = null;
+        setObCheckinScore(data.score); setObCheckinOpen(false); obAdvance();
+        return;
+      }
+      setObCheckinBusy(true);
+      /* La préparation (completeProfile) refuse d'écrire si un ressenti existe déjà : elle doit
+         être finie avant ce 1er check-in. Presque toujours déjà le cas à ce stade. */
+      await runPrepare(eliteUid).catch(() => null);
+      // Même écriture que /today (saveWellness) : montre intégrée au score si elle a la nuit.
+      const { plannedIntensity: _ignored, ...w } = data;
+      void _ignored;
+      const payload = await withDeviceScore(supabase, eliteUid, today, w);
+      const { data: saved, error } = await supabase.from("wellness_daily")
+        .upsert({ user_id: eliteUid, date: today, ...payload }, { onConflict: "user_id,date" })
+        .select().single();
+      if (error) console.error("[ob_checkin] wellness upsert error:", error);
+      posthog.capture("onboarding_checkin_saved", { ok: !error });
+      setObAnswers({ sleep: data.sleep, stress: data.stress, recovery: data.recovery, motivation: data.motivation });
+      setObExample(false); obRingRef.current = null;
+      setObCheckinScore(error ? null : ((saved as { score?: number } | null)?.score ?? payload.score));
+      setObCheckinBusy(false);
+      setObCheckinOpen(false);
+      obAdvance();
+    };
+    // Le check-in s'ouvre par-dessus son programme (ou son rejeu Santé) : pas d'écran d'intro.
+    const checkinModal = obCheckinOpen && !obCheckinBusy ? (
+      <WellnessModal date={today} onSave={saveCheckin} cancelLabel="Plus tard" skipResult
+        onClose={() => {
+          setObCheckinOpen(false); posthog.capture("onboarding_checkin_skipped");
+          // Pas de réponse : un matin de nuit courte en exemple, les écrans suivants le disent (« Imaginons »).
+          setObExample(true); obRingRef.current = null;
+          setObAnswers({ sleep: 3, stress: 4, recovery: 6, motivation: 6 }); setObCheckinScore(38);
+          obAdvance();
+        }} />
+    ) : null;
 
     const letterIcon = (k: number) => <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, border: "1px solid rgba(0,0,0,.14)", fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700, color: "#6b7177" }}>{String.fromCharCode(65 + k)}</span>;
     if (currentStep === "ob_count") {
@@ -1922,89 +2035,89 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         </QuestionShell>
       );
     }
-    if (currentStep === "ob_when" && coach) {
-      const chooseWhenCoach = (v: ObWhenCoach) => {
-        setObWhenCoach(v); obWhenCoachRef.current = v;
-        posthog.capture("onboarding_when_answered", { answer: `coach_${v}`, role });
-        if (eliteUid) {
-          supabase.from("profiles").update({ frustration: `coach_${v}` }).eq("user_id", eliteUid)
-            .then(({ error }) => { if (error) console.error("[ob_when] frustration update error:", error); });
-        }
-        obAdvance();
-      };
-      return (
-        <QuestionShell {...common}
-          title={<>Un de tes sportifs arrive cuit à une séance dure. <span style={{ color: "#d44000" }}>Tu le découvres quand ?</span></>}
-          onSkip={() => obAdvance()}>
-          {WHEN_OPTIONS_COACH.map((w, k) => (
-            <OptionCard key={w.value} label={w.label} on={obWhenCoach === w.value} onClick={() => chooseWhenCoach(w.value)} icon={letterIcon(k)} />
-          ))}
-        </QuestionShell>
-      );
-    }
-    if (currentStep === "ob_when") {
-      const chooseWhen = (v: ObWhen) => {
-        setObWhen(v); obWhenRef.current = v;
-        posthog.capture("onboarding_when_answered", { answer: v });
-        if (eliteUid) {
-          supabase.from("profiles").update({ frustration: v }).eq("user_id", eliteUid)
-            .then(({ error }) => { if (error) console.error("[ob_when] frustration update error:", error); });
-        }
-        obAdvance();
-      };
-      return (
-        <QuestionShell {...common}
-          title={<>Tu as mal dormi, et ta séance dure est prévue aujourd&apos;hui. <span style={{ color: "#d44000" }}>Tu fais quoi ?</span></>}
-          onSkip={() => obAdvance()}>
-          {WHEN_OPTIONS.map((w, k) => (
-            <OptionCard key={w.value} label={w.label} on={obWhen === w.value} onClick={() => chooseWhen(w.value)}
-              icon={<span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, border: "1px solid rgba(0,0,0,.14)", fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700, color: "#6b7177" }}>{String.fromCharCode(65 + k)}</span>} />
-          ))}
-        </QuestionShell>
-      );
-    }
-    if (currentStep === "ob_mirror" && coach) {
-      return (
-        <QuestionShell {...common} dark eyebrow="Ton constat" title={mirrorTitleCoach(obWhenCoach)}
-          onSkip={() => obAdvance()}
-          cta={{ label: "Adopter l'autorégulation", onClick: () => obAdvance() }}>
-          <MirrorBody when={obWhenCoach} coach={{ count: obCount, days: obProgramDays() }} />
-        </QuestionShell>
-      );
-    }
-    if (currentStep === "ob_control") {
-      // Le programme du coach (créé en arrière-plan depuis ob_when), sinon les séances génériques de l'AHA.
+    /* Son programme tel quel, avant le point forme (2026-10-29) : « tu l'as, mais il ne suffit pas ».
+       Sans programme exploitable : une séance type de son sport. Sportif : avec Santé, « Continuer »
+       mène à ob_health, qui ouvre le point forme ; sinon le point forme s'ouvre d'ici. Coach : son
+       programme, puis le prénom d'un de ses sportifs et le point forme qu'il lui enverrait (imaginé,
+       rien n'est enregistré). */
+    if (currentStep === "ob_plan") {
       const ready = obProgramOk !== null;
-      const pool = (builtRef.current?.template.weeks ?? []).flatMap((w, wi) => Object.values(w).flat().map(x => ({ x: x as SessionTemplate, wi })))
-        .filter(({ x }) => (x.target_difficulty ?? 0) > 0 && x.type !== "test")
-        .map(({ x, wi }) => ({ wi, s: { name: x.name, notes: x.notes ?? null, target_difficulty: x.target_difficulty as number } as ControlSession }));
-      const pick = (list: typeof pool, dir: 1 | -1) => list.length ? list.reduce((a, b) => (b.s.target_difficulty - a.s.target_difficulty) * dir > 0 ? b : a).s : null;
-      // Semaine 1 d'abord (continuité avec son programme), tout le programme si elle n'a pas de vraie séance dure/légère.
-      const week1 = pool.filter(p => p.wi === 0);
-      const hard = pick(week1.filter(p => p.s.target_difficulty >= 7), 1) ?? pick(pool, 1) ?? { name: demoHardest.name, notes: demoHardest.notes ?? null, target_difficulty: demoHardest.target_difficulty ?? 8 };
-      const easy = pick(week1.filter(p => p.s.target_difficulty <= 4), -1) ?? pick(pool, -1) ?? { name: demoLightest.name, notes: demoLightest.notes ?? null, target_difficulty: demoLightest.target_difficulty ?? 3 };
+      const next = path[path.indexOf("ob_plan") + 1];
+      // Coach : séances pas encore assignées, on montre la semaine 1 de son modèle de programme.
+      const plan = coach ? builtRef.current : obProgramOk && builtRef.current;
+      const label = obSportLabel() || builtRef.current?.sport || sport;
+      // « Triathlon — Préparation 12 Semaines » → « Triathlon » : le titre et le bandeau restent courts.
+      const shortName = (n: string) => n.split(/\s[—–-]\s/)[0].trim();
+      const claimedLabel = hasClaimedProgram && claimedProgramName ? `Ton programme « ${shortName(claimedProgramName)} » est prêt.` : "Ton programme est prêt.";
+      const who = coach ? "tes sportifs se sentent" : "tu te sens";
+      const weekRows = coach && plan ? templateWeekRows(plan.template) : obWeekSessions;
+      if (!obPlanRevealed) {
+        // Le vrai contenu quand il est prêt, sinon un détail générique : le détail s'affiche à la coche.
+        const tpl = builtRef.current?.template;
+        const exos = new Set((tpl?.weeks ?? []).flatMap(w => Object.values(w).flat() as SessionTemplate[]).flatMap(x => (x.notes ?? "").split("\n"))
+          .map(l => l.split(/\s[—–-]\s|:/)[0].trim()).filter(l => l && !/^(wod|amrap|emom|for time|circuit|\d)/i.test(l)));
+        const weeks = tpl?.weeks.length ?? 0;
+        const wOpts = obCustom?.status === "generated" ? obCustom.weaknessOptions
+          : WEAKNESSES_BY_SPORT[weaknessKeyFor(obSport || (obCustom?.status === "matched" ? findCatalogEntry(obCustom.sportLabel)?.value : ""))] ?? WEAKNESSES_BY_SPORT["Autre"] ?? [];
+        const weak = obWeak.map(k => wOpts.find(o => o.key === k)?.label).filter(Boolean).map(l => l!.toLowerCase());
+        const days = [...obDays].sort((a, b) => a - b).map(d => WEEK_DAY_LABELS[d]).join(", ");
+        const claimedName = hasClaimedProgram && claimedProgramName ? shortName(claimedProgramName) : "";
+        const steps: AnalysisStep[] = claimedName ? [
+          { label: "Lecture de ton programme", detail: claimedName },
+          { label: `Analyse du sport${label ? ` : ${label}` : ""}`, detail: "Qualités clés, gestes, charge type" },
+          { label: "Préparation de ta semaine 1", detail: weekRows.length ? `${weekRows.length} séances calées sur tes jours` : "Séances calées sur tes jours" },
+          { label: "Branchement de l'ajustement quotidien", detail: "Chaque séance s'ajustera à ta forme du matin" },
+        ] : [
+          { label: `Analyse du sport${label ? ` : ${label}` : ""}`, detail: "Qualités clés, gestes, charge type" },
+          { label: coach ? "Prise en compte du niveau du groupe" : "Prise en compte de tes faiblesses", detail: weak.length ? weak.slice(0, 3).join(", ") : "Équilibre général" },
+          { label: "Choix des exercices", detail: exos.size ? `${exos.size} exercices sélectionnés` : "Exercices de ton sport" },
+          { label: "Périodisation", detail: weeks ? `${weeks} semaines : la charge monte, puis récupère` : "La charge monte, puis récupère" },
+          { label: coach ? "Calage sur les jours d'entraînement" : "Calage sur tes jours", detail: days || undefined },
+        ];
+        return (
+          <AnalysisReveal kicker={claimedName ? "Préparation" : "Construction du programme"}
+            title={claimedName ? "On prépare ton programme." : coach ? "On construit le programme de ton groupe." : "On construit ton programme."}
+            steps={steps} ready={ready} minMs={4800}
+            onDone={() => { setObPlanRevealed(true); posthog.capture("onboarding_plan_reveal_done", { role }); }} />
+        );
+      }
       return (
-        <QuestionShell {...common} dark eyebrow="Coach Control · ce matin"
-          title="Une séance, ajustée à la forme de chacun."
-          sub="Thomas vient de faire son point forme : nuit courte, jambes lourdes. À toi de décider."
-          onSkip={() => { posthog.capture("ob_control_continue", { decided: obControlPctRef.current != null, pct: obControlPctRef.current, skipped: true }); obAdvance(); }}
-          cta={{ label: "Continuer", onClick: () => { posthog.capture("ob_control_continue", { decided: obControlPctRef.current != null, pct: obControlPctRef.current }); obAdvance(); }, busy: !ready }}>
-          {ready ? <ControlStepBody hard={hard} easy={easy} onDecided={pct => { obControlPctRef.current = pct; }} /> : <div style={{ minHeight: 320 }} />}
-        </QuestionShell>
-      );
-    }
-    if (currentStep === "ob_mirror") {
-      return (
-        <QuestionShell {...common} dark eyebrow="Ton constat" title={mirrorTitle(obWhen)}
-          onSkip={() => obAdvance()}
-          cta={{ label: "Adopter l'autorégulation", onClick: () => obAdvance() }}>
-          <MirrorBody when={obWhen} />
-        </QuestionShell>
+        <>
+          <QuestionShell {...common}
+            title={plan
+              ? <>{claimedLabel} Mais il ne sait pas <span style={{ color: "#d44000" }}>comment {who} ce matin.</span></>
+              : <>Voici une séance type{label ? ` de ${label}` : ""}. Elle ne sait pas <span style={{ color: "#d44000" }}>comment {who} ce matin.</span></>}
+            sub={coach
+              ? `${plan ? "Tel quel, il fait faire la même séance à chacun, en forme ou pas." : "Telle quelle, elle se fait pareil, en forme ou pas."} Pense à l'un d'eux et à sa forme ce matin.`
+              : `${plan ? "Tel quel, il te fait faire la même séance, en forme ou pas." : "Telle quelle, elle se fait pareil, en forme ou pas."}${next === "ob_health" ? "" : " Un point forme de 10 secondes, et il s'ajuste."}`}
+            cta={coach
+              ? { label: "Remplir son point forme", onClick: () => setObCheckinOpen(true), busy: !ready }
+              : next === "ob_health"
+              ? { label: "Continuer", onClick: () => obAdvance(), busy: !ready }
+              : { label: "Faire mon point forme", onClick: () => setObCheckinOpen(true), busy: !ready || obCheckinBusy }}>
+            {!ready ? <div style={{ minHeight: 320 }} />
+              : plan ? <PlannedWeekBody sessions={weekRows} program={{ ...plan, name: shortName(plan.name) }} today={today} />
+              : <SessionTemplateCard session={ringSession()} cardStyle={{ cursor: "default" }} />}
+          </QuestionShell>
+          {!coach && checkinModal}
+          {coach && obCheckinOpen && (
+            <WellnessModal date={today} skipResult offline subject={{ athleteId: "onboarding", userId: "onboarding", name: coachFirst, label: !obAthleteName.trim(), heading: "Imagine le point forme d'un de tes sportifs" }}
+              onClose={() => setObCheckinOpen(false)}
+              onSave={async d => {
+                setObAnswers({ sleep: d.sleep, stress: d.stress, recovery: d.recovery, motivation: d.motivation });
+                setObExample(false); obRingRef.current = null;
+                setObCheckinScore(d.score); setObCheckinOpen(false);
+                posthog.capture("onboarding_coach_checkin_imagined");
+                obAdvance();
+              }} />
+          )}
+        </>
       );
     }
     if (currentStep === "ob_health") {
       const connect = async () => {
-        if (!eliteUid || obHealthBusy) return;
+        if (obHealthBusy) return;
+        if (!eliteUid) { setObCheckinOpen(true); return; } // ?dbgstep sans compte
         setObHealthBusy(true);
         try {
           // Import à la demande : le plugin Santé n'existe que dans l'app iOS.
@@ -2016,68 +2129,86 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           console.error("[ob_health] sync error:", e);
           posthog.capture("onboarding_health_failed");
         } finally { setObHealthBusy(false); }
-        obAdvance();
-      };
-      return (
-        <QuestionShell {...common}
-          title="Ta montre sait déjà comment tu as dormi."
-          sub={`Connecte ${healthAppName()} : ton ressenti et tes mesures donnent une forme du jour bien plus juste.`}
-          onSkip={() => { posthog.capture("onboarding_health_skipped"); obAdvance(); }} skipLabel="Plus tard" skipBottom
-          cta={{ label: `Connecter ${healthAppName()}`, onClick: connect, busy: obHealthBusy }}>
-          <HealthStepBody />
-        </QuestionShell>
-      );
-    }
-    if (currentStep === "ob_checkin") {
-      const today = localTodayStr();
-      const saveCheckin = async (data: { sleep: number; stress: number; recovery: number; motivation: number; behaviors: string[]; bedtime: string; base_score: number; score: number; plannedIntensity?: unknown }) => {
-        if (!eliteUid) return;
-        /* La préparation (completeProfile) refuse d'écrire si un ressenti existe déjà : elle doit
-           être finie avant ce 1er point forme. Presque toujours déjà le cas à ce stade. */
-        await runPrepare(eliteUid).catch(() => null);
-        // Même écriture que /today (saveWellness) : montre intégrée au score si elle a la nuit.
-        const { plannedIntensity: _ignored, ...w } = data;
-        void _ignored;
-        const payload = await withDeviceScore(supabase, eliteUid, today, w);
-        const { data: saved, error } = await supabase.from("wellness_daily")
-          .upsert({ user_id: eliteUid, date: today, ...payload }, { onConflict: "user_id,date" })
-          .select().single();
-        if (error) console.error("[ob_checkin] wellness upsert error:", error);
-        posthog.capture("onboarding_checkin_saved", { ok: !error });
-        setObCheckinScore(error ? null : ((saved as { score?: number } | null)?.score ?? payload.score));
-        setObCheckinOpen(false);
-        void continueAfterCheckin();
+        setObCheckinOpen(true);
       };
       return (
         <>
           <QuestionShell {...common}
-            title="Comment tu te sens ce matin ?"
-            sub="10 secondes, chaque matin : ta séance s'ajuste à ta réponse."
-            onSkip={obCheckinBusy ? undefined : () => { posthog.capture("onboarding_checkin_skipped"); void continueAfterCheckin(); }} skipLabel="Plus tard" skipBottom
-            cta={{ label: "Faire mon point forme", onClick: () => setObCheckinOpen(true), busy: obCheckinBusy }}>
-            <div />
+            title="Ta montre sait déjà comment tu as dormi."
+            sub={`Connecte ${healthAppName()} : ton ressenti et tes mesures donnent une forme du jour bien plus juste.`}
+            onSkip={() => { posthog.capture("onboarding_health_skipped"); setObCheckinOpen(true); }} skipLabel="Plus tard" skipBottom
+            cta={{ label: `Connecter ${healthAppName()}`, onClick: connect, busy: obHealthBusy || obCheckinBusy }}>
+            <HealthStepBody />
           </QuestionShell>
-          {obCheckinOpen && !obCheckinBusy && (
-            <WellnessModal date={today} onSave={saveCheckin} cancelLabel="Plus tard" skipResult={path.indexOf("ob_week") > stepIdx}
-              onClose={() => { setObCheckinOpen(false); posthog.capture("onboarding_checkin_skipped"); void continueAfterCheckin(); }} />
-          )}
+          {checkinModal}
         </>
       );
     }
-    if (currentStep === "ob_week") {
-      const today = localTodayStr();
-      const monday = (new Date(`${today}T12:00:00`).getDay() + 6) % 7 === 0;
-      // « Programme Hyrox » → « Hyrox » ; un programme claimé garde un titre sans sport.
-      const sportName = builtRef.current && !hasClaimedProgram ? builtRef.current.name.replace(/^(mon )?programme\s*/i, "").trim() : "";
-      const weeks = builtRef.current?.template.weeks.length ?? 0;
-      const until = obGoal === "competition" && obDeadline ? new Date(`${obDeadline}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "long" }) : "";
+    /* « Tu fais quoi ? » sur sa vraie situation de ce matin (remplace ob_when + ob_mirror). La
+       réponse va dans profiles.frustration (préfixe coach_ côté coach), confrontée à la jauge. */
+    if (currentStep === "ob_decide") {
+      const ses = ringSession();
+      const choose = (v: Pick | PickCoach) => {
+        setObPick(v); obPickRef.current = v;
+        const value = coach ? `coach_${v}` : v;
+        posthog.capture("onboarding_decide_answered", { answer: value, role });
+        if (eliteUid) {
+          supabase.from("profiles").update({ frustration: value }).eq("user_id", eliteUid)
+            .then(({ error }) => { if (error) console.error("[ob_decide] frustration update error:", error); });
+        }
+        obAdvance();
+      };
+      const opts = coach ? decideOptionsCoach(answers) : decideOptions(answers);
       return (
-        <QuestionShell {...common} dark eyebrow="Ton programme est prêt"
-          title={sportName ? `Ton programme ${sportName}, ajusté chaque matin.` : "Ton programme, ajusté chaque matin."}
-          sub={weeks ? `${weeks} semaine${weeks > 1 ? "s" : ""}${until ? ` jusqu'au ${until}` : ""}, construit sur tes réponses.` : undefined}
+        <QuestionShell {...common}
+          title={coach
+            ? <>{capS(decideLeadCoach(answers, coachFirst))}, et sa séance « {ses.name} » est prévue. <span style={{ color: "#d44000" }}>Tu lui dis quoi ?</span></>
+            : obExample
+            ? <>Imaginons : nuit courte, et ta séance « {ses.name} » est prévue. <span style={{ color: "#d44000" }}>Tu fais quoi ?</span></>
+            : <>{decideLead(answers)}, et ta séance « {ses.name} » est prévue. <span style={{ color: "#d44000" }}>Tu fais quoi ?</span></>}
+          onSkip={() => obAdvance()}>
+          {opts.map((o, k) => <OptionCard key={o.value} label={o.label} on={obPick === o.value} onClick={() => choose(o.value)} icon={letterIcon(k)} />)}
+        </QuestionShell>
+      );
+    }
+    if (currentStep === "ob_insight") {
+      if (!obInsightRevealed) {
+        const ses = ringSession();
+        const lw = lowWords(answers);
+        const fam = { force: "de force", endurance: "d'endurance", mixte: "de ton sport", collectif: "de sport collectif" }[sportFamily(sportForCopy)];
+        const steps: AnalysisStep[] = [
+          { label: coach ? "Lecture de son point forme" : "Lecture de ton point forme", detail: lw ? lw.charAt(0).toUpperCase() + lw.slice(1) : "Tout est au vert" },
+          { label: coach ? "Croisement avec sa séance" : "Croisement avec ta séance", detail: `« ${ses.name} »` },
+          { label: "Comparaison avec nos données", detail: `Sportifs ${fam}, même type de matin` },
+          { label: "Analyse des comportements", detail: "Sommeil, soirées, récupération" },
+          { label: coach ? "Création de sa recommandation" : "Création de tes recommandations", detail: "Pour ce matin, et les suivants" },
+        ];
+        return (
+          <AnalysisReveal kicker="Analyse" title={coach ? "On analyse le point forme de ton sportif." : "On analyse ton point forme."}
+            steps={steps} minMs={4000}
+            onDone={() => { setObInsightRevealed(true); posthog.capture("onboarding_insight_reveal_done", { role }); }} />
+        );
+      }
+      return (
+        <QuestionShell {...common} dark eyebrow="Ce que disent nos données" title={obExample && !coach ? "Une nuit courte, par exemple." : capS(insightTitle(answers, coach ? coachFirst : undefined))}
           onSkip={() => obAdvance()}
-          cta={{ label: "C'est parti", onClick: () => obAdvance() }}>
-          <WeekStepBody sessions={obWeekSessions} program={builtRef.current} checkinScore={obCheckinScore} acclimatation={!monday} today={today} />
+          cta={{ label: coach ? `Voir la séance de ${coachFirst}` : "Voir ma séance ajustée", onClick: () => obAdvance() }}>
+          <InsightStepBody answers={answers} name={coach ? coachFirst : undefined} sport={sportForCopy} />
+        </QuestionShell>
+      );
+    }
+    /* La jauge de décision de /today (la primitive), sur sa séance, calée sur son check-in. */
+    if (currentStep === "ob_week") {
+      const ses = ringSession();
+      const sug = computeAutoregSuggestion(obCheckinScore, ses.target_difficulty, syntheticBaselineFor(obCheckinScore ?? 60));
+      return (
+        <QuestionShell {...common} dark eyebrow={coach ? "Ton instinct, avec une règle" : "Ton feeling, avec une règle"}
+          title={coach ? capS(contrastTitleCoach(obPick as PickCoach | null, sug, coachFirst)) : contrastTitle(obPick as Pick | null, sug)}
+          sub={coach ? "Dès demain, chacun de tes sportifs arrive comme ça." : undefined}
+          onSkip={() => obAdvance()}
+          cta={{ label: coach ? "Continuer" : "C'est parti", onClick: () => obAdvance() }}>
+          <WeekStepBody key={`${ses.name}-${obCheckinScore}`} sessions={[{ id: "ob-ring", date: today, name: ses.name, notes: ses.notes ?? null, target_difficulty: ses.target_difficulty }]}
+            program={null} checkinScore={obCheckinScore} acclimatation={false} today={today} decide subject={coach ? coachFirst : undefined} />
         </QuestionShell>
       );
     }
@@ -2119,7 +2250,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
               : webAndroid
               ? { label: "Disponible sur Google Play", store: "google", onClick: () => { saveHour(); window.open(PLAY_STORE_URL, "_blank"); obAdvance(); } }
               : { label: "C'est fait, continuer", onClick: () => { saveHour(); obAdvance(); } }}>
-            <AppPushStepBody desktop={!webIphone && !webAndroid} android={webAndroid} hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coach={coach} streak={streak} />
+            <AppPushStepBody desktop={!webIphone && !webAndroid} android={webAndroid} hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coach={coach} streak={streak} athleteName={coach ? obAthleteName : undefined} />
           </QuestionShell>
         );
       }
@@ -2129,18 +2260,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           sub={streak ? "En 5 matins, ThePerfClub apprend ta norme et tes conseils deviennent les tiens. On te prévient chaque matin pour ne pas casser ta série." : undefined}
           onSkip={() => { snooze(); posthog.capture("notif_prompt_dismissed", { role, surface: "onboarding" }); obAdvance(); }} skipLabel="Plus tard" skipBottom
           cta={{ label: "Activer les notifications", onClick: enable, busy: obNotifBusy }}>
-          <NotifStepBody hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coachName={invitedAthlete ? coachInviteName : null} coach={coach} streak={streak} />
+          <NotifStepBody hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coachName={invitedAthlete ? coachInviteName : null} coach={coach} streak={streak} athleteName={coach ? obAthleteName : undefined} />
         </QuestionShell>
       );
     }
     if (currentStep === "ob_pay") {
       const done = () => { if (eliteUid) finishOnboarding(eliteUid); };
-      const label = obSportLabel() || (hasClaimedProgram ? claimedProgramName ?? "" : "");
-      const headline = coach
-        ? "Ton espace est prêt. ThePerfClub ajuste la séance de chacun de tes sportifs, chaque matin."
-        : invitedAthlete
-        ? `${coachInviteName || "Ton coach"} prépare tes séances. ThePerfClub les ajuste à ta forme chaque matin.`
-        : `Ton programme${label ? ` ${label}` : ""} est prêt. ThePerfClub l'ajuste à ta forme chaque matin.`;
+      /* Titre par cas (sa réponse la plus basse du matin), sous-titre = sa décision. */
+      const ringName = ringSession().name;
+      const headline = coach ? capS(payHeadlineCoach(answers, coachFirst, sportForCopy, ringName)) : payHeadline(answers, false, sportForCopy, ringName);
+      const pickLine = obPick ? (coach ? pickWordsCoach[obPick as PickCoach] : pickWords[obPick as Pick]) ?? "" : "";
+      const paySub = coach
+        ? `${pickLine ? pickLine + " " : ""}Son point forme de 10 secondes le matin, ta décision en un tap. Et chaque semaine, le bilan de ton groupe.`
+        : `${pickLine ? pickLine + " " : ""}ThePerfClub te donne la règle chaque matin, et vérifie chaque soir.`;
       return (
         <OnboardingBackground variant="dark">
           {obPayStage === "priming" ? (
@@ -2148,8 +2280,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
               onContinue={() => setObPayStage("paywall")}
               onDismiss={() => { posthog.capture("onboarding_pay_free"); done(); }}
               onPurchased={() => { posthog.capture("onboarding_pay_purchased"); done(); }}
-              headline={headline} sub={null} name={name.trim() || undefined}
-              athleteSelfId={invitedAthlete || coach ? undefined : eliteUid ?? undefined} />
+              headline={headline} sub={paySub} name={name.trim() || undefined}
+              athleteSelfId={invitedAthlete || coach ? undefined : eliteUid ?? (dbgProgRef.current ? "demo" : undefined)} />
           ) : (
             <PaywallModal mode={coach ? "coach" : "athlete"} allowDismiss initialBilling={obBilling}
               onClose={() => setObPayStage("priming")}
@@ -2162,8 +2294,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       const hasEmail = obInvites.some(r => r.email.trim());
       return (
         <QuestionShell {...common}
-          title="Invite tes sportifs"
-          sub="Tu peux leur créer des séances avant même qu'ils arrivent."
+          title={obAthleteName.trim() ? `Envoie son accès à ${obAthleteName.trim()}` : "Invite tes sportifs"}
+          sub={obAthleteName.trim() ? "C'est gratuit pour lui. Le message est prêt, avec son prénom." : "Tu peux leur créer des séances avant même qu'ils arrivent."}
           onSkip={() => { setObInvites([{ name: "", email: "" }]); obAdvance(); }}
           cta={{ label: hasEmail ? "Envoyer les invitations" : "Continuer", onClick: () => { if (elite && hasEmail) void sendObInvites(); obAdvance(); } }}>
           <InviteForm inviteCode={obInviteCode} invites={obInvites} setInvites={setObInvites} error={obError} readyMessage />

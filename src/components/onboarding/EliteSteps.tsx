@@ -3,8 +3,6 @@
 import { PLAY_STORE_URL } from "@/lib/storeLinks";
 import { healthAppName, isAndroidApp } from "@/lib/native";
 import { useState } from "react";
-import { decisionRingState } from "@/components/sessions/DecisionRing";
-import CoachRadar, { type RadarPoint } from "@/components/coach/CoachRadar";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import { SessionTemplateCard } from "@/components/programs/SessionTemplateCard";
@@ -14,9 +12,9 @@ import AlertBox from "@/components/calendar/AlertBox";
 import DecisionGauge from "@/components/sessions/DecisionGauge";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import { relativeZoneLabel } from "@/lib/wellnessBaseline";
-import { adjustDifficulty } from "@/lib/loadAdjust";
 import { WELLNESS_RAMP } from "@/lib/wellness";
 import { DARK_CARD_BG } from "@/lib/theme";
+import { parseAndApply } from "@/lib/loadAdjust";
 import type { Program, ProgramTemplate, SessionTemplate } from "@/types";
 
 /* Écrans du parcours post-signup Elite (2026-10-17, POC https://claude.ai/artifact/HopwXw7gFnAdRLpB496JvE).
@@ -25,89 +23,7 @@ import type { Program, ProgramTemplate, SessionTemplate } from "@/types";
 const MUTED = "#6b7177";
 const LINE = "rgba(0,0,0,.10)";
 
-/* ── ob_when : la question qui fait revivre un matin précis. Enregistrée dans profiles.frustration. ── */
-export type ObWhen = "force" | "feeling" | "saute" | "jamais";
-export const WHEN_OPTIONS: { value: ObWhen; label: string }[] = [
-  { value: "force", label: "Je la fais quand même, comme prévu" },
-  { value: "feeling", label: "J'allège au feeling" },
-  { value: "saute", label: "Je la saute" },
-  { value: "jamais", label: "Ça ne m'arrive pas" },
-];
-
-/* ── ob_mirror : une étude par réponse (fiches Labo des réels, vérifiées sur PubMed). ── */
-const SCIENCE: Record<ObWhen, { title: string; n: string; text: string; source: string; quote: string }> = {
-  force: {
-    title: "Forcer fatigué ne te donne pas la séance prévue.",
-    n: "−8,6 %",
-    text: "d'effort produit à l'entraînement les matins où tu te sens moins bien, même en voulant faire la séance prévue.",
-    source: "Gallo et al. · Journal of Sports Sciences, 2016",
-    quote: "Tu paies la fatigue sans le bénéfice. Mieux vaut alléger exprès que subir.",
-  },
-  feeling: {
-    title: "Ton instinct a raison. Il lui manque une règle.",
-    n: "85 %",
-    text: "des cas où ton ressenti et les mesures (cardio, prise de sang) ne disent pas la même chose, c'est ton ressenti qui suit le mieux ta fatigue. Bilan de 56 études.",
-    source: "Saw, Main & Gastin · British Journal of Sports Medicine, 2016",
-    quote: "Avec une règle simple : +9,5 kg au développé couché en 6 semaines en avançant selon la forme du jour, zéro en programme fixe (Mann et al., 2010).",
-  },
-  saute: {
-    title: "Entre la séance dure et rien, il y a la séance ajustée.",
-    n: "+7,3 %",
-    text: "sur un contre-la-montre de 40 minutes pour les cyclistes qui ajustaient leur séance chaque jour, face à une périodisation classique.",
-    source: "Javaloyes et al. · Int J Sports Physiol Perform, 2019",
-    quote: "Une séance allégée garde le fil. Une séance sautée le casse.",
-  },
-  jamais: {
-    title: "Tu te sens prêt. Ta force, elle, bouge chaque jour.",
-    n: "4,2 %",
-    text: "d'écart en moyenne sur ta charge max d'un jour à l'autre, et jusqu'à 12 %. Sur un squat à 100 kg, ça fait 4 kg.",
-    source: "Grgic et al. · Sports Medicine Open, 2020",
-    quote: "Les bons jours, ton programme te fait aussi faire moins que ce que tu pourrais.",
-  },
-};
-export function mirrorTitle(when: ObWhen | null): string {
-  return SCIENCE[when ?? "force"].title;
-}
-
-/* ── Coach (2026-10-19) : même cadrage, vécu côté coach. Réponse enregistrée dans profiles.frustration
-   préfixée "coach_" pour ne jamais se confondre avec celles d'un sportif. ── */
-export type ObWhenCoach = "avant" | "pendant" | "apres" | "jamais";
-export const WHEN_OPTIONS_COACH: { value: ObWhenCoach; label: string }[] = [
-  { value: "avant", label: "Avant, il me prévient" },
-  { value: "pendant", label: "Pendant la séance" },
-  { value: "apres", label: "Après, en voyant ses résultats" },
-  { value: "jamais", label: "Souvent, je ne le sais pas" },
-];
-type CoachScienceKey = "c_avant" | "c_vu" | "c_jamais";
-const SCIENCE_COACH: Record<CoachScienceKey, { title: string; n: string; text: string; source: string; quote: string }> = {
-  c_avant: {
-    title: "Il te prévient. Mais vit-il la même séance que toi ?",
-    n: "27",
-    text: "études le montrent : coach et sportif ne jugent pas la même séance de la même façon. Le plus souvent, la séance « facile » ne l'est pas pour le sportif.",
-    source: "Inoue et al. · Sports Medicine Open, 2022",
-    quote: "Ce qu'il te dit, c'est quand il y pense. Son point forme, c'est chaque matin.",
-  },
-  c_vu: {
-    title: "Tu prévois une séance. Ils en vivent une autre.",
-    n: "2 446",
-    text: "séances de jeunes footballeurs : les joueurs les ont trouvées plus dures que ce que leur coach avait prévu.",
-    source: "Brink et al. · Int J Sports Physiol Perform, 2014",
-    quote: "L'écart se voit avant la séance, pas après. À condition de le demander.",
-  },
-  c_jamais: {
-    title: "Leur sommeil et leur stress pèsent autant que ta séance.",
-    n: "536",
-    text: "joueuses de netball suivies : un mauvais sommeil et une mauvaise récupération allaient de pair avec plus de blessures et de maladies.",
-    source: "Horgan et al. · Scand J Med Sci Sports, 2021",
-    quote: "Conclusion des auteurs : suivre chaque jour le sommeil et la récupération physique et mentale.",
-  },
-};
-const coachScienceKey = (w: ObWhenCoach | null): CoachScienceKey => w === "avant" ? "c_avant" : w === "jamais" ? "c_jamais" : "c_vu";
-export function mirrorTitleCoach(when: ObWhenCoach | null): string {
-  return SCIENCE_COACH[coachScienceKey(when)].title;
-}
-
-/* ── ob_count : la taille du groupe. Sert au chiffre du constat coach. ── */
+/* ── ob_count : la taille du groupe. ── */
 export type ObCount = "1-5" | "6-15" | "16-30" | "30+";
 export const COUNT_OPTIONS: { value: ObCount; label: string; n: number }[] = [
   { value: "1-5", label: "1 à 5 sportifs", n: 3 },
@@ -116,33 +32,7 @@ export const COUNT_OPTIONS: { value: ObCount; label: string; n: number }[] = [
   { value: "30+", label: "Plus de 30", n: 40 },
 ];
 
-export function MirrorBody({ when, coach }: { when: ObWhen | ObWhenCoach | null; coach?: { count: ObCount | null; days: number } }) {
-  const x = coach ? SCIENCE_COACH[coachScienceKey(when as ObWhenCoach | null)] : SCIENCE[(when as ObWhen | null) ?? "force"];
-  const n = coach ? (COUNT_OPTIONS.find(c => c.value === coach.count)?.n ?? 10) : 0;
-  return (
-    <div>
-      {coach && (
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 64, fontWeight: 800, letterSpacing: "-.05em", lineHeight: .95, color: "#fff", fontVariantNumeric: "tabular-nums" }}>
-            {n * coach.days}<span style={{ fontSize: 17, fontWeight: 600, color: "rgba(255,255,255,.55)", letterSpacing: "-.01em", marginLeft: 8 }}>séances par semaine</span>
-          </div>
-          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12.5, color: "rgba(255,255,255,.55)", marginTop: 10, lineHeight: 1.6 }}>
-            {n} sportifs × {coach.days} séances, prescrites sans savoir comment chacun a dormi
-          </div>
-        </div>
-      )}
-      <div style={{ background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: "16px 16px 14px", marginBottom: 16 }}>
-        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "rgba(255,255,255,.5)", marginBottom: 8 }}>Ce que dit la science</div>
-        <div style={{ fontSize: 40, fontWeight: 800, letterSpacing: "-.03em", color: "#ff8a55", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{x.n}</div>
-        <div style={{ fontSize: 14.5, lineHeight: 1.45, color: "rgba(255,255,255,.82)", margin: "6px 0 10px" }}>{x.text}</div>
-        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,.45)" }}>{x.source}</div>
-      </div>
-      <p style={{ fontSize: 15, lineHeight: 1.5, color: "rgba(255,255,255,.75)", margin: 0, paddingLeft: 12, borderLeft: "3px solid #d44000" }}>{x.quote}</p>
-    </div>
-  );
-}
-
-/* ── ob_health : Apple Santé, juste avant le point forme. Marques en texte, jamais de logos (refus App
+/* ── ob_health : Apple Santé, juste avant le check-in. Marques en texte, jamais de logos (refus App
    Store possible) : l'icône Santé n'est permise que dans le badge officiel. ── */
 const HEALTH_ROWS = [
   { icon: "🌙", label: "Sommeil", hint: "Durée et régularité, chaque nuit" },
@@ -184,16 +74,54 @@ function dayLabel(date: string, today: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export function WeekStepBody({ sessions, program, checkinScore, acclimatation, today }: {
+/* POC 2026-10-28 : son programme tel qu'il est, avant le check-in. Séances de la 1re semaine, sans aucun
+   ajustement : le titre de l'écran dit qu'il ne sait pas encore comment il se sent. */
+export function PlannedWeekBody({ sessions, program, today }: {
+  sessions: WeekSession[];
+  program: { name: string; sport: string; template: ProgramTemplate };
+  today: string;
+}) {
+  // Toute sa première semaine, comme l'aperçu de prod (les 7 prochains jours).
+  const end = new Date(`${today}T12:00:00`); end.setDate(end.getDate() + 6);
+  const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+  const week = sessions.filter(s => (s.target_difficulty ?? 0) > 0 && s.date <= endStr);
+  return (
+    <div>
+      <div style={{ margin: "0 -20px 8px" }}>
+        <ProgramBanner program={{ id: "", name: program.name, sport: program.sport, weeks_count: program.template.weeks.length, template: program.template } as unknown as Program} currentWeek={0} acclimatation={false} />
+      </div>
+      {week.map(s => (
+        <div key={s.id} style={{ marginBottom: 12 }}>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 6 }}>{dayLabel(s.date, today)}</div>
+          <SessionTemplateCard session={{ name: s.name, notes: s.notes, target_difficulty: s.target_difficulty ?? 5, load: 2, type: "volume" } as unknown as SessionTemplate} cardStyle={{ cursor: "default" }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* decide (POC 2026-10-28) : plus de curseur « Simule ta forme ». Sa séance du jour passe en tête avec la
+   jauge de décision de /today (AutoregButtons en anneau, la primitive), calée sur son vrai check-in ; il
+   décide lui-même. La suite de la semaine dessous, recalculée sur la même forme. subject : côté coach,
+   la séance de son sportif (« Sa forme », « sa semaine »). */
+export function WeekStepBody({ sessions, program, checkinScore, acclimatation, today, decide = false, subject }: {
   sessions: WeekSession[];
   program: { name: string; sport: string; template: ProgramTemplate } | null;
   checkinScore: number | null;
   acclimatation: boolean;
   today: string;
+  decide?: boolean;
+  subject?: string;
 }) {
   const start = checkinScore ?? 60;
   const [sim, setSim] = useState(start);
   const [moved, setMoved] = useState(false);
+  const [preview, setPreview] = useState<number | null>(null);
+  const [applied, setApplied] = useState<number | null>(null);
+  /* Séance après sa décision, comme /today une fois la séance enregistrée : notes réécrites et nouvelle
+     difficulté. La jauge reçoit cette difficulté, c'est donc le curseur qui rejoint la zone. */
+  const [cur, setCur] = useState<{ notes: string | null; target_difficulty: number } | null>(null);
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   const base = syntheticBaselineFor(sim);
   // Les 7 prochains jours : sa première semaine.
   const end = new Date(`${today}T12:00:00`); end.setDate(end.getDate() + 6);
@@ -203,10 +131,13 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
     return { s, planned, sug: computeAutoregSuggestion(sim, planned, base) };
   });
   const impacted = week.filter(w => w.sug);
+  const head = decide ? week[0] : null;
+  /* decide : la séance du jour seule, la suite de la semaine est déjà passée à l'écran du programme. */
+  const rest = decide ? [] : week;
   const firstName = (d: string) => dayLabel(d, today).split(" ")[0];
   return (
     <div>
-      {program && (
+      {program && !decide && (
         <div style={{ margin: "0 -20px 8px" }}>
           <ProgramBanner
             program={{ id: "", name: program.name, sport: program.sport, weeks_count: program.template.weeks.length, template: program.template } as unknown as Program}
@@ -214,7 +145,46 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
           />
         </div>
       )}
-      <div style={{ position: "sticky", top: 0, zIndex: 5, background: "rgba(23,27,31,.82)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 16, padding: "13px 14px", marginBottom: 18 }}>
+      {head && (() => {
+        const { s, planned, sug } = head;
+        const color = sug ? suggestionSeverityColor(sug) : null;
+        const shown = cur ?? { notes: s.notes, target_difficulty: planned };
+        const tpl = { name: s.name, notes: shown.notes, target_difficulty: shown.target_difficulty, load: 2, type: "volume" } as unknown as SessionTemplate;
+        return (
+          <div style={{ marginBottom: 22 }}>
+            {/* Plus de ligne « Aujourd'hui · Ta forme ce matin » : le texte sous l'anneau la dit déjà. */}
+            {/* La jauge toujours là, comme /today : avec une reco (Alléger / Surcharger), sinon en mode
+                libre (forme dans la zone, ou point forme passé) où il peut quand même la bouger. */}
+            <div style={{ display: "grid", gap: 12 }}>
+              <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
+                <AutoregButtons demo notes={shown.notes} sessionId={`ob-week-${s.id}`} advice="" sessionLabel={s.name}
+                  dir={sug?.dir} reco={sug?.reco}
+                  plannedDifficulty={shown.target_difficulty} onPreviewChange={setPreview} shape="ring" ringFluid ringGlow={color ?? undefined} actionsSlot={slot}
+                  severityColor={color ?? undefined} isActive
+                  onApply={async pct => {
+                    // Même réécriture que /today (TodayClient, onApply).
+                    setApplied(pct);
+                    setCur({ notes: s.notes ? s.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : s.notes, target_difficulty: applyAutoregDifficulty(planned, pct) });
+                    return { notes: s.notes ?? "", target_difficulty: planned };
+                  }}
+                  onUndo={async () => { setApplied(null); setCur(null); }}
+                  onMaintenir={() => setApplied(0)} />
+              </div>
+              {/* Comme /today depuis le 2026-10-28 : anneau en grand, titre au centre, plus d'encart. */}
+              <AlertBox variant="bare"
+                alert={{ border: `${color ?? "#ffffff"}66`, glow: color ?? "#ffffff", text: sug
+                  ? `${autoregHeadline(sug.dir)}\n${autoregAdvice(sug.dir, planned, subject)}`
+                  : subject ? `Dans sa zone\nLa forme de ${subject} ce matin colle à la séance prévue : garde-la telle quelle.` : "Dans ta zone\nTa forme de ce matin colle à la séance prévue : garde-la telle quelle." }}
+                actions={<div ref={setSlot} className="autoreg-slot" />} />
+            </div>
+            <div style={{ marginTop: 12 }}>
+              {/* Comme /today : barré tant qu'il n'a pas validé, puis la séance réécrite telle quelle. */}
+              <SessionTemplateCard session={tpl} adjustPct={applied != null ? null : preview || null} cardStyle={{ cursor: "default" }} />
+            </div>
+          </div>
+        );
+      })()}
+      {!decide && <div style={{ position: "sticky", top: 0, zIndex: 5, background: "rgba(23,27,31,.82)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 16, padding: "13px 14px", marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 9 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11.5, fontWeight: 800, color: "rgba(255,255,255,.65)", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -243,9 +213,9 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
               {impacted.map((w, i) => <span key={w.s.id}>{i > 0 && ", "}<b>{firstName(w.s.date)}</b></span>)}.</>
           )}
         </div>
-      </div>
-      {week.length > 0 && <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 8 }}>Ta première semaine</div>}
-      {week.map(({ s, planned, sug }) => {
+      </div>}
+      {rest.length > 0 && <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 8 }}>{decide ? `La suite de ${subject ? "sa" : "ta"} semaine` : "Ta première semaine"}</div>}
+      {rest.map(({ s, planned, sug }) => {
         const color = sug ? suggestionSeverityColor(sug) : null;
         const tpl = { name: s.name, notes: s.notes, target_difficulty: planned, load: 2, type: "volume" } as unknown as SessionTemplate;
         const adjusted = sug ? applyAutoregDifficulty(planned, sug.reco) : planned;
@@ -254,7 +224,7 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
             <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 6 }}>{dayLabel(s.date, today)}</div>
             {sug && color && (
               <div style={{ marginBottom: 8 }}>
-                <AlertBox variant="darkColor" alert={{ border: `${color}66`, glow: color, text: `${autoregHeadline(sug.dir)}\n${autoregAdvice(sug.dir, planned)}` }} />
+                <AlertBox variant="darkColor" alert={{ border: `${color}66`, glow: color, text: `${autoregHeadline(sug.dir)}\n${autoregAdvice(sug.dir, planned, subject)}` }} />
               </div>
             )}
             <SessionTemplateCard session={tpl} cardStyle={{ cursor: "default" }}
@@ -293,17 +263,20 @@ export function StreakTitle({ day = 1 }: { day?: number }) {
   );
 }
 
-export function NotifStepBody({ hour, setHour, sessionName, coachName, error, coach, streak }: {
+export function NotifStepBody({ hour, setHour, sessionName, coachName, error, coach, streak, athleteName }: {
   hour: number; setHour: (h: number) => void; sessionName: string | null; coachName: string | null; error?: string | null;
   /** Le sportif vient de faire son 1er point forme : les notifs servent à continuer sa série. */
   streak?: boolean;
   /** Coach : alerte récup fragile + résumé du matin (notifs de prod depuis iOS 1.1). */
   coach?: boolean;
+  /** Coach : le sportif qu'il vient d'imaginer, à la place de Thomas. */
+  athleteName?: string;
 }) {
   const clock = `${String(hour).padStart(2, "0")}:00`;
+  const who = athleteName?.trim() || "Thomas";
   const pushes = coach ? [
-    { title: "Thomas : récup fragile, séance dure prévue", body: "ThePerfClub recommande d'alléger. Tu valides ?", when: "maintenant" },
-    { title: "2 sportifs à regarder ce matin", body: "Thomas M. · Léa P.", when: clock },
+    { title: `${who} : récup fragile, séance dure prévue`, body: "ThePerfClub recommande d'alléger. Tu valides ?", when: "maintenant" },
+    { title: "2 sportifs à regarder ce matin", body: `${who === "Thomas" ? "Thomas M." : who} · Léa P.`, when: clock },
   ] : streak ? [
     { title: "Jour 2 sur 5 · Comment tu te sens ?", body: "10 secondes pour continuer ta série et ajuster ta séance.", when: "demain" },
     { title: "Jour 3 sur 5 · Ta norme se précise", body: sessionName ? `${sessionName} : fais ton point forme pour l'ajuster.` : "Fais ton point forme pour ajuster ta séance.", when: "après-demain" },
@@ -349,8 +322,8 @@ export function NotifStepBody({ hour, setHour, sessionName, coachName, error, co
    navigateur (impossible dans Safari hors app, et le point forme se vit sur le téléphone). On pousse
    l'app iPhone, avec sa montre : l'app lit Apple Santé. Android dans le navigateur : l'app Android
    (Health Connect) dès qu'elle est sur Google Play (2026-10-28). ── */
-export function AppPushStepBody({ desktop, android = false, hour, setHour, sessionName, coach, streak }: {
-  desktop: boolean; android?: boolean; hour: number; setHour: (h: number) => void; sessionName: string | null; coach?: boolean; streak?: boolean;
+export function AppPushStepBody({ desktop, android = false, hour, setHour, sessionName, coach, streak, athleteName }: {
+  desktop: boolean; android?: boolean; hour: number; setHour: (h: number) => void; sessionName: string | null; coach?: boolean; streak?: boolean; athleteName?: string;
 }) {
   return (
     <div>
@@ -367,64 +340,7 @@ export function AppPushStepBody({ desktop, android = false, hour, setHour, sessi
           ⌚ Tu as une montre ? L&apos;app relit tes 30 derniers jours dans {android ? "Health Connect" : "Apple Santé"} : tes analyses sont pleines dès l&apos;installation.
         </p>
       )}
-      <NotifStepBody hour={hour} setHour={setHour} sessionName={sessionName} coachName={null} coach={coach} streak={streak} />
-    </div>
-  );
-}
-
-/* ── ob_control (coach) : le déclic (2026-10-27, POC https://claude.ai/artifact/LeydVcBfSZF8osutKTvNWu).
-   Son programme appliqué à 4 sportifs de démo sur le radar du Coach Control ; Thomas vient de faire
-   son point forme et c'est au coach de décider, avec le vrai anneau de décision (mode démo : rien
-   d'enregistré, pas de « 1re décision »). Les siens remplacent les démos dès leur point forme. ── */
-export interface ControlSession { name: string; notes: string | null; target_difficulty: number }
-const THOMAS_SCORE = 30;
-
-function controlPoint(id: string, name: string, score: number | null, s: ControlSession, decided?: number | null): RadarPoint {
-  const baseline = score == null ? null : syntheticBaselineFor(score);
-  const sug = score == null ? null : computeAutoregSuggestion(score, s.target_difficulty, baseline);
-  const x = score == null ? null : Math.round(baseline?.relativeScore ?? score);
-  return {
-    id, name, score: x, diff: decided ?? s.target_difficulty,
-    ring: x == null ? null : decisionRingState([{ done: false, target_difficulty: s.target_difficulty }], decided != null ? null : sug, null),
-    hideZone: !sug || decided != null,
-  };
-}
-
-export function ControlStepBody({ hard, easy, onDecided }: { hard: ControlSession; easy: ControlSession; onDecided?: (pct: number) => void }) {
-  const [preview, setPreview] = useState<number | null>(null);
-  const [applied, setApplied] = useState<number | null>(null);
-  const [slot, setSlot] = useState<HTMLDivElement | null>(null);
-  const base = syntheticBaselineFor(THOMAS_SCORE);
-  const sug = computeAutoregSuggestion(THOMAS_SCORE, hard.target_difficulty, base);
-  const decidedDiff = applied != null ? adjustDifficulty(hard.target_difficulty, applied) : null;
-  const points: RadarPoint[] = [
-    controlPoint("ines", "Inès R.", 84, easy),
-    controlPoint("hugo", "Hugo B.", 80, hard),
-    controlPoint("lea", "Léa P.", null, hard),
-    controlPoint("thomas", "Thomas M.", THOMAS_SCORE, hard, decidedDiff),
-  ];
-  const tpl = { name: hard.name, notes: hard.notes, target_difficulty: hard.target_difficulty, load: 2, type: "volume" } as unknown as SessionTemplate;
-  const decide = (pct: number) => { setApplied(pct); onDecided?.(pct); };
-  return (
-    <div>
-      <CoachRadar points={points} onSelect={() => {}} />
-      {sug && (
-        <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <AutoregButtons demo notes={hard.notes} sessionId="ob-control-demo-thomas" advice="" sessionLabel={hard.name} dir={sug.dir} reco={sug.reco}
-              plannedDifficulty={hard.target_difficulty} onPreviewChange={setPreview} shape="ring" ringSize={160} actionsSlot={slot}
-              severityColor={suggestionSeverityColor(sug)} isActive viewer={{ role: "coach", subjectName: "Thomas" }}
-              onApply={async pct => { decide(pct); return { notes: hard.notes ?? "", target_difficulty: hard.target_difficulty }; }}
-              onMaintenir={() => decide(0)} />
-          </div>
-          <AlertBox variant="darkColor" centered
-            alert={{ border: `${suggestionSeverityColor(sug)}66`, glow: suggestionSeverityColor(sug), text: `${autoregHeadline(sug.dir)}\n${autoregAdvice(sug.dir, hard.target_difficulty, "Thomas", base)}` }}
-            actions={<div ref={setSlot} className="autoreg-slot" />} />
-        </div>
-      )}
-      <div style={{ marginTop: 12 }}>
-        <SessionTemplateCard session={tpl} adjustPct={(applied ?? preview) || null} cardStyle={{ cursor: "default" }} />
-      </div>
+      <NotifStepBody hour={hour} setHour={setHour} sessionName={sessionName} coachName={null} coach={coach} streak={streak} athleteName={athleteName} />
     </div>
   );
 }

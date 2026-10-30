@@ -161,9 +161,17 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
   const [applying, setApplying] = useState(false);
   const [record, setRecord] = useState<AutoregDecisionRecord | null>(null);
   const [undoing, setUndoing] = useState(false);
+  /* Dernière valeur dessinée par l'anneau, quel que soit le mode (2026-10-29) : en passant de la
+     décision à « appliqué » (ou retour), l'anneau remonté repart de là au lieu du bas de l'échelle.
+     Vide au 1er montage : l'arrivée normale depuis le bas reste. */
+  const lastRingValue = useRef<number | null>(null);
+  // Valeur affichée au moment du clic « Alléger / Surcharger » : départ de l'anneau « appliqué ».
+  const applyFromRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const decision = free ? null : getAutoregDecision(sessionId);
+    /* Démo (onboarding) : jamais de décision relue ni écrite dans le navigateur (2026-10-29) — l'id de
+       séance y est fixe, une décision d'un passage précédent revenait « appliquée », zone décalée. */
+    const decision = free || demo ? null : getAutoregDecision(sessionId);
     if (decision) {
       setMode("decided");
       setDecidedPct(decision.pct);
@@ -280,15 +288,16 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
   }, [selectedPct, mode, free]);
 
   async function maintenir() {
+    applyFromRef.current = diffFromPct(plannedDifficulty, selectedPct);
     track("maintain", null);
     haptic("light");
     // `cursorDir` plutôt que `dir` (absent en mode libre, voir plus haut) — sans effet visible pour
     // "Maintenir" (pct=null, aucun texte/couleur n'en dépend en mode "decided"), mais reste correct
     // dans les deux cas plutôt que de forcer une valeur arbitraire.
-    setAutoregDecision(sessionId, cursorDir, null);
+    if (!demo) setAutoregDecision(sessionId, cursorDir, null);
     const rec = recordFor(plannedDifficulty);
     setRecord(rec);
-    saveDecisionRecord(sessionId, rec);
+    if (!demo) saveDecisionRecord(sessionId, rec);
     setMode("decided");
     setDecidedPct(null);
     setDecidedPlannedDiff(null);
@@ -312,10 +321,10 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
     // applique la valeur déjà réglée.
     const conservativePct = pctFromDiff(plannedDifficulty, targetInt);
     const pctToApply = inZone || !hasSuggestion ? selectedPct : conservativePct;
-    if (!inZone && hasSuggestion) {
-      setSelectedPct(conservativePct);
-      onPreviewChange?.(conservativePct);
-    }
+    /* L'anneau ne saute plus à la cible pendant l'enregistrement (2026-10-29, Gildas) : il reste où il
+       est, puis l'anneau « appliqué » glisse de là jusqu'à la valeur appliquée. */
+    applyFromRef.current = diffFromPct(plannedDifficulty, selectedPct);
+    if (!inZone && hasSuggestion) onPreviewChange?.(conservativePct);
     setApplying(true);
     /* Décision écrite en localStorage AVANT l'await (2026-09-27) — prérequis du passage en "Plan
        cohérent" côté coach : `onApply` déclenche, en son sein, un state du parent qui peut faire
@@ -324,7 +333,7 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
        retour de l'await (ancien code), elle lisait un localStorage encore vide et repartait en mode
        actif, comme si rien n'avait été fait. `original` est patché juste après : `undo()` relit
        toujours la décision au moment du clic, il n'en a pas besoin plus tôt. */
-    setAutoregDecision(sessionId, cursorDir, pctToApply);
+    if (!demo) setAutoregDecision(sessionId, cursorDir, pctToApply);
     let original: AutoregOriginal | void;
     try {
       original = await onApply(pctToApply);
@@ -339,10 +348,10 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
     // paywall/signup (rien d'écrit) — ne jamais marquer "traité" dans ce cas (voir commentaire du
     // prop isActive plus haut). La jauge reste ouverte, prête à réessayer après connexion.
     if (isActive === false) { clearAutoregDecision(sessionId); return; }
-    setAutoregDecision(sessionId, cursorDir, pctToApply, original ?? undefined);
+    if (!demo) setAutoregDecision(sessionId, cursorDir, pctToApply, original ?? undefined);
     const rec = recordFor(Math.round(diffFromPct(plannedDifficulty, pctToApply)), original || null);
     setRecord(rec);
-    saveDecisionRecord(sessionId, rec);
+    if (!demo) saveDecisionRecord(sessionId, rec);
     setMode("decided");
     setDecidedPct(pctToApply);
     setDecidedPlannedDiff(original?.target_difficulty ?? null);
@@ -359,6 +368,7 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
   }, [actionRequest?.nonce]);
 
   async function undo() {
+    applyFromRef.current = null;
     const decision = getAutoregDecision(sessionId);
     track("undo", decision?.pct ?? null);
     setUndoing(true);
@@ -432,7 +442,8 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
                 plannedMarker={plannedDifficulty}
                 zoneLow={zoneLow}
                 zoneHigh={zoneHigh}
-                value={diffFromPct(plannedDifficulty, selectedPct)}
+                introFrom={lastRingValue.current ?? undefined}
+                value={(lastRingValue.current = diffFromPct(plannedDifficulty, selectedPct), lastRingValue.current)}
                 onChange={newDiff => selectChip(pctFromDiff(plannedDifficulty, newDiff))}
               />
             ) : (
@@ -495,7 +506,8 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
                   centerLabel={free ? { arrow: String(appliedDiff), verb: "Ajustée" } : undefined}
                   hideHint
                   onHint={free ? undefined : onHint}
-                  value={plannedDifficulty}
+                  introFrom={applyFromRef.current ?? lastRingValue.current ?? undefined}
+                  value={(lastRingValue.current = plannedDifficulty, plannedDifficulty)}
                   plannedMarker={decidedPct !== null ? decidedPlannedDiff : null}
                   readOnly
                   hint={decidedHint}

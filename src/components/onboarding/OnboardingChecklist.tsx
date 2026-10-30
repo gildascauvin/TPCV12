@@ -137,7 +137,7 @@ export default function OnboardingChecklist() {
             boxShadow: "0 20px 50px rgba(0,0,0,.55)", color: "#fff",
           }}>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 19, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 2 }}>
-              {role === "coach" ? "Lance ton équipe" : "Lance ton autorégulation"}
+              {role === "coach" ? "Lance ton groupe" : "Lance ton autorégulation"}
             </div>
             <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.6)", marginBottom: 14 }}>
               {doneCount}/{total} étapes · {nextStep ? `Prochaine : ${nextStep.label.toLowerCase()}` : "Tout est prêt"}

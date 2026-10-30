@@ -44,38 +44,36 @@ for (const role of roles) for (const has of hasValues) for (const claimed of boo
 
     if (role === "coach") {
       expect(p.includes("decision_2b"), `aha coach ${tag}`);
-      expect(p.includes("ob_count") && p.includes("ob_when") && p.includes("ob_mirror") && p.includes("ob_control") && p.includes("ob_invite") && p.includes("ob_pay"), `écrans coach présents ${tag}`);
-      expect(!p.some(s => ["ob_health", "ob_checkin", "ob_week", "decision_2a"].includes(s)), `coach : ni Santé, ni check-in, ni semaine ${tag}`);
+      expect((["ob_count", "ob_plan", "ob_decide", "ob_insight", "ob_week", "ob_invite", "ob_pay"] as StepId[]).every(s => p.includes(s)), `écrans coach présents ${tag}`);
+      expect(!p.some(s => (["ob_health", "decision_2a", "ob_when", "ob_mirror", "ob_control", "ob_checkin"] as StepId[]).includes(s)), `coach : ni Santé, ni anciens écrans ${tag}`);
       expect(p.includes("ob_notif") === pushAvailable, `coach : notifs seulement si activables ${tag}`);
-      expect(p.indexOf("ob_control") < p.indexOf("ob_invite") && p.indexOf("ob_invite") < p.indexOf("ob_pay"), `coach : déclic avant l'invitation, paywall en dernier ${tag}`);
+      expect(p.indexOf("ob_week") < p.indexOf("ob_invite") && p.indexOf("ob_invite") < p.indexOf("ob_pay"), `coach : déclic avant l'invitation ${tag}`);
       expect(p[p.length - 1] === "ob_pay", `coach : paywall en dernier ${tag}`);
       const lastQ = Math.max(...PROGRAM_QUESTION_STEPS.map(s => p.indexOf(s)), p.indexOf("ob_count"));
-      expect(lastQ < p.indexOf("ob_when"), `coach : questions avant le cadrage ${tag}`);
+      expect(lastQ < p.indexOf("ob_plan"), `coach : questions avant son programme ${tag}`);
       if (claimed) expect(!p.includes("ob_sport") && !p.includes("ob_program"), `coach claimé : pas de questions programme ${tag}`);
+      continue;
+    }
+    if (inv) {
+      expect(eq(p, ["value_intro", "account"]), `invité : inscription seule, puis l'app ${tag}`);
       continue;
     }
     // Sportif Elite
     expect(p.includes("decision_2a"), `aha montré au sportif ${tag}`);
-    expect(p.includes("ob_checkin"), `check-in toujours présent ${tag}`);
-    expect(!p.includes("ob_invite"), `pas d'invitation côté sportif ${tag}`);
+    expect((["ob_plan", "ob_decide", "ob_insight", "ob_week", "ob_pay"] as StepId[]).every(s => p.includes(s)), `écrans de l'argumentaire présents ${tag}`);
+    expect(!p.some(s => (["ob_invite", "ob_when", "ob_mirror", "ob_checkin", "ob_control"] as StepId[]).includes(s)), `sportif : ni invitation, ni anciens écrans ${tag}`);
     expect(p.includes("ob_health") === healthAvailable, `Apple Santé seulement si disponible ${tag}`);
     expect(p.includes("ob_notif") === pushAvailable, `notifs seulement si activables ${tag}`);
-    expect(p.includes("ob_pay") === !(inv && coachPaying), `paywall sauf invité d'un coach payant ${tag}`);
+    expect(p[p.length - 1] === "ob_pay", `paywall en dernier ${tag}`);
     // Les écrans Elite gardent leur ordre et viennent après toutes les questions de programme.
     const elite = p.filter(s => ELITE_STEPS.includes(s));
     expect(eq(elite, ELITE_STEPS.filter(s => elite.includes(s))), `ordre des écrans Elite ${tag}`);
-    const lastQuestion = Math.max(...(["ob_sport", "ob_program", "ob_import", "ob_goal", "ob_weak", "ob_days"] as StepId[]).map(s => p.indexOf(s)));
+    const lastQuestion = Math.max(...PROGRAM_QUESTION_STEPS.map(s => p.indexOf(s)));
     expect(lastQuestion < p.indexOf(elite[0]), `écrans Elite après les questions ${tag}`);
-    if (inv) {
-      expect(!p.some(s => ["ob_sport", "ob_program", "ob_import", "ob_goal", "ob_weak", "ob_days", "ob_when", "ob_mirror", "ob_week"].includes(s)), `invité : ni questions, ni cadrage, ni semaine ${tag}`);
-    } else {
-      expect(p.includes("ob_when") && p.includes("ob_mirror"), `cadrage présent ${tag}`);
-      const hasProgram = claimed || has !== "later";
-      expect(p.includes("ob_week") === (hasProgram && programReady !== false), `semaine seulement avec un programme prêt ${tag}`);
-      if (claimed) expect(!p.includes("ob_sport") && !p.includes("ob_program"), `claimé : pas de questions programme ${tag}`);
-      if (!claimed && has === "import") expect(p.includes("ob_import") && !p.includes("ob_goal"), `import : pas d'objectif/jours ${tag}`);
-      if (!claimed && has === "later") expect(!p.includes("ob_goal") && !p.includes("ob_import"), `passé : aucune question de programme après ob_program ${tag}`);
-    }
+    expect(p.indexOf("ob_plan") < p.indexOf("ob_decide"), `programme avant la décision ${tag}`);
+    if (claimed) expect(!p.includes("ob_sport") && !p.includes("ob_program"), `claimé : pas de questions programme ${tag}`);
+    if (!claimed && has === "import") expect(p.includes("ob_import") && !p.includes("ob_goal"), `import : pas d'objectif/jours ${tag}`);
+    if (!claimed && has === "later") expect(!p.includes("ob_goal") && !p.includes("ob_import"), `passé : aucune question de programme après ob_program ${tag}`);
   }
 
 // Cas lisibles, pour l'œil.

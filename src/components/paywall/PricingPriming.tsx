@@ -7,8 +7,8 @@ import ShareButton from "@/components/sessions/ShareButton";
 import { isNativeApp } from "@/lib/nativeGoogleAuth";
 
 /* Offre Gratuit / Elite (2026-10-07, POC https://claude.ai/artifact/MgsQY4Fncy8XtVgmNBA9Q5).
-   Partagé par PrimingJourneyModal.tsx (desktop : 2 colonnes côte à côte ; mobile : Elite puis
-   Gratuit empilés) — un seul point de vérité pour le prix, les fonctionnalités, les vidéos et la
+   Partagé par PrimingJourneyModal.tsx (carte Gratuit retirée le 2026-10-30 : la carte Elite seule,
+   face à la frise des 14 jours offerts) — un seul point de vérité pour le prix, les fonctionnalités, les vidéos et la
    FAQ. Le titre personnalisé vit dans src/lib/primingSource.ts.
 
    Essai : 14 jours, CB requise, 0€ aujourd'hui. Consigne de Gildas : ne jamais parler d'« essai
@@ -149,23 +149,6 @@ const chip = (color: string, bg: string): React.CSSProperties => ({
   color, background: bg, borderRadius: 999, padding: "5px 9px", whiteSpace: "nowrap",
 });
 
-/* Carte Gratuit : « Ton plan actuel », sans prix. `footer` = bouton « Continuer en Gratuit »
-   (desktop) ; absent en mobile (lien dans le bas fixe). */
-export function FreePlanCard({ role, sportDe, footer }: { role: "athlete" | "coach"; sportDe: string | null; footer?: React.ReactNode }) {
-  const f = planFeatures(role, sportDe);
-  return (
-    <div style={{ borderRadius: 20, padding: "20px 20px 18px", display: "flex", flexDirection: "column", gap: 14, minWidth: 0, background: "rgba(255,255,255,.035)", border: "1px solid rgba(255,255,255,.10)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(255,255,255,.62)" }}>Gratuit</span>
-        <span style={chip("rgba(255,255,255,.62)", "rgba(255,255,255,.08)")}>Ton plan actuel</span>
-      </div>
-      <div style={{ fontSize: 13, color: "rgba(255,255,255,.58)", lineHeight: 1.5 }}>Tout ce que tu saisis et tes mesures, sans limite de durée.</div>
-      <FeatureList items={f.free} elite={false} />
-      {footer && <><div style={{ flex: 1 }} />{footer}</>}
-    </div>
-  );
-}
-
 /* Carte Elite, mise en avant. `cta` = bouton d'achat (absent en mobile : bas fixe). */
 export function ElitePlanCard({ role, billing, setBilling, sportDe, hitIndex, hitLabel, cta, sideLink }: {
   role: "athlete" | "coach"; billing: Billing; setBilling: (b: Billing) => void; sportDe: string | null;
@@ -183,7 +166,7 @@ export function ElitePlanCard({ role, billing, setBilling, sportDe, hitIndex, hi
         <span style={chip("#7fdb8f", "rgba(47,158,68,.20)")}>✓ {TRIAL_DAYS} jours offerts</span>
       </div>
       <ElitePrice role={role} billing={billing} setBilling={setBilling} />
-      <div style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: ".07em", textTransform: "uppercase", color: "rgba(255,138,85,.85)", margin: "4px 0 -6px" }}>Tout Gratuit, plus</div>
+      <div style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: ".07em", textTransform: "uppercase", color: "rgba(255,138,85,.85)", margin: "4px 0 -6px" }}>En plus du gratuit</div>
       <FeatureList items={f.elite} elite hitIndex={hitIndex} hitLabel={hitLabel} />
       {cta && <><div style={{ flex: 1 }} />{cta}</>}
       {sideLink}

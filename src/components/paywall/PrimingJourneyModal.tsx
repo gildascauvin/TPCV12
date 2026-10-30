@@ -4,7 +4,8 @@ import { isNativeApp } from "@/lib/nativeGoogleAuth";
 import { NativePurchasePanel } from "./NativeCheckout";
 import { useEffect, useState } from "react";
 import posthog from "posthog-js";
-import { ElitePlanCard, FreePlanCard, PrimingExtras, PricingSideLink, PRICING_PRIMING_GUARANTEE_CAPTION } from "./PricingPriming";
+import { ElitePlanCard, PrimingExtras, PricingSideLink, PRICING_PRIMING_GUARANTEE_CAPTION } from "./PricingPriming";
+import { RiskTimeline } from "./RiskTimeline";
 import { PAYWALL_CTA_LABEL } from "./PaywallModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
@@ -85,25 +86,25 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
       <div style={{ textAlign: "center", fontSize: 12, color: "rgba(255,255,255,.5)" }}>{PRICING_PRIMING_GUARANTEE_CAPTION}</div>
     </>
   );
-  const freeBtn = allowDismiss ? (
-    <button onClick={close} style={{ width: "100%", height: 46, borderRadius: 16, border: "1px solid rgba(255,255,255,.16)", background: "transparent", color: "rgba(255,255,255,.8)", fontSize: 13.5, fontWeight: 800, cursor: "pointer" }}>
-      Continuer en Gratuit
-    </button>
-  ) : undefined;
   const sideLink = <PricingSideLink role={mode} athleteSelfId={athleteSelfId} name={displayName} />;
 
+  /* Plus de carte Gratuit (2026-10-30, Gildas : un seul choix, Elite oui ou non ; la croix reste la sortie),
+     partout, onboarding comme app. À la place, la frise des 14 jours offerts sous le titre. */
   const head = (
-    <div style={{ maxWidth: 760 }}>
-      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 12 }}>{titles.eyebrow}</div>
-      <div style={{ fontFamily: "var(--font-display)", fontSize: isMd ? 29 : 24, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.18, color: "#fff", textWrap: "balance" as React.CSSProperties["textWrap"], marginBottom: 10 }}>{title}</div>
-      {subText && <div style={{ fontSize: isMd ? 14.5 : 13.5, lineHeight: 1.55, color: "rgba(255,255,255,.62)", maxWidth: 620 }}>{subText}</div>}
+    <div>
+      <div style={{ maxWidth: 760 }}>
+        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 12 }}>{titles.eyebrow}</div>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: isMd ? 29 : 24, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.18, color: "#fff", textWrap: "balance" as React.CSSProperties["textWrap"], marginBottom: 10 }}>{title}</div>
+        {subText && <div style={{ fontSize: isMd ? 14.5 : 13.5, lineHeight: 1.55, color: "rgba(255,255,255,.62)", maxWidth: 620 }}>{subText}</div>}
+      </div>
+      <div style={{ marginTop: 22 }}><RiskTimeline coach={mode === "coach"} /></div>
     </div>
   );
   const closeBtn = allowDismiss && (
     <button onClick={close} aria-label="Fermer" style={{ position: "absolute", top: 14, right: 14, width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)", cursor: "pointer", fontSize: 19, color: "rgba(255,255,255,.75)", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5 }}>×</button>
   );
 
-  /* Mobile : plein écran, Elite puis Gratuit, achat dans le bas fixe. */
+  /* Mobile : plein écran, titre et frise puis Elite, achat dans le bas fixe. */
   if (!isMd) {
     return (
       <div className={exitClass} style={backdrop}>
@@ -113,24 +114,18 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
             <div style={{ padding: "44px 20px 4px" }}>{head}</div>
             <div style={{ padding: "18px 16px 6px", display: "flex", flexDirection: "column", gap: 14 }}>
               <ElitePlanCard role={mode} billing={billing} setBilling={setBilling} sportDe={ctx.sportDe} hitIndex={hitIndex} hitLabel={hitLabel} sideLink={sideLink} />
-              <FreePlanCard role={mode} sportDe={ctx.sportDe} />
             </div>
             <div style={{ padding: "14px 16px 20px" }}><PrimingExtras role={mode} /></div>
           </div>
           <div style={{ flexShrink: 0, padding: "12px 16px 16px", background: "rgba(7,10,13,.88)", borderTop: "1px solid rgba(255,255,255,.08)", display: "flex", flexDirection: "column", gap: 8 }}>
             {cta}
-            {allowDismiss && (
-              <button onClick={close} style={{ border: "none", background: "none", color: "rgba(255,255,255,.75)", fontSize: 13, fontWeight: 700, textDecoration: "underline", cursor: "pointer", alignSelf: "center", padding: 2 }}>
-                Continuer en Gratuit
-              </button>
-            )}
           </div>
         </div>
       </div>
     );
   }
 
-  /* Desktop : modale centrée, les 2 offres côte à côte (empilées si la fenêtre est étroite). */
+  /* Desktop : modale centrée, titre et frise à gauche, Elite à droite (empilés si la fenêtre est étroite). */
   return (
     <div className={exitClass} style={backdrop} onClick={e => { if (allowDismiss && e.target === e.currentTarget) close(); }}>
       <div style={{
@@ -141,19 +136,9 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
       }}>
         {closeBtn}
         <div style={{ flex: 1, overflowY: "auto" }}>
-          <div style={{ padding: "34px 32px 6px" }}>{head}</div>
-          <div style={{ padding: "22px 32px 8px", display: "grid", gap: 14, gridTemplateColumns: columns ? "0.85fr 1.15fr" : "1fr", alignItems: "stretch" }}>
-            {columns ? (
-              <>
-                <FreePlanCard role={mode} sportDe={ctx.sportDe} footer={freeBtn} />
-                <ElitePlanCard role={mode} billing={billing} setBilling={setBilling} sportDe={ctx.sportDe} hitIndex={hitIndex} hitLabel={hitLabel} cta={cta} sideLink={sideLink} />
-              </>
-            ) : (
-              <>
-                <ElitePlanCard role={mode} billing={billing} setBilling={setBilling} sportDe={ctx.sportDe} hitIndex={hitIndex} hitLabel={hitLabel} cta={cta} sideLink={sideLink} />
-                <FreePlanCard role={mode} sportDe={ctx.sportDe} footer={freeBtn} />
-              </>
-            )}
+          <div style={{ padding: "34px 32px 8px", display: "grid", gap: columns ? 36 : 22, gridTemplateColumns: columns ? "1fr 1.05fr" : "1fr", alignItems: "start" }}>
+            <div style={{ paddingTop: columns ? 4 : 0 }}>{head}</div>
+            <ElitePlanCard role={mode} billing={billing} setBilling={setBilling} sportDe={ctx.sportDe} hitIndex={hitIndex} hitLabel={hitLabel} cta={cta} sideLink={sideLink} />
           </div>
           <div style={{ padding: "18px 32px 28px" }}><PrimingExtras role={mode} /></div>
         </div>

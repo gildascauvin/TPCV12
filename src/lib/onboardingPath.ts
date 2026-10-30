@@ -3,15 +3,20 @@
 
    Parcours "Elite" (POC https://claude.ai/artifact/HopwXw7gFnAdRLpB496JvE, v26), derrière un
    interrupteur (readEliteFlag) : désactivé, le parcours est exactement celui d'avant.
-     Sportif direct  : value_intro → decision_2a → account → questions programme → ob_when →
-                       ob_mirror → ob_health (app iOS) → ob_checkin → ob_week (programme prêt) →
-                       ob_notif (notifs possibles) → ob_pay
+   Argumentaire avant paywall (2026-10-29, POC https://claude.ai/artifact/Ma3E6NB8dAAhd7HwjjuVF7) :
+     Sportif direct  : value_intro → decision_2a → account → questions programme → ob_plan (son
+                       programme tel quel, ouvre le check-in) → ob_health (app iOS) → ob_decide
+                       (« Tu fais quoi ? ») → ob_insight (ce que disent nos données) → ob_week (la
+                       jauge de décision) → ob_notif (notifs possibles) → ob_pay
      Programme claimé : mêmes écrans sans les questions de programme.
-     Invité par un coach : value_intro → decision_2a → account → ob_health → ob_checkin → ob_notif →
-                       ob_pay (seulement si le coach ne paie pas).
-     Coach (2026-10-19) : value_intro → decision_2b → account → ob_sport → ob_count → questions
-                       programme → ob_when → ob_mirror → ob_control → ob_invite → ob_notif → ob_pay
-                       (claimé : ob_count seul avant ob_when). Ni Apple Santé, ni point forme, ni semaine. */
+     Sans programme (« plus tard », génération ou import raté) : mêmes écrans, une séance type de son
+                       sport à la place du programme.
+     Invité par un coach : value_intro → account, puis l'app directement (la checklist prend le relais ;
+                       coach gratuit : le paywall arrive par le gating de l'app).
+     Coach : value_intro → decision_2b → account → ob_sport → ob_count → questions programme →
+                       ob_plan (son programme tel quel, puis le prénom d'un de ses sportifs et son point
+                       forme imaginé) → ob_decide → ob_insight → ob_week (la séance de ce sportif) →
+                       ob_invite → ob_notif → ob_pay (claimé : ob_count seul). */
 
 export type Role = "athlete" | "coach";
 export type ObHas = "import" | "generate" | "later" | null;
@@ -25,20 +30,20 @@ export type StepId =
   // Parcours Elite (2026-10-17).
   | "ob_when" | "ob_mirror" | "ob_health" | "ob_checkin" | "ob_week" | "ob_notif" | "ob_pay"
   // Parcours Elite coach (2026-10-19) : taille du groupe, puis Coach Control démo.
-  | "ob_count" | "ob_control";
+  | "ob_count" | "ob_control"
+  // Argumentaire avant paywall (2026-10-29).
+  | "ob_plan" | "ob_decide" | "ob_insight";
 
 export const ATHLETE_PATH: StepId[] = ["value_intro", "decision_2a", "account"];
 export const COACH_PATH: StepId[] = ["value_intro", "decision_2b", "account"];
 export const PROGRAM_ATHLETE_PATH: StepId[] = ["value_intro", "decision_2a", "account"];
 export const PROGRAM_COACH_PATH: StepId[] = ["value_intro", "decision_2b", "account"];
-/* Sportif invité par un coach : ni questions de programme ni paywall (accès gratuit tant que le coach
-   paie). Parcours Elite : l'aha est montré aussi (voir INVITE_ATHLETE_ELITE_PATH). */
+/* Sportif invité par un coach : l'inscription seule, puis l'app (2026-10-29, aussi en parcours Elite). */
 export const INVITE_ATHLETE_PATH: StepId[] = ["value_intro", "account"];
-export const INVITE_ATHLETE_ELITE_PATH: StepId[] = ["value_intro", "decision_2a", "account"];
 
 /* Écrans propres au parcours Elite, dans l'ordre. On ne revient jamais d'un de ces écrans vers les
    questions de programme : le programme est déjà en cours de création à partir de ob_when. */
-export const ELITE_STEPS: StepId[] = ["ob_when", "ob_mirror", "ob_health", "ob_checkin", "ob_week", "ob_control", "ob_notif", "ob_pay"];
+export const ELITE_STEPS: StepId[] = ["ob_plan", "ob_health", "ob_decide", "ob_insight", "ob_week", "ob_invite", "ob_notif", "ob_pay"];
 /* Questions qui construisent le programme : un écran Elite n'y revient jamais en arrière. */
 export const PROGRAM_QUESTION_STEPS: StepId[] = ["ob_sport", "ob_program", "ob_import", "ob_goal", "ob_weak", "ob_days"];
 
@@ -90,28 +95,26 @@ export function buildOnboardingPath(o: PathOptions): StepId[] {
       if (o.has === "import") post.push("ob_import");
       else if (o.has !== "later") post.push("ob_goal", "ob_weak", "ob_days");
     }
-    post.push("ob_when", "ob_mirror", "ob_control", "ob_invite");
+    post.push("ob_plan", "ob_decide", "ob_insight", "ob_week", "ob_invite");
     if (o.pushAvailable) post.push("ob_notif");
     post.push("ob_pay");
     return [...base, ...post];
   }
 
-  const base = invited ? INVITE_ATHLETE_ELITE_PATH : (o.claimed ? PROGRAM_ATHLETE_PATH : ATHLETE_PATH);
+  if (invited) return INVITE_ATHLETE_PATH;
+  const base = o.claimed ? PROGRAM_ATHLETE_PATH : ATHLETE_PATH;
   const post: StepId[] = [];
-  if (!invited && !o.claimed) {
+  if (!o.claimed) {
     post.push("ob_sport", "ob_program");
     if (o.has === "import") post.push("ob_import");
     else if (o.has !== "later") post.push("ob_goal", "ob_weak", "ob_days");
   }
-  if (!invited) post.push("ob_when", "ob_mirror");
+  // Sans programme exploitable, ob_plan et ob_week prennent une séance type de son sport : toujours là.
+  post.push("ob_plan");
   if (o.healthAvailable) post.push("ob_health");
-  post.push("ob_checkin");
-  // La semaine : seulement s'il y a un programme créé par ce parcours (pas pour un invité, dont le
-  // coach n'a peut-être encore rien préparé).
-  const hasProgram = o.claimed || o.has !== "later";
-  if (!invited && hasProgram && o.programReady !== false) post.push("ob_week");
+  post.push("ob_decide", "ob_insight", "ob_week");
   if (o.pushAvailable) post.push("ob_notif");
-  if (!(invited && o.coachPaying)) post.push("ob_pay");
+  post.push("ob_pay");
   return [...base, ...post];
 }
 
