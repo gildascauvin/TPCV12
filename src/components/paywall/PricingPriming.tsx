@@ -96,7 +96,7 @@ function FeatureList({ items, elite, hitIndex, hitLabel }: { items: Feature[]; e
 }
 
 /* Formules l'une sous l'autre (2026-10-30), partagées par le paywall et l'offre de sortie (ExitOffer). */
-export type OfferRow = { b: Billing; label: string; big: string; unit: string; small: React.ReactNode; badge?: string };
+export type OfferRow = { b: Billing; label: string; big: string; unit: string; small: React.ReactNode; badge?: string; tag?: string };
 export function OfferRows({ rows, billing, setBilling }: { rows: OfferRow[]; billing: Billing; setBilling: (b: Billing) => void }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }} role="radiogroup" aria-label="Formule">
@@ -104,12 +104,13 @@ export function OfferRows({ rows, billing, setBilling }: { rows: OfferRow[]; bil
         const on = billing === r.b;
         return (
           <button key={r.b} type="button" role="radio" aria-checked={on} onClick={() => setBilling(r.b)} style={{
-            display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", cursor: "pointer",
+            position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", cursor: "pointer",
             padding: "13px 14px", borderRadius: 16, color: "#fff",
             background: on ? "rgba(212,64,0,.16)" : "rgba(255,255,255,.04)",
             border: on ? "1.5px solid #ff8a55" : "1.5px solid rgba(255,255,255,.12)",
             transition: "background .15s, border-color .15s",
           }}>
+            {r.tag && <span style={{ position: "absolute", top: 0, right: 14, transform: "translateY(-50%)", fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#fff", background: "#D44000", borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap" }}>{r.tag}</span>}
             <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: "50%", border: on ? "6px solid #ff8a55" : "2px solid rgba(255,255,255,.35)", transition: "border .15s" }} />
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -139,7 +140,7 @@ function ElitePrice({ role, billing, setBilling }: { role: "athlete" | "coach"; 
   const saved = p.monthly * 12 - p.annual;
   const rows: OfferRow[] = [
     {
-      b: "annual", label: "Annuel", badge: `-${saved} €`,
+      b: "annual", label: "Annuel", badge: `-${saved} €`, tag: "Meilleur prix",
       big: ios ? `${p.annual} €` : `${fr(p.annualMonthly)} €`, unit: ios ? "/an" : "/mois",
       small: ios ? <>soit {fr(p.annualMonthly)} €/mois</> : <><s style={{ opacity: .6 }}>{p.monthly * 12} €</s> {p.annual} € par an</>,
     },
@@ -182,11 +183,6 @@ export function PricingSideLink({ role, athleteSelfId, name }: { role: "athlete"
   );
 }
 
-const chip = (color: string, bg: string): React.CSSProperties => ({
-  fontFamily: mono, fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase",
-  color, background: bg, borderRadius: 999, padding: "5px 9px", whiteSpace: "nowrap",
-});
-
 /* Carte Elite, mise en avant. `cta` = bouton d'achat (absent en mobile : bas fixe). */
 export function ElitePlanCard({ role, billing, setBilling, sportDe, hitIndex, hitLabel, cta, sideLink }: {
   role: "athlete" | "coach"; billing: Billing; setBilling: (b: Billing) => void; sportDe: string | null;
@@ -200,8 +196,7 @@ export function ElitePlanCard({ role, billing, setBilling, sportDe, hitIndex, hi
       border: "1px solid rgba(255,138,85,.45)", boxShadow: "0 0 0 1px rgba(212,64,0,.18), 0 24px 60px rgba(212,64,0,.14)",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#ff8a55" }}>Elite</span>
-        <span style={chip("#7fdb8f", "rgba(47,158,68,.20)")}>✓ {TRIAL_DAYS} jours offerts</span>
+        <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#ff8a55" }}>Essayer Elite {TRIAL_DAYS} jours</span>
       </div>
       <ElitePrice role={role} billing={billing} setBilling={setBilling} />
       <div style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: ".07em", textTransform: "uppercase", color: "rgba(255,138,85,.85)", margin: "4px 0 -6px" }}>En plus du gratuit</div>

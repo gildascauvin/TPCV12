@@ -19,7 +19,7 @@ export default function ExitOffer({ mode, billing, setBilling, onAccept, onDecli
   const ios = isNativeApp() || paywallSimIos();
   const pa = exitPrice(mode, "annual"), pm = exitPrice(mode, "monthly");
   const rows: OfferRow[] = [
-    { b: "annual", label: "Annuel", badge: "-30 %", big: ios ? euros(pa.now) : euros(pa.perMonth), unit: ios ? "/an" : "/mois",
+    { b: "annual", label: "Annuel", badge: "-30 %", tag: "Meilleur prix", big: ios ? euros(pa.now) : euros(pa.perMonth), unit: ios ? "/an" : "/mois",
       small: <><s style={{ opacity: .6 }}>{euros(pa.was)}</s> {ios ? "la 1re année" : `${euros(pa.now)} la 1re année`}</> },
     { b: "monthly", label: "Mensuel", badge: "-30 %", big: euros(pm.now), unit: "/mois",
       small: <><s style={{ opacity: .6 }}>{euros(pm.was)}</s> pendant 12 mois</> },

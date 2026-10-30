@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { markBrevoClient } from "@/lib/email/brevoContact";
 
 /* Abonnements Apple (RevenueCat) → profiles.subscription_status (2026-10-01).
    Plutôt que d'interpréter chaque type d'événement du webhook, on relit l'état complet du client
@@ -52,17 +53,13 @@ export function statusFromSubscriber(sub: RcSubscriber): "athlete" | "coach" | "
   return "expired";
 }
 
-async function markBrevoClient(userId: string) {
+async function markBrevoClientByUser(userId: string) {
   if (!process.env.BREVO_API_KEY) return;
   const admin = createAdminClient();
   const { data } = await admin.auth.admin.getUserById(userId);
   const email = data?.user?.email;
   if (!email) return;
-  await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/brevo/contact`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, status: "client" }),
-  }).catch(() => {});
+  await markBrevoClient(email).catch(e => console.error("[brevo] mark client", e));
 }
 
 /* Retourne le statut écrit, ou null si rien n'a été touché. */
@@ -82,6 +79,6 @@ export async function syncRevenueCatStatus(userId: string): Promise<string | nul
 
   const { error } = await admin.from("profiles").update({ subscription_status: status }).eq("user_id", userId);
   if (error) throw new Error(`profiles update: ${error.message}`);
-  if (status !== "expired") markBrevoClient(userId);
+  if (status !== "expired") markBrevoClientByUser(userId);
   return status;
 }

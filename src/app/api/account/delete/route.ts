@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { deleteBrevoContact } from "@/lib/email/brevoContact";
 
 /* Suppression de compte par l'utilisateur lui-même (2026-10-01) — exigée par Apple (guideline
    5.1.1(v)) dès qu'on peut créer un compte dans l'app, et utile au RGPD sur le web.
@@ -13,7 +14,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
    - la ligne du sportif dans le roster de son coach (coach_athletes.user_id passe à NULL sinon, et
      la ligne s'afficherait comme un "sportif démo") ;
    - program_assignments.user_id et coach_invites.email : pas de clé étrangère ;
-   - les fichiers du bucket exercise-comments (dossier {user_id}/).
+   - les fichiers du bucket exercise-comments (dossier {user_id}/) ;
+   - le contact Brevo.
    Côté paiement : l'abonnement Stripe est résilié immédiatement ; un abonnement Apple ne peut pas
    l'être par nous (l'utilisateur est prévenu dans l'app de le résilier dans ses réglages Apple). */
 
@@ -78,7 +80,10 @@ export async function POST() {
       }).catch(e => console.error("[account/delete] revenuecat", e));
     }
 
-    // 8. Le compte lui-même : tout le reste part en cascade.
+    // 8. Brevo : plus aucun email marketing (best effort, ne bloque pas la suppression).
+    if (email) await deleteBrevoContact(email).catch(e => console.error("[account/delete] brevo", e));
+
+    // 9. Le compte lui-même : tout le reste part en cascade.
     const { error } = await admin.auth.admin.deleteUser(uid);
     if (error) throw new Error(`auth delete: ${error.message}`);
   } catch (e) {

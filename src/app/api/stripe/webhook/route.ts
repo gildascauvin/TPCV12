@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { markBrevoClient } from "@/lib/email/brevoContact";
 
 function getServiceClient() {
   return createServiceClient(
@@ -9,17 +10,13 @@ function getServiceClient() {
   );
 }
 
-async function markBrevoClient(userId: string) {
+async function markBrevoClientByUser(userId: string) {
   if (!process.env.BREVO_API_KEY) return;
   const supabase = getServiceClient();
   const { data } = await supabase.auth.admin.getUserById(userId);
   const email = data?.user?.email;
   if (!email) return;
-  await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/brevo/contact`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, status: "client" }),
-  }).catch(() => {});
+  await markBrevoClient(email).catch(e => console.error("[brevo] mark client", e));
 }
 
 export async function POST(request: Request) {
@@ -60,7 +57,7 @@ export async function POST(request: Request) {
           .from("profiles")
           .update({ subscription_status: plan as "athlete" | "coach" })
           .eq("user_id", userId);
-        markBrevoClient(userId);
+        markBrevoClientByUser(userId);
       } else if (userId && ["past_due", "canceled", "unpaid"].includes(sub.status)) {
         await supabase
           .from("profiles")

@@ -337,7 +337,8 @@ export function getSportCategory(sport: string): SportCategory {
   if (s.includes("collectif") || s.includes("foot") || s.includes("basket") || s.includes("rugby") || s.includes("handball") || s.includes("volley")) return "collectif";
   if (s.includes("nata") || s.includes("aqua") || s.includes("swim")) return "natation";
   if (s.includes("triathlon")) return "triathlon";
-  if (s.includes("cycl") || s.includes("vélo") || s.includes("velo") || s.includes("bike")) return "cyclisme";
+  // « velo » en mot entier : en sous-chaîne, « développé » tombait en cyclisme.
+  if (s.includes("cycl") || /\bv[ée]lo\b/.test(s) || s.includes("bike")) return "cyclisme";
   if (s.includes("ski") || s.includes("snowboard")) return "ski";
   if (s.includes("aviron") || s.includes("rowing") || s.includes("rameur")) return "aviron";
   if (s.includes("gym") || s.includes("agrès") || s.includes("agres")) return "gymnastique";

@@ -47,10 +47,12 @@ export const PRICING = {
    contrairement à l'écran priming qui ne fait qu'avancer vers celui-ci (voir PricingPriming.tsx /
    Actions "Continuer →"). */
 export const PAYWALL_CTA_LABEL: Record<"athlete" | "coach", string> = {
-  // 2026-10-07 : l'offre s'appelle Elite (POC MgsQY4Fncy8XtVgmNBA9Q5), libellé choisi par Gildas.
-  athlete: "Débloquer Elite — 14 jours offerts",
-  coach: "Débloquer Elite — 14 jours offerts",
+  // 2026-10-30 : « Débloquer Elite — 14 jours offerts » remplacé (Gildas). Bouton du priming (web) et achat natif.
+  athlete: "Commencer mon essai gratuit",
+  coach: "Commencer mon essai gratuit",
 };
+/* Bouton du formulaire de carte (web, 2026-10-30) : un autre verbe que le priming, qui ne fait qu'ouvrir ce formulaire. */
+export const PAYWALL_SUBMIT_LABEL = "Activer mon essai gratuit";
 
 // Doit rester en phase avec TRIAL_DAYS dans /api/stripe/subscribe/route.ts et PricingPriming.tsx.
 const TRIAL_DAYS = 14;
@@ -134,7 +136,7 @@ export function CheckoutForm({
   }, [stripe, billing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const priceStr = promo ? (billing === "annual" ? `${euros(exitPrice(mode, billing).now)} la 1re année, puis ${p.annual}€/an` : `${euros(exitPrice(mode, billing).now)}/mois pendant 12 mois, puis ${p.monthly}€/mois`) : billing === "annual" ? `${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois (${p.annual}€/an)` : `${p.monthly}€/mois`;
-  const effectiveCtaLabel = ctaLabel ?? PAYWALL_CTA_LABEL[mode];
+  const effectiveCtaLabel = ctaLabel ?? PAYWALL_SUBMIT_LABEL;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
