@@ -19,11 +19,11 @@ export async function POST(request: Request) {
 
   if (!priceId) return NextResponse.json({ error: "Invalid plan or missing annual price" }, { status: 400 });
 
-  /* Offre de sortie (src/lib/exitOffer.ts) : code DEPART30, annuel seulement. Code introuvable ou inactif =
+  /* Offre de sortie (src/lib/exitOffer.ts) : code DEPART30, mensuel ou annuel (coupon -30 % 12 mois sur les deux produits). Code introuvable ou inactif =
      erreur plutôt qu'un abonnement au plein tarif alors que l'écran affichait le prix remisé. */
   let promotionCodeId: string | null = null;
   if (promo) {
-    if (promo !== "DEPART30" || billing !== "annual") return NextResponse.json({ error: "Cette offre n'est valable que sur l'abonnement annuel." }, { status: 400 });
+    if (promo !== "DEPART30") return NextResponse.json({ error: "Cette offre n'est plus disponible." }, { status: 400 });
     const codes = await stripe.promotionCodes.list({ code: promo, active: true, limit: 1 });
     promotionCodeId = codes.data[0]?.id ?? null;
     if (!promotionCodeId) return NextResponse.json({ error: "Cette offre n'est plus disponible." }, { status: 400 });

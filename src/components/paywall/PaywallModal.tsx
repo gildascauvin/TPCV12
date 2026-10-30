@@ -89,7 +89,7 @@ export function CheckoutForm({
   /** Désactivé sur l'onboarding (2026-07-30) : le reçu "Dû aujourd'hui / Renouvellement..." rendu juste au-dessus
       (OnboardingFlow.tsx) dit déjà tout ça, plus précisément — répéter la phrase ici ferait doublon. */
   showBillingLegal?: boolean;
-  /** Code promo de l'offre de sortie (annuel seulement, voir src/lib/exitOffer.ts). */
+  /** Code promo de l'offre de sortie (mensuel ou annuel, voir src/lib/exitOffer.ts). */
   promo?: string;
 }) {
   const stripe = useStripe();
@@ -103,7 +103,7 @@ export function CheckoutForm({
 
   useEffect(() => {
     if (!stripe) return;
-    const amount = promo ? Math.round(exitPrice(mode).now * 100) : billing === "annual" ? p.annual * 100 : p.monthly * 100;
+    const amount = promo ? Math.round(exitPrice(mode, billing).now * 100) : billing === "annual" ? p.annual * 100 : p.monthly * 100;
     const pr = stripe.paymentRequest({
       country: "FR",
       currency: "eur",
@@ -133,7 +133,7 @@ export function CheckoutForm({
     });
   }, [stripe, billing]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const priceStr = promo ? `${euros(exitPrice(mode).now)} la 1re année, puis ${p.annual}€/an` : billing === "annual" ? `${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois (${p.annual}€/an)` : `${p.monthly}€/mois`;
+  const priceStr = promo ? (billing === "annual" ? `${euros(exitPrice(mode, billing).now)} la 1re année, puis ${p.annual}€/an` : `${euros(exitPrice(mode, billing).now)}/mois pendant 12 mois, puis ${p.monthly}€/mois`) : billing === "annual" ? `${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois (${p.annual}€/an)` : `${p.monthly}€/mois`;
   const effectiveCtaLabel = ctaLabel ?? PAYWALL_CTA_LABEL[mode];
 
   async function handleSubmit(e: React.FormEvent) {
@@ -258,9 +258,9 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
      et ne change plus une fois ici. */
   // App iOS : achat Apple (NativeCheckout), jamais de Stripe ni de setup-intent.
   const native = isNativeApp();
-  // Offre de sortie acceptée (web) : annuel imposé, code promo envoyé à /api/stripe/subscribe.
+  // Offre de sortie acceptée (web) : formule choisie sur l'offre (mensuel ou annuel), code promo envoyé à /api/stripe/subscribe.
   const [promo] = useState<string | undefined>(() => !native && exitOfferAccepted() ? EXIT_PROMO : undefined);
-  const [billing] = useState<Billing>(promo ? "annual" : initialBilling ?? "annual");
+  const [billing] = useState<Billing>(initialBilling ?? "annual");
 
   useEffect(() => {
     posthog.capture("paywall_form_viewed", { plan: mode, ...(abVariant ? { ab_variant: abVariant } : {}) });
@@ -284,7 +284,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   const testimonial = PAYWALL_TESTIMONIALS[mode];
   const p = PRICING[mode];
   // App iOS (refus App Store 3.1.2(c), 2026-10-09) : montant facturé seul, et le 0€ de l'essai pas plus en vue que lui.
-  const due = promo ? `${euros(exitPrice(mode).now)} (1re année)` : billing === "annual"
+  const due = promo ? (billing === "annual" ? `${euros(exitPrice(mode, billing).now)} (1re année)` : `${euros(exitPrice(mode, billing).now)}/mois`) : billing === "annual"
     ? native ? `${p.annual}€/an` : `${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois (${p.annual}€/an)`
     : `${p.monthly}€/mois`;
   const endDate = (() => { const d = new Date(); d.setDate(d.getDate() + TRIAL_DAYS); return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long" }); })();
@@ -300,7 +300,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
       {[
         { l: "Aujourd'hui", v: "0€", big: !native },
         { l: `Le ${endDate}`, v: due },
-        ...(promo ? [{ l: `Code ${promo}`, v: "-30 % la 1re année" }] : []),
+        ...(promo ? [{ l: `Code ${promo}`, v: billing === "annual" ? "-30 % la 1re année" : "-30 % pendant 12 mois" }] : []),
         { l: "Annulation", v: "1 clic" },
       ].map((r, i) => (
         <div key={r.l} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "11px 0", borderTop: i ? "1px solid rgba(255,255,255,.07)" : "none", fontSize: 13.5, color: "rgba(255,255,255,.85)" }}>

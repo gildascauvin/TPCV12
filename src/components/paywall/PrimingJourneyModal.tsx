@@ -100,8 +100,8 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
     close();
   };
   const exitOffer = exitOpen && (
-    <ExitOffer mode={mode}
-      onAccept={() => { posthog.capture("exit_offer_accepted", { plan: mode, source }); acceptExitOffer(); setBilling("annual"); onContinue(); }}
+    <ExitOffer mode={mode} billing={billing} setBilling={setBilling}
+      onAccept={() => { posthog.capture("exit_offer_accepted", { plan: mode, source, billing }); acceptExitOffer(); onContinue(); }}
       onDecline={() => { posthog.capture("exit_offer_declined", { plan: mode, source }); close(); }} />
   );
   const sideLink = <PricingSideLink role={mode} athleteSelfId={athleteSelfId} name={displayName} />;
