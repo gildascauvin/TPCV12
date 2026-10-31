@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { DARK_CARD_BG } from "@/lib/theme";
 import { AhaBilanPreview, AhaDecisionPreview, AhaFormPeakPreview, AhaRadarPreview, AhaGroupBilanPreview } from "@/components/onboarding/AhaPreviews";
@@ -82,15 +82,50 @@ interface Props {
 
 const AUTO_MS = 5000;
 
+/* L'illustration tient en entier au-dessus du bouton (31/10) : elle était coupée par le footer sur
+   iPhone. Réduite jusqu'à 72 % de sa taille ; en dessous, la zone défile comme avant. */
+function FitBox({ children }: { children: React.ReactNode }) {
+  const outer = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState({ s: 1, h: 0 });
+  useLayoutEffect(() => {
+    const o = outer.current, i = inner.current;
+    if (!o || !i || typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      const h = i.offsetHeight, avail = o.clientHeight;
+      if (!h || !avail) return;
+      setFit({ s: Math.max(0.72, Math.min(1, avail / h)), h });
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(o); ro.observe(i); measure();
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div ref={outer} style={{ flex: 1, minHeight: 0, overflowY: fit.s <= 0.72 ? "auto" : "hidden" }}>
+      <div style={{ height: fit.h ? fit.h * fit.s : undefined }}>
+        <div ref={inner} style={{ transform: `scale(${fit.s})`, transformOrigin: "top center" }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function DecisionStep({ sport, role, athleteName, onNext, onBack }: Props) {
   const { isMd } = useBreakpoint();
   const coach = role === "coach";
   const [activeIdx, setActiveIdx] = useState(0);
   const [paused, setPaused] = useState(false);
 
+  /* Défilement automatique (31/10) : s'arrête au 3e item au lieu de boucler, se met en pause dès qu'on
+     touche l'illustration ou que l'onglet est masqué, et ne démarre pas en mouvement réduit. */
   useEffect(() => {
-    if (paused) return;
-    const t = setTimeout(() => setActiveIdx(i => (i + 1) % 3), AUTO_MS);
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) setPaused(true);
+    const onVis = () => { if (document.hidden) setPaused(true); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+  useEffect(() => {
+    if (paused || activeIdx >= 2) return;
+    const t = setTimeout(() => setActiveIdx(i => i + 1), AUTO_MS);
     return () => clearTimeout(t);
   }, [activeIdx, paused]);
 
@@ -133,22 +168,22 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
   const timerBars = (
     <div style={{ display: "flex", gap: 6, marginBottom: 24 }}>
       {[0, 1, 2].map(i => {
-        const isPastAuto = !paused && i < activeIdx;
+        const isPastAuto = i < activeIdx;
         const isActive = i === activeIdx;
         return (
           <div key={i} style={{ flex: 1, height: 3, borderRadius: 999, background: "rgba(255,255,255,.15)", overflow: "hidden" }}>
             <div
               key={isActive ? activeIdx : undefined}
               style={{
-                height: "100%", borderRadius: 999, background: "#d44000",
-                width: isPastAuto ? "100%" : isActive && paused ? "100%" : isActive ? "0%" : "0%",
+                height: "100%", borderRadius: 999, background: "#d44000", transformOrigin: "left",
+                transform: `scaleX(${isPastAuto || (isActive && paused) ? 1 : 0})`,
                 animation: isActive && !paused ? `decisionBarFill ${AUTO_MS}ms linear forwards` : undefined,
               }}
             />
           </div>
         );
       })}
-      <style>{`@keyframes decisionBarFill { from { width: 0%; } to { width: 100%; } }`}</style>
+      <style>{`@keyframes decisionBarFill { from { transform: scaleX(0); } to { transform: scaleX(1); } }`}</style>
     </div>
   );
 
@@ -179,14 +214,14 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
-            fontSize: isActive ? 26 : 16, fontWeight: isActive ? 950 : 900,
+            fontSize: isActive ? (isMd ? 26 : 22) : 16, fontWeight: isActive ? 950 : 900,
             letterSpacing: isActive ? "-0.03em" : "-0.02em", lineHeight: 1.2,
             color: isActive ? "#fff" : "rgba(255,255,255,.55)",
           }}>
             {item.title}
           </div>
           {isActive && (
-            <div style={{ fontSize: 15, color: "rgba(255,255,255,.6)", lineHeight: 1.5, marginTop: 8, animation: "stepIn 0.2s ease" }}>
+            <div style={{ fontSize: 15, color: "rgba(255,255,255,.6)", lineHeight: 1.5, marginTop: 8, animation: "stepIn 220ms cubic-bezier(.23,1,.32,1)" }}>
               {item.desc}
             </div>
           )}
@@ -209,7 +244,7 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
   );
 
   const backBtn = onBack && (
-    <button onClick={onBack} aria-label="Retour" style={{ width: 52, height: 52, borderRadius: 16, flexShrink: 0, cursor: "pointer", fontSize: 17, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", color: "#171b1f" }}>←</button>
+    <button onClick={onBack} aria-label="Retour" style={{ width: 52, height: 52, borderRadius: 16, flexShrink: 0, cursor: "pointer", fontSize: 17, border: "1.5px solid rgba(255,255,255,.18)", background: "rgba(255,255,255,.08)", color: "#fff" }}>←</button>
   );
   const nextBtn = (
     <button
@@ -232,7 +267,7 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
         </div>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "#f1f0ee" }}>
           <div style={{ flex: 1, overflowY: "auto", padding: "48px", display: "flex", alignItems: "center" }}>
-            <div key={activeIdx} style={{ width: "100%", maxWidth: 720, margin: "0 auto", animation: "stepIn 0.25s ease" }}>
+            <div key={activeIdx} style={{ width: "100%", maxWidth: 720, margin: "0 auto", animation: "stepIn 220ms cubic-bezier(.23,1,.32,1)" }}>
               {active.illustration}
             </div>
           </div>
@@ -258,22 +293,23 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
       marginTop: -36, marginBottom: -120, display: "flex", flexDirection: "column", height: "100dvh",
       background: DARK_CARD_BG,
     }}>
-      <div style={{ flex: 1, overflowY: "auto", padding: "20px 16px 8px" }}>
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: "20px 16px 8px" }}
+        onPointerDown={() => setPaused(true)}>
         {timerBars}
         {bulletsList}
         {/* Fond sombre conservé derrière l'illustration (2026-09-04, retour de Gildas) — pas de
             carte claire dessous, contrairement à la colonne desktop (#f1f0ee) : ici l'illustration
             (carte dark ou carte blanche selon l'item) repose directement sur le fond `#141414` de
             toute la page. */}
-        <div key={activeIdx} style={{ marginTop: 24, animation: "stepIn 0.25s ease" }}>
-          {active.illustration}
+        <div key={activeIdx} style={{ marginTop: 16, flex: 1, minHeight: 0, display: "flex", flexDirection: "column", animation: "stepIn 220ms cubic-bezier(.23,1,.32,1)" }}>
+          <FitBox>{active.illustration}</FitBox>
         </div>
       </div>
       {/* Fond transparent (2026-09-25, DARK_CARD_BG) — le dégradé radial du parent (100dvh) est déjà
          peint derrière ce footer ; le répéter ici recalculerait le gradient relatif à la petite boîte
          du footer (position % différente) au lieu du même dégradé continu, créant une coupure visible
          à la frontière. Transparent laisse le fond du parent transparaître sans couture. */}
-      <div style={{ flexShrink: 0, background: "transparent", padding: "14px 20px 24px", display: "flex", gap: 10 }}>
+      <div style={{ flexShrink: 0, background: "transparent", padding: "14px 20px calc(24px + env(safe-area-inset-bottom, 0px))", display: "flex", gap: 10 }}>
         {backBtn}{nextBtn}
       </div>
     </div>

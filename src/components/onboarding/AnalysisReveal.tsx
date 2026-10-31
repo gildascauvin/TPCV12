@@ -124,3 +124,68 @@ export default function AnalysisReveal({ kicker, title, steps, ready = true, min
     </div>
   );
 }
+
+/* Lecture du point forme (31/10, 2e écran d'analyse) : visuel différent du premier pour ne pas sonner
+   faux. Ses 4 vraies réponses se remplissent une à une (mot + barre, jamais la couleur seule), puis la
+   séance du jour et le verdict du moteur. ~3 s, 1 s en mouvement réduit. */
+export function ReadingReveal({ kicker, title, rows, session, verdict, onDone }: {
+  kicker: string;
+  title: string;
+  rows: { label: string; word: string; g: number }[];
+  session: string;
+  verdict: string;
+  onDone: () => void;
+}) {
+  const [shown, setShown] = useState(0);
+  const [leaving, setLeaving] = useState(false);
+  const doneRef = useRef(onDone);
+  doneRef.current = onDone;
+  useEffect(() => {
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const step = reduced ? 150 : 420;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (let i = 1; i <= rows.length + 1; i++) timers.push(setTimeout(() => { setShown(i); haptic("light"); }, step * i));
+    const end = step * (rows.length + 1) + (reduced ? 400 : 1100);
+    timers.push(setTimeout(() => setLeaving(true), end));
+    timers.push(setTimeout(() => doneRef.current(), end + 300));
+    return () => timers.forEach(clearTimeout);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center",
+      background: "#070a0d", backgroundImage: "radial-gradient(ellipse 120% 60% at 50% 100%, rgba(240,74,8,.18) 0%, transparent 62%)",
+      color: "#fff", padding: "max(32px, env(safe-area-inset-top)) 24px max(32px, env(safe-area-inset-bottom))",
+      opacity: leaving ? 0 : 1, transition: "opacity .3s ease",
+    }}>
+      <style>{`@keyframes tpcReadIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }`}</style>
+      <div style={{ width: "100%", maxWidth: 420 }}>
+        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 8 }}>{kicker}</div>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2, marginBottom: 24 }}>{title}</div>
+        <div style={{ display: "grid", gap: 14, padding: 18, borderRadius: 20, background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.10)" }}>
+          {rows.map((r, i) => {
+            const on = shown > i;
+            return (
+              <div key={r.label} style={{ opacity: on ? 1 : .35, transition: "opacity .3s ease" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 6 }}>
+                  <span style={{ color: "rgba(255,255,255,.7)" }}>{r.label}</span>
+                  <span style={{ fontWeight: 700, visibility: on ? "visible" : "hidden" }}>{r.word}</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 99, background: "rgba(255,255,255,.08)", overflow: "hidden" }}>
+                  <div style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg,#ffb08a,#f04a08)", transformOrigin: "left",
+                    transform: `scaleX(${on ? Math.max(0.08, r.g / 10) : 0})`, transition: "transform .45s cubic-bezier(.23,1,.32,1)" }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ marginTop: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 18px", borderRadius: 16,
+          background: "rgba(240,74,8,.12)", border: "1px solid rgba(240,74,8,.35)", visibility: shown > rows.length ? "visible" : "hidden",
+          animation: shown > rows.length ? "tpcReadIn .35s cubic-bezier(.23,1,.32,1) both" : undefined }}>
+          <span style={{ fontSize: 14, color: "rgba(255,255,255,.75)", minWidth: 0 }}>« {session} »</span>
+          <span style={{ fontSize: 14, fontWeight: 800, whiteSpace: "nowrap" }}>{verdict}</span>
+        </div>
+      </div>
+    </div>
+  );
+}

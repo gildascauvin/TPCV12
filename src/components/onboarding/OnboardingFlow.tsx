@@ -5,7 +5,7 @@ import { catalogEntry, findCatalogEntry, weaknessKeyFor } from "@/lib/sportCatal
 import { WEAKNESSES_BY_SPORT } from "@/lib/sportCategories";
 import {
   QuestionShell, OptionCard, ChoiceChip, SportStepBody, ImportStepBody, DeadlineField,
-  GOAL_OPTIONS, WEEK_DAY_LABELS, type ObHas, type ObGoal,
+  goalOptionsFor, WEEK_DAY_LABELS, type ObHas, type ObGoal,
 } from "@/components/onboarding/PostSignupSteps";
 import { InviteForm, type InviteRow } from "@/components/coach/InviteModal";
 import { sessionsComplement } from "@/lib/sportCategories";
@@ -26,9 +26,9 @@ import Actions from "@/components/onboarding/Actions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, PROGRAM_QUESTION_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
 import { COUNT_OPTIONS, HealthStepBody, WeekStepBody, PlannedWeekBody, NotifStepBody, AppPushStepBody, StreakTitle, type ObCount, type WeekSession } from "@/components/onboarding/EliteSteps";
-import { InsightStepBody, insightTitle, payHeadline, payHeadlineCoach, decideOptions, decideLead, decideOptionsCoach, decideLeadCoach, contrastTitle, contrastTitleCoach, pickWords, pickWordsCoach, lowestAnswer, lowWords, sportFamily, type Answers, type Pick, type PickCoach } from "@/components/onboarding/InsightSteps";
+import { InsightStepBody, insightTitle, payHeadline, payHeadlineCoach, decideOptions, decideLead, decideOptionsCoach, decideLeadCoach, contrastTitle, contrastTitleCoach, pickWords, pickWordsCoach, lowestAnswer, lowWords, sportFamily, answerRows, type Answers, type Pick, type PickCoach } from "@/components/onboarding/InsightSteps";
 import { SessionTemplateCard } from "@/components/programs/SessionTemplateCard";
-import AnalysisReveal, { type AnalysisStep } from "@/components/onboarding/AnalysisReveal";
+import AnalysisReveal, { ReadingReveal, type AnalysisStep } from "@/components/onboarding/AnalysisReveal";
 import { computeAutoregSuggestion } from "@/lib/autoregulation";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import { APP_STORE_URL, PLAY_STORE_URL } from "@/lib/storeLinks";
@@ -341,6 +341,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     }
     return 0;
   });
+  /* Sens de la transition (31/10), calculé seulement quand l'étape change : sinon un re-rendu changerait
+     le nom de l'animation et la rejouerait. */
+  const prevStepIdxRef = useRef(stepIdx);
+  const stepDirRef = useRef<"stepIn" | "stepBack">("stepIn");
+  if (prevStepIdxRef.current !== stepIdx) {
+    stepDirRef.current = stepIdx < prevStepIdxRef.current ? "stepBack" : "stepIn";
+    prevStepIdxRef.current = stepIdx;
+  }
   const [role, setRole]       = useState<Role>(pendingData?.role || initialRole || "athlete");
   /* roleChosen ne dérive plus de initialRole (2026-08-06) : le rôle pré-rempli par un ?role= dans
      l'URL (iframes programme, landing pages) mesurait nettement moins bien que le demander sur un
@@ -405,6 +413,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [obWeak, setObWeak] = useState<string[]>([]);
   const [obDays, setObDays] = useState<number[]>([0, 2, 4]); // 0 = lundi
   const [obInvites, setObInvites] = useState<InviteRow[]>([{ name: "", email: "" }]);
+  const [obInviteBusy, setObInviteBusy] = useState(false);
   const [obInviteCode, setObInviteCode] = useState<string | null>(null);
   const [obFinishing, setObFinishing] = useState(false);
   const [obError, setObError] = useState<string | null>(null);
@@ -484,6 +493,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [name, setName]         = useState(pendingData?.name || "");
   const [email, setEmail]       = useState("");
   const emailInputRef = useRef<HTMLInputElement>(null);
+  /* Hauteur du clavier (visualViewport), pour garder le bouton d'inscription au-dessus. 0 quand la
+     vue est déjà redimensionnée (app native) ou sans clavier. */
+  const [keyboardInset, setKeyboardInset] = useState(0);
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv) return;
+    const update = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setKeyboardInset(inset > 80 ? Math.round(inset) : 0);
+    };
+    vv.addEventListener("resize", update); vv.addEventListener("scroll", update); update();
+    return () => { vv.removeEventListener("resize", update); vv.removeEventListener("scroll", update); };
+  }, []);
   const [saving, setSaving]     = useState(false);
   const [accountFieldFocus, setAccountFieldFocus] = useState(false);
   const [error, setError]       = useState<string | null>(null);
@@ -1117,12 +1139,16 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     }
   }
 
-  async function sendObInvites() {
-    const rows = obInvites.filter(r => /\S+@\S+\.\S+/.test(r.email.trim()));
-    await Promise.all(rows.map(r => fetch("/api/invite/create", {
+  /* Renvoie les adresses non envoyées (31/10 : le coach croyait ses invitations parties même en échec). */
+  async function sendObInvites(): Promise<string[]> {
+    const filled = obInvites.filter(r => r.email.trim());
+    const bad = filled.filter(r => !EMAIL_RE.test(r.email.trim())).map(r => r.email.trim());
+    const rows = filled.filter(r => EMAIL_RE.test(r.email.trim()));
+    const res = await Promise.all(rows.map(r => fetch("/api/invite/create", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ athleteEmail: r.email.trim(), athleteName: r.name.trim() || undefined }),
-    }).catch(() => null)));
+    }).then(x => x.ok).catch(() => false)));
+    return [...bad, ...rows.filter((_, i) => !res[i]).map(r => r.email.trim())];
   }
 
   /* Séances à venir du programme qu'on vient d'assigner (écran semaine). false = pas de programme
@@ -1766,7 +1792,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         {showBack && (
           <button
             onClick={doBack} aria-label="Retour"
-            style={{ width: 52, height: 52, borderRadius: 16, flexShrink: 0, cursor: "pointer", fontSize: 17, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", color: "#171b1f" }}
+            style={{ width: 52, height: 52, borderRadius: 16, flexShrink: 0, cursor: "pointer", fontSize: 17, border: "1.5px solid rgba(255,255,255,.18)", background: "rgba(255,255,255,.08)", color: "#fff" }}
           >←</button>
         )}
         <button
@@ -1793,7 +1819,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     return (
       <div>
         {content}
-        <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, padding: "14px 20px 24px", background: "#070a0d" }}>
+        <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, background: "#070a0d",
+          /* Au-dessus du clavier (31/10) : sur iPhone, un bloc fixe en bas reste derrière le clavier. */
+          padding: keyboardInset > 0 ? "10px 20px 10px" : "14px 20px calc(24px + env(safe-area-inset-bottom, 0px))",
+          transform: keyboardInset > 0 ? `translateY(-${keyboardInset}px)` : undefined }}>
           <div style={{ maxWidth: colMaxWidth, margin: "0 auto", display: "flex", gap: 10 }}>{ctaButtons}</div>
         </div>
         <div style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,.55)", marginTop: 14, lineHeight: 1.6 }}>
@@ -1905,7 +1934,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           onSkip={() => { setObHas("later"); obAdvance("later"); }}>
           <OptionCard icon="📷" label="Oui, je l'importe" hint="Une photo ou le texte suffit"
             on={obHas === "import"} onClick={() => { setObHas("import"); obAdvance("import"); }} />
-          <OptionCard icon="✨" label="Non, crée-le moi" hint="Sur mesure, en 3 questions"
+          <OptionCard icon="✨" label="Non, crée-le-moi" hint="Sur mesure, en 3 questions"
             on={obHas === "generate"} onClick={() => { setObHas("generate"); obAdvance("generate"); }} />
           {errorLine}
         </QuestionShell>
@@ -1929,7 +1958,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           title={coach ? "L'objectif de ton programme ?" : "Ton objectif pour les prochaines semaines ?"}
           onSkip={() => { setObGoal(null); obAdvance(); }}
           cta={comp ? { label: "Continuer", onClick: () => obAdvance(), disabled: !obDeadline } : undefined}>
-          {GOAL_OPTIONS.map(g => (
+          {goalOptionsFor(sportFamily(obChosenSport())).map(g => (
             <div key={g.value}>
               <OptionCard icon={g.icon} label={g.label} hint={g.hint} on={obGoal === g.value}
                 onClick={() => { setObGoal(g.value); if (g.value !== "competition") obAdvance(); }} />
@@ -2199,26 +2228,23 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     }
     if (currentStep === "ob_insight") {
       if (!obInsightRevealed) {
+        /* 2e écran d'analyse (31/10) : la relecture du point forme, pas un 2e anneau à cocher. */
         const ses = ringSession();
-        const lw = lowWords(answers);
-        const fam = { force: "de force", endurance: "d'endurance", mixte: "de ton sport", collectif: "de sport collectif" }[sportFamily(sportForCopy)];
-        const steps: AnalysisStep[] = [
-          { label: coach ? "Lecture de son point forme" : "Lecture de ton point forme", detail: lw ? lw.charAt(0).toUpperCase() + lw.slice(1) : "Tout est au vert" },
-          { label: coach ? "Croisement avec sa séance" : "Croisement avec ta séance", detail: `« ${ses.name} »` },
-          { label: "Comparaison avec nos données", detail: `Sportifs ${fam}, même type de matin` },
-          { label: "Analyse des comportements", detail: "Sommeil, soirées, récupération" },
-          { label: coach ? "Création de sa recommandation" : "Création de tes recommandations", detail: "Pour ce matin, et les suivants" },
-        ];
+        const sug = computeAutoregSuggestion(obCheckinScore, ses.target_difficulty, syntheticBaselineFor(obCheckinScore ?? 60));
+        const verdict = !sug ? "À garder telle quelle" : sug.dir === "low" ? "À alléger" : "Peut être poussée";
         return (
-          <AnalysisReveal kicker="Analyse" title={coach ? "On analyse le point forme de ton sportif." : "On analyse ton point forme."}
-            steps={steps} minMs={4000}
+          <ReadingReveal kicker="Lecture" title={coach ? "On lit le point forme de ton sportif." : "On lit ton point forme."}
+            rows={answerRows(answers)} session={ses.name} verdict={verdict}
             onDone={() => { setObInsightRevealed(true); posthog.capture("onboarding_insight_reveal_done", { role }); }} />
         );
       }
+      // Le bouton suit la décision de l'écran suivant (31/10) : « ajustée » seulement si la séance change.
+      const insightSes = ringSession();
+      const insightSug = computeAutoregSuggestion(obCheckinScore, insightSes.target_difficulty, syntheticBaselineFor(obCheckinScore ?? 60));
       return (
         <QuestionShell {...common} dark eyebrow="Ce que disent nos données" title={obExample && !coach ? "Une nuit courte, par exemple." : capS(insightTitle(answers, coach ? coachFirst : undefined))}
           onSkip={() => obAdvance()}
-          cta={{ label: coach ? `Voir la séance de ${coachFirst}` : "Voir ma séance ajustée", onClick: () => obAdvance() }}>
+          cta={{ label: coach ? `Voir la séance de ${coachFirst}` : (insightSug ? "Voir ma séance ajustée" : "Voir ma séance du jour"), onClick: () => obAdvance() }}>
           <InsightStepBody answers={answers} name={coach ? coachFirst : undefined} sport={sportForCopy} />
         </QuestionShell>
       );
@@ -2228,7 +2254,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       const ses = ringSession();
       const sug = computeAutoregSuggestion(obCheckinScore, ses.target_difficulty, syntheticBaselineFor(obCheckinScore ?? 60));
       return (
-        <QuestionShell {...common} dark eyebrow={coach ? "Ton instinct, avec une règle" : "Ton feeling, avec une règle"}
+        <QuestionShell {...common} dark eyebrow={coach ? "Ton instinct, avec une règle" : "Ton ressenti, avec une règle"}
           title={coach ? capS(contrastTitleCoach(obPick as PickCoach | null, sug, coachFirst)) : contrastTitle(obPick as Pick | null, sug)}
           sub={coach ? "Dès demain, chacun de tes sportifs arrive comme ça." : undefined}
           onSkip={() => obAdvance()}
@@ -2322,8 +2348,20 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         <QuestionShell {...common}
           title={obAthleteName.trim() ? `Envoie son accès à ${obAthleteName.trim()}` : "Invite tes sportifs"}
           sub={obAthleteName.trim() ? "C'est gratuit pour lui. Le message est prêt, avec son prénom." : "Tu peux leur créer des séances avant même qu'ils arrivent."}
-          onSkip={() => { setObInvites([{ name: "", email: "" }]); obAdvance(); }}
-          cta={{ label: hasEmail ? "Envoyer les invitations" : "Continuer", onClick: () => { if (elite && hasEmail) void sendObInvites(); obAdvance(); } }}>
+          onSkip={() => { setObInvites([{ name: "", email: "" }]); setObError(null); obAdvance(); }}
+          cta={{ label: obInviteBusy ? "Envoi…" : hasEmail ? "Envoyer les invitations" : "Continuer", disabled: obInviteBusy, onClick: async () => {
+            if (!(elite && hasEmail)) { obAdvance(); return; }
+            setObInviteBusy(true); setObError(null);
+            const failed = await sendObInvites();
+            setObInviteBusy(false);
+            if (failed.length) {
+              // Les invitations réussies sont retirées de la liste : un nouvel essai ne renvoie que les ratées.
+              setObInvites(prev => { const left = prev.filter(r => failed.includes(r.email.trim())); return left.length ? left : [{ name: "", email: "" }]; });
+              setObError(`Invitation non envoyée à ${failed.join(", ")}. Vérifie l'adresse et réessaie, ou passe cette étape.`);
+              return;
+            }
+            obAdvance();
+          } }}>
           <InviteForm inviteCode={obInviteCode} invites={obInvites} setInvites={setObInvites} error={obError} readyMessage />
         </QuestionShell>
       );
@@ -2331,6 +2369,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   }
 
   const isDarkStep = DARK_STEPS.includes(currentStep);
+  const stepAnim = stepDirRef.current;
 
   return (
     /* Inscription (2026-10-28) : fond sombre de l'app, dans la continuité de l'AHA. Pas l'écran
@@ -2338,7 +2377,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     <OnboardingBackground variant={isDarkStep ? "dark" : currentStep === "account" && !emailSent ? "glow" : "light"}>
       <div>
 
-        <div key={currentStep} style={{ animation: "stepIn 0.22s ease" }}>
+        <div key={currentStep} style={{ animation: `${stepAnim} 220ms cubic-bezier(.23,1,.32,1)` }}>
         {/* ── VALUE INTRO — rôle fusionné dedans (2026-09-04, expérimentation "value+rôle → AHA
             générique → signup", voir doc des paths en tête de fichier) : plus de step "role" séparé
             juste après, les 2 cartes de rôle sont désormais le CTA de cet écran lui-même — même
@@ -2437,7 +2476,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                   pouvaient que coïncider par hasard. */}
               <div style={{
                 width: "100vw", position: "relative", left: "50%", marginLeft: "-50vw", marginRight: "-50vw", boxSizing: "border-box",
-                zIndex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", minHeight: "70vh", paddingBottom: roleKnownUpfront ? 110 : 100, paddingLeft: 20, paddingRight: 20,
+                zIndex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", minHeight: "70svh", paddingBottom: roleKnownUpfront ? 110 : 100, paddingLeft: 20, paddingRight: 20,
               }}>
                 <div style={{ maxWidth: colMaxWidth, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
                   <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 10 }}>ThePerfClub</div>
@@ -2459,7 +2498,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                   nextLabel={isClaimed ? "Voir mon programme personnalisé →" : "Commencer →"}
                 />
               ) : (
-                <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, padding: "14px 20px 24px" }}>
+                <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, padding: "14px 20px calc(24px + env(safe-area-inset-bottom, 0px))" }}>
                   <div style={{ maxWidth: colMaxWidth, margin: "0 auto" }}>
                     <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,.75)", marginBottom: 10 }}>
                       Comment vas-tu l&apos;utiliser ?
@@ -2468,13 +2507,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                       {roleCards.map(({ r, icon, label, sub, badgeBg }) => {
                         const picked = roleChosen && role === r;
                         return (
-                          <div key={r} onClick={() => chooseRole(r)}
+                          <button type="button" key={r} onClick={() => chooseRole(r)} className="tpc-press"
                             style={{
                               cursor: "pointer", display: "flex", alignItems: "center", gap: 16, borderRadius: 16, padding: "16px 18px",
+                              width: "100%", textAlign: "left", font: "inherit", color: "inherit",
                               border: picked ? "2px solid #d44000" : "1.5px solid rgba(255,255,255,.16)",
                               background: picked ? "rgba(212,64,0,.16)" : "rgba(255,255,255,.08)",
                               backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
-                              transition: "all .15s",
+                              transition: "transform .14s ease, filter .14s ease, border-color .15s ease, background .15s ease",
                             }}>
                             <div style={{ flexShrink: 0, width: 52, height: 52, borderRadius: 16, background: badgeBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>{icon}</div>
                             <div style={{ flex: 1 }}>
@@ -2482,7 +2522,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                               <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.6)", lineHeight: 1.35 }}>{sub}</div>
                             </div>
                             <div style={{ flexShrink: 0, color: "rgba(255,255,255,.35)", fontSize: 18 }}>→</div>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>

@@ -29,6 +29,10 @@ export function lowestAnswer(a: Answers): ScaleKey | null {
   return best?.k ?? null;
 }
 export const answerWord = (k: ScaleKey, v: number) => SCALE_WORDS[k].labels[v].toLowerCase();
+/* Les 4 réponses du point forme, relues sur l'écran de lecture (31/10). g = niveau « bon » sur 10. */
+export function answerRows(a: Answers): { label: string; word: string; g: number }[] {
+  return ORDER.map(k => ({ label: QLABEL[k], word: SCALE_WORDS[k].labels[a[k]] ?? "", g: good(k, a[k]) }));
+}
 /* « stress marqué, récupération lourde » : les deux réponses les plus basses, pour le sous-titre coach. */
 export function lowWords(a: Answers): string {
   return [...ORDER].sort((x, y) => good(x, a[x]) - good(y, a[y])).slice(0, 2).filter(k => good(k, a[k]) <= 6)
@@ -173,7 +177,7 @@ export function InsightStepBody({ answers, name, sport = "" }: { answers: Answer
       </div>
       <div style={{ ...BOX, borderRadius: 18, padding: "14px 16px", marginTop: 18, display: "flex", alignItems: "center", gap: 14 }}>
         <span style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, letterSpacing: "-0.02em", color: "#ff8a55", lineHeight: 1 }}>111</span>
-        <span style={{ fontSize: 13.5, lineHeight: 1.4, color: "rgba(255,255,255,.8)" }}>séances ajustées en 6 mois par un sportif ThePerfClub, au lieu d&apos;être faites au feeling.</span>
+        <span style={{ fontSize: 13.5, lineHeight: 1.4, color: "rgba(255,255,255,.8)" }}>séances ajustées en 6 mois par un sportif ThePerfClub, au lieu d&apos;être faites au ressenti.</span>
       </div>
       <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, color: "rgba(255,255,255,.4)", marginTop: 12, textAlign: "center" }}>Exemples tirés du bilan ThePerfClub</div>
     </div>
@@ -265,7 +269,7 @@ export function ReplayStepBody() {
         </div>
         <div style={{ fontSize: 13.5, lineHeight: 1.45, color: "rgba(255,255,255,.82)" }}>Au-dessus de ta norme deux matins, séance faite sans rien ajouter.</div>
       </div>
-      <p className="ob-in" style={{ fontSize: 15, lineHeight: 1.5, color: "rgba(255,255,255,.75)", margin: 0, paddingLeft: 12, borderLeft: "3px solid #d44000", animation: "obIn .45s ease 1.8s both" }}>Ton feeling a laissé passer 3 matins. Dès demain, ThePerfClub les voit avant ta séance.</p>
+      <p className="ob-in" style={{ fontSize: 15, lineHeight: 1.5, color: "rgba(255,255,255,.75)", margin: 0, paddingLeft: 12, borderLeft: "3px solid #d44000", animation: "obIn .45s ease 1.8s both" }}>Ton ressenti a laissé passer 3 matins. Dès demain, ThePerfClub les voit avant ta séance.</p>
     </div>
   );
 }
@@ -279,7 +283,7 @@ export { RiskTimeline } from "@/components/paywall/RiskTimeline";
 export type Pick = "force" | "feeling" | "saute" | "pousse";
 export function decideOptions(a: Answers): { value: Pick; label: string }[] {
   return lowestAnswer(a)
-    ? [{ value: "force", label: "Je la fais comme prévu" }, { value: "feeling", label: "J'allège au feeling" }, { value: "saute", label: "Je la saute" }]
+    ? [{ value: "force", label: "Je la fais comme prévu" }, { value: "feeling", label: "J'allège au ressenti" }, { value: "saute", label: "Je la saute" }]
     : [{ value: "force", label: "Je la fais comme prévu" }, { value: "pousse", label: "Je pousse un peu" }];
 }
 export function decideLead(a: Answers): string {
@@ -290,11 +294,11 @@ export function decideLead(a: Answers): string {
    dessous dit déjà « -3 points » et réécrit les séries, un % dans le titre ne collait pas avec elle. */
 export function contrastTitle(pick: Pick | null, sug: { dir: "low" | "high"; reco: number } | null): string {
   const p = pick ?? "force";
-  if (!sug) return { force: "Ton feeling avait raison : on la garde comme prévu.", feeling: "Tu aurais allégé au feeling. Ton état permet de la garder telle quelle.", saute: "Tu l'aurais sautée. Ton état permet de la faire, telle quelle.", pousse: "Tu aurais poussé. Ton état dit de la garder comme prévu." }[p];
-  if (sug.dir === "low") return { force: "Tu l'aurais faite comme prévu. ThePerfClub l'allège, série par série.", feeling: "Tu aurais allégé au feeling. ThePerfClub te dit de combien, série par série.", saute: "Tu l'aurais sautée. ThePerfClub la garde, allégée série par série.", pousse: "Tu aurais poussé. ThePerfClub l'allège, série par série." }[p];
-  return { force: "Tu l'aurais faite comme prévu. Ton état permet de pousser, série par série.", pousse: "Ton feeling avait raison. ThePerfClub te dit de combien pousser, série par série.", feeling: "Tu aurais allégé. Ton état permet de pousser, série par série.", saute: "Tu l'aurais sautée. Ton état permet même de pousser." }[p];
+  if (!sug) return { force: "Ton ressenti avait raison : on la garde comme prévu.", feeling: "Tu aurais allégé au ressenti. Ton état permet de la garder telle quelle.", saute: "Tu l'aurais sautée. Ton état permet de la faire, telle quelle.", pousse: "Tu aurais poussé. Ton état dit de la garder comme prévu." }[p];
+  if (sug.dir === "low") return { force: "Tu l'aurais faite comme prévu. ThePerfClub l'allège, série par série.", feeling: "Tu aurais allégé au ressenti. ThePerfClub te dit de combien, série par série.", saute: "Tu l'aurais sautée. ThePerfClub la garde, allégée série par série.", pousse: "Tu aurais poussé. ThePerfClub l'allège, série par série." }[p];
+  return { force: "Tu l'aurais faite comme prévu. Ton état permet de pousser, série par série.", pousse: "Ton ressenti avait raison. ThePerfClub te dit de combien pousser, série par série.", feeling: "Tu aurais allégé. Ton état permet de pousser, série par série.", saute: "Tu l'aurais sautée. Ton état permet même de pousser." }[p];
 }
-export const pickWords: Record<Pick, string> = { force: "Tu fais la séance quand même.", feeling: "Tu allèges au feeling.", saute: "Tu sautes la séance.", pousse: "Tu pousses au feeling." };
+export const pickWords: Record<Pick, string> = { force: "Tu fais la séance quand même.", feeling: "Tu allèges au ressenti.", saute: "Tu sautes la séance.", pousse: "Tu pousses au ressenti." };
 
 /* ── Coach, mêmes étapes que le sportif (POC 2026-10-28) : remplace ob_when coach, ob_mirror coach et le
    radar. Le coach saisit le check-in qu'un de ses sportifs lui enverrait (vraie fonction depuis le 26/10),

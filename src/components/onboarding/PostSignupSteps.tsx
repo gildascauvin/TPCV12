@@ -166,11 +166,23 @@ export function ImportStepBody({ text, onText, file, onFile, error }: {
 }
 
 export const GOAL_OPTIONS: { value: ObGoal; icon: string; label: string; hint?: string }[] = [
-  { value: "volume", icon: "📈", label: "Gagner en volume" },
-  { value: "intensite", icon: "⚡", label: "Monter en intensité" },
+  { value: "volume", icon: "📈", label: "Augmenter ma capacité de travail", hint: "Plus de volume, sans te griller" },
+  { value: "intensite", icon: "⚡", label: "Monter en intensité", hint: "Des séances plus intenses" },
   { value: "competition", icon: "🎯", label: "Préparer une échéance", hint: "Compétition, test, course" },
   { value: "mixte", icon: "⚖️", label: "Un peu de tout" },
 ];
+
+/* « Volume » = capacité de travail, « intensité » : dits dans les mots du sport (31/10, retour Gildas :
+   « Gagner en volume » était ambigu pour un coureur). Famille : sportFamily() d'InsightSteps. */
+const GOAL_WORDS: Record<"force" | "endurance" | "collectif" | "mixte", Partial<Record<ObGoal, { label: string; hint: string }>>> = {
+  force: { volume: { label: "Encaisser plus de travail", hint: "Plus de séries et de répétitions" }, intensite: { label: "Soulever plus lourd", hint: "Des charges plus proches de ton max" } },
+  endurance: { volume: { label: "Tenir plus longtemps", hint: "Plus de kilomètres, des sorties plus longues" }, intensite: { label: "Aller plus vite", hint: "Fractionné, allure, VMA" } },
+  collectif: { volume: { label: "Tenir tout le match", hint: "Répéter les efforts sans baisser" }, intensite: { label: "Être plus explosif", hint: "Sprints, sauts, changements de direction" } },
+  mixte: {},
+};
+export function goalOptionsFor(family: keyof typeof GOAL_WORDS) {
+  return GOAL_OPTIONS.map(g => ({ ...g, ...(GOAL_WORDS[family][g.value] ?? {}) }));
+}
 
 export function DeadlineField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [min] = useState(() => new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0]);

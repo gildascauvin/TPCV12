@@ -22,8 +22,8 @@ interface Props {
 const PAGE_VARIANTS: Variant[] = ["light", "dark"];
 
 const RECIPES: Record<Variant, React.CSSProperties> = {
-  light:         { padding: "14px 20px 24px", background: "#f1f0ee" },
-  dark:          { padding: "14px 20px 24px" },
+  light:         { padding: "14px 20px calc(24px + env(safe-area-inset-bottom, 0px))", background: "#f1f0ee" },
+  dark:          { padding: "14px 20px calc(24px + env(safe-area-inset-bottom, 0px))" },
   "modal-light": { padding: "20px 28px 20px", background: "#fff", flexShrink: 0 },
   "modal-dark":  { padding: "20px 28px 20px", background: "#161616", flexShrink: 0 },
 };

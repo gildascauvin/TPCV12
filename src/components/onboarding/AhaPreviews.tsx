@@ -150,12 +150,12 @@ export function AhaFormPeakPreview() {
   const chargeBand = bandAt(AGG_BANDS.charge, chargePos);
   return (
     <Panel>
-      <AlertBox variant="darkColor" alert={{ border: "#2f9e4466", glow: "#2f9e44", text: "Phase · Supercompensation\nTa charge chronique monte et ta récupération suit : tu encaisses le travail, ta forme progresse." }} />
+      <AlertBox variant="darkColor" alert={{ border: "#2f9e4466", glow: "#2f9e44", text: "Phase · Supercompensation\nLe travail des dernières semaines monte et ta récupération suit : tu encaisses le travail, ta forme progresse." }} />
       <div style={{ marginTop: 16, background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 24, padding: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
           <div>
             <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,.45)" }}>Forme</div>
-            <div style={{ fontSize: 17.5, fontWeight: 700, marginTop: 4 }}>Frais · <span style={{ fontFamily: "var(--font-mono), monospace" }}>+13 %</span></div>
+            <div style={{ fontSize: 17.5, fontWeight: 700, marginTop: 4 }}>Forme en hausse</div>
             <div style={{ fontSize: 12.5, lineHeight: 1.45, color: "rgba(255,255,255,.6)", marginTop: 6, maxWidth: "30ch" }}>Ta forme progresse : la condition prend le dessus sur la fatigue.</div>
           </div>
           <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, color: "#8fbdf0", whiteSpace: "nowrap" }}>↗ +25 pts / 28 j</div>
@@ -167,7 +167,7 @@ export function AhaFormPeakPreview() {
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,.45)" }}>Charge · risque de blessure</div>
           <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12.5, fontWeight: 700, color: chargeBand.color, marginTop: 3 }}>{chargeBand.label} · 1,05</div>
-          <div style={{ fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,.6)", marginTop: 3 }}>Ta charge récente suit ta charge habituelle : tu progresses sans t&apos;exposer. Une alerte arrive si elle s&apos;emballe.</div>
+          <div style={{ fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,.6)", marginTop: 3 }}>Ton travail récent suit ton rythme habituel : tu progresses sans t&apos;exposer. Une alerte arrive si elle s&apos;emballe.</div>
         </div>
       </div>
     </Panel>
