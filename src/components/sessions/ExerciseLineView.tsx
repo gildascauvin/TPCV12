@@ -92,6 +92,7 @@ function schemeText(sc: Scheme, side: boolean): string | null {
   else if (sc.sets && sc.dist) t = `${sc.sets}×${fmtDist(sc.dist)}`;
   else if (sc.sets && secT) t = `${sc.sets}×${secT}`;
   else if (sc.sets) t = `${sc.sets}×`;
+  else if (reps != null && sc.dist) t = `${reps}×${fmtDist(sc.dist)}`;
   else if (reps != null) t = /[-/]/.test(reps) ? reps : `${reps} reps`;
   else if (sc.dist) t = fmtDist(sc.dist);
   else if (secT) t = secT;
