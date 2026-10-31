@@ -2121,7 +2121,7 @@ function selectSprint(n: number, ctx?: CurriculumContext): Archetype[] {
 const HA_SNATCH: Archetype = { name: "Focus Arraché", type: "intensite", exercises: [
   "Arraché — 5×2@75%", "Tirage arraché — 3×3@95%", "Back squat — 5×3@80%", "Extension lombaire — 3×10",
 ]};
-const HA_CLEAN_JERK: Archetype = { name: "Focus Épaulé-Jeté", type: "intensite", exercises: [
+const HA_CLEAN_JERK: Archetype = { name: "Focus Épaulé-Jeté", type: "volume", exercises: [
   "Épaulé-jeté — 5×2@75%", "Tirage épaulé — 3×3@95%", "Squat avant — 4×3@80%", "Pallof press tenu — 3×30s par côté",
 ]};
 // "volume" (modéré) : en 4 jours il suit presque toujours l'arraché la veille (Lun+Mar), et deux jours
@@ -2176,22 +2176,22 @@ const PL_DEADLIFT: Archetype = { name: "Focus Deadlift", type: "intensite", alt:
 // Spécialisations : schéma Texas Method sur le mouvement du titre (volume / léger / intensité),
 // au lieu de deux séances identiques dans la même semaine.
 const PL_SQUAT_HEAVY: Archetype = { name: "Squat lourd", type: "intensite", exercises: [
-  "Back squat — 4×3@85%", "Fente bulgare — 3×8@60% par jambe", "Gainage latéral — 3×30s par côté",
+  "Back squat — 4×3@85%", "Développé couché — 4×5@75%", "Gainage latéral — 3×30s par côté",
 ]};
 const PL_SQUAT_LIGHT: Archetype = { name: "Squat léger", type: "technique", exercises: [
-  "Back squat — 3×5@65%", "Squat tempo 3 s en descente — 3×5@55%", "Leg curl — 3×12",
+  "Back squat — 3×5@65%", "Soulevé de terre roumain — 3×6@60%", "Planche — 3×40s",
 ]};
 const PL_BENCH_HEAVY: Archetype = { name: "Développé couché lourd", type: "intensite", exercises: [
-  "Développé couché — 4×3@85%", "Développé militaire — 3×6@65%", "Tirage horizontal — 3×10",
+  "Développé couché — 4×3@85%", "Back squat — 4×5@72%", "Tirage horizontal — 3×10",
 ]};
 const PL_BENCH_LIGHT: Archetype = { name: "Développé couché léger", type: "technique", exercises: [
-  "Développé couché — 3×5@65%", "Développé couché tempo 3 s — 3×5@55%", "Face pull — 3×15",
+  "Développé couché — 3×5@65%", "Développé militaire — 3×6@60%", "Face pull — 3×15",
 ]};
 const PL_DEADLIFT_HEAVY: Archetype = { name: "Soulevé de terre lourd", type: "intensite", exercises: [
-  "Soulevé de terre — 3×2@87%", "Rowing barre — 3×8@70%", "Planche — 3×40s",
+  "Soulevé de terre — 3×2@87%", "Développé couché — 4×5@75%", "Planche — 3×40s",
 ]};
 const PL_DEADLIFT_LIGHT: Archetype = { name: "Soulevé de terre léger", type: "technique", exercises: [
-  "Soulevé de terre roumain — 3×6@60%", "Good morning — 3×8@40%", "Hip thrust — 3×10@60%",
+  "Soulevé de terre roumain — 3×6@60%", "Back squat — 3×5@65%", "Hip thrust — 3×10@60%",
 ]};
 function selectPowerlifting(n: number): Archetype[] {
   const rotation = [PL_SQUAT, PL_BENCH, PL_DEADLIFT];
