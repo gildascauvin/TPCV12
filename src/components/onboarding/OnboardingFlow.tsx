@@ -1706,7 +1706,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           <Image src={claimedCover} alt="" fill priority sizes="100vw" style={{ objectFit: "cover", objectPosition: "center 35%" }} />
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(7,10,13,.45) 0%, rgba(7,10,13,.5) 40%, rgba(7,10,13,.85) 75%, #070a0d 100%)" }} />
         </div>
-        <div style={{ position: "relative", zIndex: 1, height: 96 }} />
+        <div style={{ position: "relative", zIndex: 1, height: 40 }} />
         {claimedProgramName && (
           <div style={{ position: "relative", zIndex: 1, textAlign: "center", marginBottom: 10, fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(255,255,255,.75)" }}>
             {claimedProgramName.split(" — ")[0]}{wizardTemplate?.weeks.length ? ` · ${wizardTemplate.weeks.length} semaines` : ""}

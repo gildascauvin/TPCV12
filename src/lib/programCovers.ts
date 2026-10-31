@@ -36,7 +36,7 @@ const PROGRAM_COVERS: Record<string, string> = {
   "8318e4c4-4a69-4b36-9968-bbdbbe830af7": "https://www.theperfclub.com/wp-content/uploads/2024/03/sentrainer-dans-la-douleur-scaled.jpg", // programme-lombalgie-renforcement-lombaire-6-semaines
   "852e152c-b119-4331-9c6f-15e6047e2db5": "https://www.theperfclub.com/wp-content/uploads/2024/12/Etirement-des-epaules-et-prevention-des-blessures-scaled.jpg", // programme-coiffe-des-rotateurs-renforcement-6-semaines
   "2fbc61c9-75dc-4e2d-88a0-ec9bc6ac056d": "https://www.theperfclub.com/wp-content/uploads/2021/01/Entrai%CC%82nement-en-force-pour-athle%CC%80tes-dendurance.jpeg", // programme-triathlon-preparation-12-semaines
-  "c84c3ac1-4b3d-4843-8b43-aead44bbbb9b": "https://www.theperfclub.com/wp-content/uploads/2020/12/hqdefault-2xFHMV.jpeg", // programme-arrache-snatch-specialisation-4-semaines
+  "c84c3ac1-4b3d-4843-8b43-aead44bbbb9b": "https://www.theperfclub.com/wp-content/uploads/2026/10/halterophilie-arrache-paysage-1600x1067.jpg", // programme-arrache-snatch-specialisation-4-semaines
   "1a07c4b0-a128-41a6-90fc-99f5cbc73883": "https://www.theperfclub.com/wp-content/uploads/2023/10/etirements-pendant-les-jours-de-recuperation-scaled.jpg", // programme-mobilite-et-flexibilite-6-semaines
   "8df3e3d3-79e8-4cec-95e1-8afcd51330d8": "https://www.theperfclub.com/wp-content/uploads/2026/06/preparation-physique-football-scaled.jpg", // programme-football-preparation-physique-8-semaines
   "2aa22e84-1012-42ee-88ab-a4ab70562f3e": "https://www.theperfclub.com/wp-content/uploads/2026/06/Preparation-physique-padel-scaled.jpg", // programme-padel-preparation-physique-6-semaines
@@ -58,14 +58,14 @@ const PROGRAM_COVERS: Record<string, string> = {
   "e1037e4f-6ee9-407b-b68f-751cc425a25f": "https://www.theperfclub.com/wp-content/uploads/2026/05/Sprint-et-musculation-scaled.jpg", // programme-sprint-developpement-complet-8-semaines
   "e0b3b169-0a85-4ddc-8e18-06687afecb42": "https://www.theperfclub.com/wp-content/uploads/2026/05/Sprint-et-musculation-scaled.jpg", // programme-puissance-explosivite-6-semaines
   "bab4683e-a599-4c26-908f-5882d328aa54": "https://www.theperfclub.com/wp-content/uploads/2021/10/rugby.png", // programme-sport-collectif-preparation-physique-8-semaines
-  "bd0d3d0b-2240-4227-b84b-fb768459a6a8": "https://www.theperfclub.com/wp-content/uploads/2021/03/halte%CC%81rophilie-Thibault-cortes.png", // programme-halterophilie-4-jours-4-semaines
+  "bd0d3d0b-2240-4227-b84b-fb768459a6a8": "https://www.theperfclub.com/wp-content/uploads/2026/10/halterophilie-arrache-paysage-1600x1067.jpg", // programme-halterophilie-4-jours-4-semaines
   "85229876-3756-4554-a02d-8c6103e65081": "https://www.theperfclub.com/wp-content/uploads/2021/01/RPE-et-ve%CC%81locite%CC%81.jpeg", // programme-musculation-par-rpe-4-semaines
   "ff91c31e-5ec2-4032-b39a-0e51d3354884": "https://www.theperfclub.com/wp-content/uploads/2024/06/valgus-des-genoux-et-squat-scaled.jpg", // programme-corriger-valgus-du-genou-6-semaines
   "81c0a4de-be5b-45eb-804d-71150a82367c": "https://www.theperfclub.com/wp-content/uploads/2023/02/tendons-et-ligaments-les-renforcer-scaled.jpg", // programme-renforcement-tendons-ligaments-6-semaines
   "5bf7b813-d72c-479e-82d8-93d741f46da8": "https://www.theperfclub.com/wp-content/uploads/2020/12/photo-1541534741688-6078c6bfb5c5.jpeg", // programme-cross-training-8-semaines-athlete-complet
   "0a631b9f-308e-41f2-aabf-43ee588985b9": "https://www.theperfclub.com/wp-content/uploads/2025/06/Periodisation-en-sprint.jpg", // programme-sprint-athletisme-periodisation-8-semaines
   "6ddca6dd-e97f-4271-b4fc-7b4c63023cad": "https://www.theperfclub.com/wp-content/uploads/2020/12/pexels-photo-2803158.jpeg", // programme-zone-2-course-a-pied-debutant-6-semaines
-  "d85c3fff-51df-466c-92cf-54b675fa7ed4": "https://www.theperfclub.com/wp-content/uploads/2020/12/hqdefault-2xFHMV.jpeg", // programme-halterophilie-avance-4-semaines
+  "d85c3fff-51df-466c-92cf-54b675fa7ed4": "https://www.theperfclub.com/wp-content/uploads/2026/10/halterophilie-arrache-paysage-1600x1067.jpg", // programme-halterophilie-avance-4-semaines
 };
 
 export const DEFAULT_ONBOARDING_COVER = "https://www.theperfclub.com/wp-content/uploads/2026/07/value-intro-BG.jpeg";
