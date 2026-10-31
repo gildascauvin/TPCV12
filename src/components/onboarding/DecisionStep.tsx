@@ -138,7 +138,7 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
     {
       title: coach ? "Vois qui est vraiment en forme" : "Découvre ce qui pèse sur tes séances",
       desc: coach
-        ? "Sommeil, stress, courbatures et comportements de chacun de tes sportifs, lus chaque matin."
+        ? "Sommeil, stress, courbatures et comportements de chacun de tes sportifs : un score calculé chaque matin."
         : "Soirée, stress, sommeil, séances trop dures : ton bilan montre ce qui pèse vraiment sur tes séances. Chez toi, pas en moyenne.",
       illustration: coach ? <AhaRadarPreview /> : <AhaBilanPreview />,
     },
