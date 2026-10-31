@@ -58,6 +58,17 @@ value_intro → decision_2b → account → ob_sport → ob_count → questions 
 - **ob_pay** : `PrimingJourneyModal` puis `PaywallModal`, titre `payHeadline` / `payHeadlineCoach` avec le nom de la séance de la jauge. La fermeture et l'achat appellent `finishOnboarding`. Contenu du paywall (pas de carte Gratuit, `RiskTimeline`, offre de sortie, feuille de perte) : skill `paywall-billing`.
 - Côté coach, pas de prénom de sportif : « ton sportif » partout (`capS()` en début de phrase).
 
+## Audit UX du 31/10 (en ligne)
+- Inscription : vrai `<form>` (Entrée/« Aller » valide), champs 16 px + autocomplete, email vérifié (`EMAIL_RE`), erreurs Supabase traduites (`signupErrorFr`). Sur téléphone (`pointer: coarse`), pendant la saisie le bouton fixe disparaît et « Activer mon espace » s'affiche sous le champ email (`inlineCta`) : le bouton déplacé au-dessus du clavier (visualViewport) se plaçait mal dans Safari et Chrome iOS, ne pas y revenir.
+- Préparation : `fetchWithTimeout` (20 s) sur génération, enregistrement et attribution du programme.
+- Frise des questions par thème (`segments` de `QuestionShell`) : programme / point forme / sportifs et notifications.
+- 2e analyse = `ReadingReveal` (« On lit ton point forme », vraies réponses + verdict), jamais un 2e anneau à cocher. Jamais « ton matin ».
+- Objectifs par famille du catalogue (`goalOptionsFor`) : force, endurance, collectif (« Tenir tout le match »), combat (« Tenir tout le combat »), athlé.
+- Démos coach : le sportif s'appelle Karim (AHA et aperçu des notifications), « ton sportif » dans le texte. Titres neutres si `ob_decide` est passé.
+- `ob_pay` coach : `athleteCount` (réponse `ob_count`) et `hasAthletes` (invitations envoyées) passés à `PrimingJourneyModal`.
+- Point forme : ← et « Plus tard » en haut, pas de « Suivant » (les notes avancent seules), bouton seulement aux comportements.
+- Mode test sans compte : le programme reprend sport, jours, objectif et points faibles choisis (`dbgsport` en repli).
+
 ## Données écrites
 - `handleFinish` : `supabase.auth.signUp` (mot de passe aléatoire), `createAccount(uid)`, `posthog.identify`, `account_created`, puis `/api/invite/link` et, pour un invité, `/api/invite/join` (résultat vérifié ; échec → `inviteJoinFailed`, retour au parcours normal). `afterAccount` va au step après `account`.
 - `runPrepare` / `prepareOnboarding` (lancé en arrière-plan dès le 1er écran Elite, promesse mémorisée, relancée seulement en cas d'échec) :
