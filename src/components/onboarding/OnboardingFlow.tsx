@@ -20,13 +20,13 @@ import Link from "next/link";
 import Image from "next/image";
 import OnboardingBackground from "@/components/onboarding/OnboardingBackground";
 import DecisionStep from "@/components/onboarding/DecisionStep";
-import { AhaMorningCard } from "@/components/onboarding/AhaPreviews";
+import { AhaMorningCard, type DemoSession } from "@/components/onboarding/AhaPreviews";
 import { PAYWALL_AVATARS } from "@/components/paywall/paywallAvatars";
 import Actions from "@/components/onboarding/Actions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, PROGRAM_QUESTION_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
 import { COUNT_OPTIONS, HealthStepBody, WeekStepBody, PlannedWeekBody, NotifStepBody, AppPushStepBody, StreakTitle, type ObCount, type WeekSession } from "@/components/onboarding/EliteSteps";
-import { InsightStepBody, insightTitle, payHeadline, payHeadlineCoach, decideOptions, decideLead, decideOptionsCoach, decideLeadCoach, contrastTitle, contrastTitleCoach, pickWords, pickWordsCoach, lowestAnswer, lowWords, sportFamily, answerRows, type Answers, type Pick, type PickCoach } from "@/components/onboarding/InsightSteps";
+import { InsightStepBody, insightTitle, payHeadline, payHeadlineCoach, decideOptions, decideLead, decideOptionsCoach, decideLeadCoach, contrastTitle, contrastTitleCoach, pickWords, pickWordsCoach, lowestAnswer, lowWords, sportFamily, answerRows, testFor, type Answers, type Pick, type PickCoach } from "@/components/onboarding/InsightSteps";
 import { SessionTemplateCard } from "@/components/programs/SessionTemplateCard";
 import AnalysisReveal, { ReadingReveal, type AnalysisStep } from "@/components/onboarding/AnalysisReveal";
 import { computeAutoregSuggestion } from "@/lib/autoregulation";
@@ -1697,9 +1697,27 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     const accountBlur = () => setTimeout(() => setAccountFieldFocus(!!(document.activeElement as HTMLElement | null)?.closest?.("#ob-account-form")), 60);
     const inlineCta = touchDevice && accountFieldFocus;
 
+    /* Programme choisi sur /p/ (31/10) : la photo de son sport en bandeau et le nom du programme, pour garder
+       le fil depuis la page programme (« c'est bien mon programme que j'active »). */
+    const claimBanner = hasClaimedProgram && claimedCover ? (
+      <>
+        {/* Photo derrière un dégradé, en haut de l'écran comme sur les questions (31/10, Gildas : pas d'encadré). */}
+        <div aria-hidden style={{ position: "absolute", top: 0, left: 0, right: 0, height: 250, zIndex: -1, pointerEvents: "none" }}>
+          <Image src={claimedCover} alt="" fill priority sizes="100vw" style={{ objectFit: "cover", objectPosition: "center 35%" }} />
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(7,10,13,.45) 0%, rgba(7,10,13,.5) 40%, rgba(7,10,13,.85) 75%, #070a0d 100%)" }} />
+        </div>
+        <div style={{ position: "relative", zIndex: 1, height: 96 }} />
+        {claimedProgramName && (
+          <div style={{ position: "relative", zIndex: 1, textAlign: "center", marginBottom: 10, fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(255,255,255,.75)" }}>
+            {claimedProgramName.split(" — ")[0]}{wizardTemplate?.weeks.length ? ` · ${wizardTemplate.weeks.length} semaines` : ""}
+          </div>
+        )}
+      </>
+    ) : null;
     const content = (
       <>
-        <div style={{ fontFamily: "var(--font-display)", fontSize: 27, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 28, lineHeight: "normal", textAlign: "center", color: "#fff" }}>
+        {claimBanner}
+        <div style={{ position: "relative", zIndex: 1, fontFamily: "var(--font-display)", fontSize: 27, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 28, lineHeight: "normal", textAlign: "center", color: "#fff" }}>
           {(() => {
             // Programme claimé : le sport est connu (fetch du claim), on le nomme. Sinon titre générique.
             const comp = hasClaimedProgram ? sessionsComplement(sport) : null;
@@ -1866,6 +1884,20 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   function tupleToTemplate([name, notes, diff]: [string, string, number]): SessionTemplate {
     return { name, notes, target_difficulty: diff, load: 2, type: "volume" };
   }
+  /* Programme choisi sur /p/ (31/10, Gildas : personnaliser l'AHA) : une vraie séance chargée du programme
+     (hors tests, difficulté 6 à 9, la plus riche en charges), le type de séance et le test de son sport. */
+  const claimDemo: DemoSession | null = (() => {
+    if (!hasClaimedProgram || !wizardTemplate) return null;
+    const pool = wizardTemplate.weeks.slice(0, 2).flatMap(w => Object.values(w).flat() as SessionTemplate[])
+      .filter(x => x.type !== "test" && x.target_difficulty >= 6 && x.target_difficulty <= 9 && (x.notes ?? "").includes(" — "));
+    const loaded = (x: SessionTemplate) => (x.notes ?? "").split("\n").filter(l => /\d\s*(kg|%)/.test(l)).length;
+    const best = pool.sort((a, b) => loaded(b) - loaded(a) || b.target_difficulty - a.target_difficulty)[0];
+    if (!best) return null;
+    return { name: best.name.split(" — ")[0], lines: (best.notes ?? "").split("\n").map(l => l.trim()).filter(l => l.includes(" — ")).slice(0, 4) };
+  })();
+  const claimFam = sportFamily(sport);
+  const claimBilanSes = hasClaimedProgram && sport ? ({ force: "séances de force", endurance: "fractionnés", mixte: "séances les plus intenses", collectif: "séances les plus intenses" } as const)[claimFam] : undefined;
+  const claimRecord = hasClaimedProgram && sport ? testFor(sport, claimFam).name.toLowerCase() : undefined;
   const demoHardest = tupleToTemplate(sessionTuples[0]);
   const demoLightest = tupleToTemplate(sessionTuples[1]);
   const demoMiddle = tupleToTemplate(sessionTuples[3]);
@@ -2482,7 +2514,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                 />
                 <div style={{ position: "absolute", left: 0, right: 0, top: colIsMd ? 72 : 56, padding: "0 20px", display: "flex", pointerEvents: "none" }}>
                   <div style={{ maxWidth: colMaxWidth, margin: "0 auto", width: "100%", display: "flex", justifyContent: "flex-end" }}>
-                    <AhaMorningCard isMd={colIsMd} />
+                    <AhaMorningCard isMd={colIsMd} session={claimDemo} />
                   </div>
                 </div>
                 <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(10,10,10,.6) 0%, rgba(10,10,10,.75) 40%, rgba(8,8,8,.95) 85%)" }} />
@@ -2576,12 +2608,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
              l'espace"). Accordéon+illustration (voir DecisionStep.tsx) — plein écran, son propre
              `onNext`/`onBack`, plus aucun lien avec le formulaire de compte. ── */}
         {currentStep === "decision_2a" && (
-          <DecisionStep demoHardest={demoHardest} demoLightest={demoLightest} demoMiddle={demoMiddle} sport={sport} role={role} athleteName={name} onNext={next} onBack={canGoBack ? goBack : undefined} />
+          <DecisionStep demoHardest={demoHardest} demoLightest={demoLightest} demoMiddle={demoMiddle} sport={sport} role={role} athleteName={name} session={claimDemo} bilanSes={claimBilanSes} recordTest={claimRecord} onNext={next} onBack={canGoBack ? goBack : undefined} />
         )}
 
         {/* Même step propre que decision_2a ci-dessus, voir sa doc. */}
         {currentStep === "decision_2b" && (
-          <DecisionStep demoHardest={demoHardest} demoLightest={demoLightest} demoMiddle={demoMiddle} sport={sport} role={role} onNext={next} onBack={canGoBack ? goBack : undefined} />
+          <DecisionStep demoHardest={demoHardest} demoLightest={demoLightest} demoMiddle={demoMiddle} sport={sport} role={role} session={claimDemo} onNext={next} onBack={canGoBack ? goBack : undefined} />
         )}
 
 

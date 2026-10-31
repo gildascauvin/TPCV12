@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { DARK_CARD_BG } from "@/lib/theme";
-import { AhaBilanPreview, AhaDecisionPreview, AhaFormPeakPreview, AhaRadarPreview, AhaGroupBilanPreview } from "@/components/onboarding/AhaPreviews";
+import { AhaBilanPreview, AhaDecisionPreview, AhaFormPeakPreview, AhaRadarPreview, AhaGroupBilanPreview, type DemoSession } from "@/components/onboarding/AhaPreviews";
 import type { SessionTemplate } from "@/types";
 
 /* Écran de décision — 9e itération (2026-09-02, dernière refonte de la journée) : garde le split
@@ -78,6 +78,10 @@ interface Props {
   athleteName?: string;
   onNext: () => void;
   onBack?: () => void;
+  /* Programme choisi sur /p/ (31/10) : sa vraie séance, le type de séance et le test de son sport. */
+  session?: DemoSession | null;
+  bilanSes?: string;
+  recordTest?: string;
 }
 
 const AUTO_MS = 5000;
@@ -109,7 +113,7 @@ function FitBox({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function DecisionStep({ sport, role, athleteName, onNext, onBack }: Props) {
+export default function DecisionStep({ sport, role, athleteName, onNext, onBack, session, bilanSes, recordTest }: Props) {
   const { isMd } = useBreakpoint();
   const coach = role === "coach";
   const [activeIdx, setActiveIdx] = useState(0);
@@ -140,20 +144,20 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
       desc: coach
         ? "Sommeil, stress, courbatures et comportements de chacun de tes sportifs : un score calculé chaque matin."
         : "Soirée, stress, sommeil, séances trop dures : ton bilan montre ce qui pèse vraiment sur tes séances. Chez toi, pas en moyenne.",
-      illustration: coach ? <AhaRadarPreview /> : <AhaBilanPreview />,
+      illustration: coach ? <AhaRadarPreview /> : <AhaBilanPreview ses={bilanSes} />,
     },
     {
       title: coach ? "Ajuste les séances en un clic" : "Ta séance s'ajuste chaque matin",
       desc: coach
         ? "Surcharge ou allège les séances de tes sportifs pour optimiser leurs gains de performance et éviter les blessures."
         : "Surcharge ou allège tes séances pour optimiser tes gains de performance et éviter les blessures.",
-      illustration: coach ? <AhaDecisionPreview name="Karim Haddad" /> : <AhaDecisionPreview />,
+      illustration: coach ? <AhaDecisionPreview name="Karim Haddad" session={session} /> : <AhaDecisionPreview session={session} />,
     },
     {
       title: coach ? "Vois qui décroche avant qu'il lâche" : "Arrive en forme le jour J, sans te blesser",
       desc: coach
         ? "Chaque semaine, le bilan de ton groupe : qui décroche, les séances que tu écris trop légères, ce que l'app apprend de chacun, qui monte trop vite."
-        : "Ta forme et ta charge suivies semaine après semaine : tu sais quand viser un record, et quand lever le pied avant la blessure.",
+        : `Ta forme et ta charge suivies semaine après semaine : tu sais quand viser un record${recordTest ? ` (${recordTest})` : ""}, et quand lever le pied avant la blessure.`,
       illustration: coach ? <AhaGroupBilanPreview /> : <AhaFormPeakPreview />,
     },
   ];

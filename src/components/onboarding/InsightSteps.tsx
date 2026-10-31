@@ -10,6 +10,7 @@ import { useRef, useState } from "react";
 import { SlideBody, GLOW, KICKER, KICKER_COACH } from "@/components/bilan/BilanCarousel";
 import { SCALE_WORDS, type ScaleKey } from "@/lib/wellnessWords";
 import type { Bilan, BilanSlide } from "@/lib/bilan";
+import { catalogEntry, findCatalogEntry } from "@/lib/sportCatalog";
 
 const MONO: React.CSSProperties = { fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase" };
 const BOX: React.CSSProperties = { background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16 };
@@ -87,11 +88,11 @@ export function sportFamily(sport: string): SportFamily {
   if (/foot|rugby|basket|hand|volley|tennis|padel|hockey|combat|boxe|judo|mma/.test(s)) return "collectif";
   return "mixte";
 }
-const FAM: Record<SportFamily, { ses: string; block: string; stress: [number, number, number, number]; heavy: [number, number, number, number]; test: { name: string; unit: string; pct: number; values: number[] } }> = {
-  force: { ses: "séance de force", block: "Force", stress: [17, 26, 13, 38], heavy: [14, 20, 12, 44], test: { name: "Squat Jump", unit: "cm", pct: 18, values: [38, 40.5, 42.2, 44.8] } },
-  endurance: { ses: "séance de fractionné", block: "Fractionné", stress: [15, 22, 11, 34], heavy: [13, 18, 10, 41], test: { name: "VMA", unit: "km/h", pct: 6, values: [16, 16.4, 16.8, 17] } },
-  mixte: { ses: "séance la plus intense", block: "Metcon", stress: [16, 24, 12, 36], heavy: [14, 19, 11, 42], test: { name: "Burpees en 3 min", unit: "reps", pct: 17, values: [52, 55, 58, 61] } },
-  collectif: { ses: "séance la plus intense", block: "Séance intense", stress: [14, 21, 10, 33], heavy: [12, 17, 9, 38], test: { name: "Détente verticale", unit: "cm", pct: 12, values: [41, 42.5, 44, 46] } },
+const FAM: Record<SportFamily, { ses: string; block: string; stress: [number, number, number, number]; heavy: [number, number, number, number] }> = {
+  force: { ses: "séance de force", block: "Force", stress: [17, 26, 13, 38], heavy: [14, 20, 12, 44] },
+  endurance: { ses: "séance de fractionné", block: "Fractionné", stress: [15, 22, 11, 34], heavy: [13, 18, 10, 41] },
+  mixte: { ses: "séance la plus intense", block: "Metcon", stress: [16, 24, 12, 36], heavy: [14, 19, 11, 42] },
+  collectif: { ses: "séance la plus intense", block: "Séance intense", stress: [14, 21, 10, 33], heavy: [12, 17, 9, 38] },
 };
 const DATES = ["2026-06-02", "2026-07-07", "2026-08-25", "2026-10-06"];
 const S_SLEEP: BilanSlide = { kind: "ressenti", crashes: 0, crashesSeen: 0, sleepBars: [{ label: "Correct", value: 413, display: "6h53" }, { label: "Bon", value: 453, display: "7h33" }, { label: "Très bon", value: 471, display: "7h51", highlight: true }] };
@@ -100,10 +101,56 @@ const S_LEVIER: BilanSlide = { kind: "leviers", unit: "sleep", rows: [{ label: "
 const S_CHARGE: BilanSlide = { kind: "charge", pctInZone: 64, daysHigh: 3, daysCounted: 7 };
 const sStress = (f: SportFamily): BilanSlide => { const [a, b, c, d] = FAM[f].stress; return { kind: "predit", blocks: [{ title: `${FAM[f].block} · stress élevé`, rows: [{ label: "Les jours de stress", part: a, total: b, highlight: true }, { label: "Les autres jours", part: c, total: d }] }] }; };
 const sHeavy = (f: SportFamily): BilanSlide => { const [a, b, c, d] = FAM[f].heavy; return { kind: "predit", blocks: [{ title: `${FAM[f].block} · corps fatigué`, rows: [{ label: "Les matins corps fatigué", part: a, total: b, highlight: true }, { label: "Les autres matins", part: c, total: d }] }] }; };
-const sTests = (f: SportFamily): BilanSlide => { const t = FAM[f].test; return { kind: "tests", main: { name: t.name, unit: t.unit, pct: t.pct, points: t.values.map((value, i) => ({ date: DATES[i], value })) }, others: [] }; };
+/* Test d'exemple dans le vocabulaire du sport (31/10, Gildas : « Burpees en 3 min » trop vague, squat jump
+   réservé aux sports explosifs). Clé = valeur du catalogue ; sport hors catalogue : test de la famille. */
+type TestEx = { name: string; unit: string; pct: number; values: number[] };
+const T = (name: string, unit: string, values: number[]): TestEx => ({ name, unit, values, pct: Math.round((values[3] / values[0] - 1) * 100) });
+const VMA = T("VMA", "km/h", [16, 16.4, 16.8, 17]);
+const SJ = T("Squat jump", "cm", [38, 40.5, 42.2, 44.8]);
+const SPORT_TESTS: Record<string, TestEx> = {
+  "Haltérophilie": T("Arraché", "kg", [70, 72, 74, 76]),
+  "Powerlifting": T("Squat", "kg", [140, 145, 150, 155]),
+  "Musculation / Hypertrophie": T("Développé couché", "kg", [80, 82.5, 85, 87.5]),
+  "Calisthenics": T("Tractions strictes", "reps", [12, 13, 14, 16]),
+  "Gymnastique": T("Tractions strictes", "reps", [12, 13, 14, 16]),
+  "Puissance & explosivité": SJ, "Pliométrie": SJ, "Ski": SJ, "BMX": SJ, "Hockey sur glace": SJ, "Arts martiaux & combat": SJ,
+  "Perte de poids": T("Pompes en 1 min", "reps", [20, 23, 26, 28]),
+  "Fitness / CrossFit": T("Épaulé-jeté", "kg", [70, 73, 76, 79]),
+  "Hyrox": VMA, "Endurance": VMA, "Trail": VMA, "Triathlon": VMA,
+  "Vélo / Cyclisme": T("FTP", "W", [230, 238, 245, 252]),
+  "Natation": T("Nage en 12 min", "m", [700, 730, 760, 790]),
+  "Aviron": T("Puissance sur 2 000 m", "W", [250, 258, 265, 272]),
+  "Athlétisme & vitesse": T("Vitesse max", "km/h", [32, 32.6, 33.1, 33.8]),
+  "Athlétisme — Sauts": T("Détente verticale", "cm", [45, 47, 48.5, 50.5]),
+  "Sports collectifs": T("Détente verticale", "cm", [41, 42.5, 44, 46]),
+  "Baseball": T("Lancer de médecine-ball", "m", [9, 9.5, 10, 10.4]),
+  "Golf": T("Lancer en rotation", "m", [8, 8.4, 8.9, 9.3]),
+  "Escalade": T("Suspension à la poutre", "s", [20, 24, 27, 30]),
+  "Voile": T("Gainage latéral", "s", [60, 70, 78, 85]),
+  "Équitation": T("Gainage", "s", [60, 70, 78, 85]),
+  "Prevention/Reeducation — Cheville": T("Montées sur pointes", "reps", [12, 15, 18, 21]),
+  "Prevention/Reeducation — Tendon Achille": T("Montées sur pointes", "reps", [12, 15, 18, 21]),
+  "Prevention/Reeducation — Périostite": T("Montées sur pointes", "reps", [12, 15, 18, 21]),
+  "Prevention/Reeducation — Genou": T("Chaise contre le mur", "s", [30, 40, 50, 60]),
+  "Prevention/Reeducation — Genou LCA": T("Chaise contre le mur", "s", [30, 40, 50, 60]),
+  "Prevention/Reeducation — Genou Rotulien": T("Chaise contre le mur", "s", [30, 40, 50, 60]),
+  "Prevention/Reeducation — Lombaire": T("Gainage", "s", [40, 50, 60, 70]),
+  "Prevention/Reeducation — Épaule": T("Rotation externe", "reps", [12, 14, 16, 18]),
+  "Police Nationale": T("Luc Léger", "palier", [8, 8.5, 9.5, 10]),
+  "Gendarmerie": T("Luc Léger", "palier", [8, 8.5, 9.5, 10]),
+  "Sapeur-Pompier": T("Luc Léger", "palier", [8, 8.5, 9.5, 10]),
+  "GIGN": T("Luc Léger", "palier", [8, 8.5, 9.5, 10]),
+  "Armée de Terre — TAP": T("Luc Léger", "palier", [8, 8.5, 9.5, 10]),
+};
+const FAMILY_TEST: Record<SportFamily, TestEx> = { force: T("Squat", "kg", [100, 104, 108, 112]), endurance: VMA, mixte: T("Squat", "kg", [80, 84, 88, 92]), collectif: T("Détente verticale", "cm", [41, 42.5, 44, 46]) };
+export function testFor(sport: string, f: SportFamily): TestEx {
+  const e = catalogEntry(sport) ?? findCatalogEntry(sport);
+  return (e && SPORT_TESTS[e.value]) || FAMILY_TEST[f];
+}
+const sTests = (t: TestEx): BilanSlide => { return { kind: "tests", main: { name: t.name, unit: t.unit, pct: t.pct, points: t.values.map((value, i) => ({ date: DATES[i], value })) }, others: [] }; };
 
-function leadCard(k: CaseKey, f: SportFamily): Card {
-  const { ses, stress: [sa, sb], heavy: [ha, hb], test } = FAM[f];
+function leadCard(k: CaseKey, f: SportFamily, test: TestEx): Card {
+  const { ses, stress: [sa, sb], heavy: [ha, hb] } = FAM[f];
   return {
     stress: { key: "stress", slide: sStress(f), says: (n?: string) => n
       ? `Le stress de ${n} se paie sur sa ${ses} : plus dure que prévu ${sa} fois sur ${sb}.`
@@ -117,7 +164,7 @@ function leadCard(k: CaseKey, f: SportFamily): Card {
     motivation: { key: "charge", slide: S_CHARGE, says: (n?: string) => n
       ? `Pas un manque de volonté : quand l'envie de ${n} baisse, la charge est souvent sortie de la zone.`
       : "Pas un manque de volonté : quand l'envie baisse, ta charge est souvent sortie de ta zone." },
-    ok: { key: "tests", slide: sTests(f), says: () => `Les bons matins poussés s'additionnent : ${test.name} +${test.pct} %.` },
+    ok: { key: "tests", slide: sTests(test), says: () => `Les bons matins poussés s'additionnent : ${test.name} +${test.pct} %.` },
   }[k];
 }
 /* Levier choisi selon sa réponse la plus basse (2026-10-29), d'après l'historique d'un sportif ThePerfClub
@@ -153,7 +200,7 @@ function SlideFrame({ slide, name }: { slide: BilanSlide; name?: string }) {
 export function InsightStepBody({ answers, name, sport = "" }: { answers: Answers; name?: string; sport?: string }) {
   const k = lowestAnswer(answers);
   const f = sportFamily(sport);
-  const lead = leadCard(k ?? "ok", f);
+  const lead = leadCard(k ?? "ok", f, testFor(sport, f));
   const slides = [lead, ...moreCards(f, k ?? "ok").filter(c => c.key !== lead.key)];
   const [idx, setIdx] = useState(0);
   const track = useRef<HTMLDivElement>(null);

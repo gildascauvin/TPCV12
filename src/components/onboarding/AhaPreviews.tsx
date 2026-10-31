@@ -63,7 +63,12 @@ const ATHLETE_PLANNED = 8;
 /* ── Sportif 2 / Coach 2 · l'ajustement : jauge de décision ronde ──────────────────────────── */
 const DEMO_SESSION_LINES = ["Back squat — 5×5 @ 120 kg", "Fentes bulgares — 3×8 @ 24 kg", "Sprint 30 m — 6 reps", "Planche — 3×45 s"];
 
-export function AhaDecisionPreview({ name }: { name?: string }) {
+/* Programme choisi sur /p/ (31/10) : une vraie séance de ce programme à la place de la séance générique,
+   sur l'accueil (AhaMorningCard) et dans la démo (AhaDecisionPreview). Sinon la séance générique. */
+export type DemoSession = { name: string; lines: string[] };
+
+export function AhaDecisionPreview({ name, session }: { name?: string; session?: DemoSession | null }) {
+  const lines = session?.lines.length ? session.lines : DEMO_SESSION_LINES;
   const score = name ? 50 : ATHLETE_SCORE;
   const planned = name ? 9 : ATHLETE_PLANNED;
   const baseline = syntheticBaselineFor(score);
@@ -113,15 +118,15 @@ export function AhaDecisionPreview({ name }: { name?: string }) {
       />
       <div style={{ marginTop: 16, background: "#fff", color: "#171b1f", borderRadius: 24, padding: "16px 16px 14px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <span style={{ fontWeight: 900, fontSize: 15 }}>💪 Force · Bas du corps</span>
+          <span style={{ fontWeight: 900, fontSize: 15 }}>{session?.name ?? "💪 Force · Bas du corps"}</span>
           <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "4px 8px", borderRadius: 8, background: applied ? "#fff4e6" : "rgba(212,64,0,.10)", color: applied ? "#c25d00" : "#d44000" }}>
             {applied ? "Ajustée" : "Prévue"}
           </span>
         </div>
-        <SessionSynthesis notes={DEMO_SESSION_LINES.join("\n")} adjustPct={applied ? sug.reco : null} style={{ marginBottom: 10 }} />
+        <SessionSynthesis notes={lines.join("\n")} adjustPct={applied ? sug.reco : null} style={{ marginBottom: 10 }} />
         <DiffGauge value={applied ? adjustDifficulty(planned, sug.reco) : planned} height={10} />
         <div style={{ display: "grid", gap: 7, marginTop: 12 }}>
-          {exerciseViews(DEMO_SESSION_LINES, applied ? sug.reco : null).map((v, i) => (
+          {exerciseViews(lines, applied ? sug.reco : null).map((v, i) => (
             <div key={i} style={{ padding: "8px 10px", borderRadius: 12, background: "#f7f8f9" }}>
               <ExerciseLineView text={v.text} original={v.original} ctx={v.ctx} />
             </div>
@@ -178,13 +183,18 @@ export function AhaFormPeakPreview() {
    Remplace « Signal du jour » (score 52) : plus de score de forme avant l'inscription. Mêmes
    données que AhaDecisionPreview (même reco du vrai moteur, mêmes lignes réécrites par le vrai
    parseur), pour que l'écran 2 montre la même séance. */
-export function AhaMorningCard({ isMd }: { isMd: boolean }) {
+export function AhaMorningCard({ isMd, session }: { isMd: boolean; session?: DemoSession | null }) {
   const sug = computeAutoregSuggestion(ATHLETE_SCORE, ATHLETE_PLANNED, syntheticBaselineFor(ATHLETE_SCORE));
   if (!sug) return null;
-  const lines = DEMO_SESSION_LINES.map(l => {
+  const rewrite = (src: string[]) => src.map(l => {
     const [name, rx] = l.split(" — ");
     return { name, before: rx, after: adjustNotes(l, sug.reco).text.split(" — ")[1] ?? rx };
   }).filter(l => l.after !== l.before).slice(0, 2);
+  // Séance du programme choisi seulement si le moteur en réécrit au moins une ligne (sinon rien à montrer).
+  const own = session?.lines.length ? rewrite(session.lines) : [];
+  const lines = own.length ? own : rewrite(DEMO_SESSION_LINES);
+  // « 5×2@75% » des programmes écrit comme la séance de démo : « 5×2 à 75 % ».
+  const rx = (t: string) => t.replace(/\s*@\s*(\d[\d,.]*)\s*%/g, " à $1\u00a0%").replace(/\s*@\s*/g, " @ ");
   const kicker: React.CSSProperties = { fontSize: isMd ? 10 : 9, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" };
   return (
     <div style={{
@@ -202,7 +212,7 @@ export function AhaMorningCard({ isMd }: { isMd: boolean }) {
       <div style={{ ...kicker, color: "rgba(255,255,255,.5)", marginBottom: 5 }}>⬇ Séance allégée</div>
       {lines.map(l => (
         <div key={l.name} style={{ fontSize: isMd ? 12 : 11, color: "rgba(255,255,255,.85)", lineHeight: 1.45 }}>
-          {l.name} <s style={{ color: "rgba(255,255,255,.4)" }}>{l.before}</s> <b style={{ color: "#ffb38e" }}>{l.after}</b>
+          {l.name} <s style={{ color: "rgba(255,255,255,.4)" }}>{rx(l.before)}</s> <b style={{ color: "#ffb38e" }}>{rx(l.after)}</b>
         </div>
       ))}
     </div>
@@ -257,7 +267,7 @@ function SynthMarks({ name, marks }: { name: string; marks: ("ok" | "tired" | "m
   );
 }
 
-export function AhaBilanPreview() {
+export function AhaBilanPreview({ ses = "séances de force" }: { ses?: string }) {
   const k = useProgress(900);
   return (
     <BilanSynthesis title="Ton bilan du mois" kicker="APPRIS SUR TOI" headline={<>Ce qui pèse vraiment <span style={{ color: "#c79bf7" }}>sur tes séances.</span></>} blocks={[
@@ -265,7 +275,7 @@ export function AhaBilanPreview() {
         <SynthBar k={k} label="Lendemain de séance très dure" value="68" pct={92} color="rgba(199,155,247,.4)" />
         <SynthBar k={k} label="Lendemain de soirée" value="62" pct={84} color="#a855f7" />
       </> },
-      { kicker: "Ce qui te prédit", color: "#ff8a5c", text: "Le stress pèse sur tes séances de force.", extra:
+      { kicker: "Ce qui te prédit", color: "#ff8a5c", text: `Le stress pèse sur tes ${ses}.`, extra:
         <SynthBar k={k} label="Plus dures que prévu, stressé" value="7 sur 9" pct={78} color="#ff6a2b" /> },
       { kicker: "Tes leviers", color: "#7ee08f", text: "Le stretching du soir te rend 24 min de nuit.", extra:
         <div style={{ fontSize: 12, color: "rgba(255,255,255,.6)" }}>Avec : 7h59 · Sans : 7h35</div> },
