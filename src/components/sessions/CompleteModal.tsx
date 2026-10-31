@@ -87,14 +87,16 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
       className={exitClass}
       onClick={e => { if (e.target === e.currentTarget) close(); }}
     >
+      {/* Boutons fixés en bas (31/10) : après l'échelle de 10 lignes, « Valider » sortait de l'écran sur un petit téléphone. */}
       <div style={{
         background: "#fff", color: "#171b1f",
         border: "1px solid rgba(0,0,0,.10)",
         boxShadow: "0 42px 120px rgba(0,0,0,.34)",
-        borderRadius: 24, padding: 28,
-        width: "100%", maxWidth: 400, maxHeight: "calc(100dvh - 36px)", overflowY: "auto",
+        borderRadius: 24,
+        width: "100%", maxWidth: 400, maxHeight: "calc(100dvh - 36px)", display: "flex", flexDirection: "column", overflow: "hidden",
         animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "28px 28px 8px" }}>
         {/* Title */}
         <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", marginBottom: 4 }}>
           Terminer la séance
@@ -173,9 +175,10 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
             onRelease={n => setInsight(rpeInsight(n, session.target_difficulty, rated, session.date))} />
           <RpeInsightLine insight={insight} />
         </div>
+        </div>
 
         {/* Actions */}
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0, padding: "14px 28px max(20px, env(safe-area-inset-bottom))", borderTop: "1px solid rgba(0,0,0,.06)" }}>
           <button
             onClick={close}
             style={{ flex: 1, height: 46, borderRadius: 16, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#62686e", fontSize: 14, fontWeight: 700, cursor: "pointer" }}

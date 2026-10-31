@@ -38,7 +38,9 @@ export default function CoachCompleteModal({ session, athleteName, onSave, onClo
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2147483100, padding: 18 }}
       onClick={e => { if (e.target === e.currentTarget) close(); }}
     >
-      <div style={{ background: "#fff", borderRadius: 24, padding: 28, width: "100%", maxWidth: 420, maxHeight: "calc(100dvh - 36px)", overflowY: "auto", boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
+      {/* Boutons fixés en bas (31/10) : après l'échelle de 10 lignes, « Valider » sortait de l'écran sur un petit téléphone. */}
+      <div style={{ background: "#fff", borderRadius: 24, width: "100%", maxWidth: 420, maxHeight: "calc(100dvh - 36px)", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "28px 28px 8px" }}>
         <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", marginBottom: 4 }}>
           Résultat de la séance
         </div>
@@ -65,8 +67,9 @@ export default function CoachCompleteModal({ session, athleteName, onSave, onClo
             <RpeInsightLine insight={insight} />
           </div>
         </div>
+        </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 24 }}>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0, padding: "14px 28px max(20px, env(safe-area-inset-bottom))", borderTop: "1px solid rgba(0,0,0,.06)" }}>
           <button onClick={close} style={{ flex: 1, height: 50, borderRadius: 16, background: "#f0efed", color: "#62686e", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
             Annuler
           </button>

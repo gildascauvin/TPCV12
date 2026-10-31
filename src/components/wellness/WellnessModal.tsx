@@ -435,12 +435,20 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         {/* En-tête « 💓 Wellness du jour · 1 / 5 » retiré (2026-10-27, Gildas : les barres disent déjà où
             on en est). Reste seulement ce qui informe : le retour à l'étape 0, et le nom du sportif quand
             le coach saisit pour lui. */}
-        {((step === 0 && onBack) || who) && (
-          <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 14 }}>
-            {step === 0 && onBack && <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 18, padding: "2px 4px", borderRadius: 8, flexShrink: 0, marginLeft: -4 }}>←</button>}
-            {who && <div style={{ fontSize: 13, fontWeight: 700, color: "#172018" }}>{subject?.heading ?? `Point forme de ${who}`}</div>}
-          </div>
-        )}
+        {/* Barre du haut (31/10, comme les questions de l'onboarding) : ← à gauche (question précédente, ou
+            l'écran d'avant à la 1re), « Plus tard » à droite. Les questions à une note avancent seules au tap :
+            plus de bouton « Suivant » en bas, sauf aux comportements (plusieurs cases ou aucune). */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14, minHeight: 30 }}>
+          {(step > 0 || onBack) && (
+            <button onClick={step > 0 ? goBack : onBack} aria-label="Retour"
+              style={{ width: 34, height: 34, borderRadius: "50%", border: "1px solid rgba(0,0,0,0.10)", background: "#fff", color: "#172018", cursor: "pointer", fontSize: 16, flexShrink: 0, display: "grid", placeItems: "center", marginLeft: -2 }}>←</button>
+          )}
+          {who && <div style={{ fontSize: 13, fontWeight: 700, color: "#172018", minWidth: 0 }}>{subject?.heading ?? `Point forme de ${who}`}</div>}
+          <button onClick={closeAnimated}
+            style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "#7b7f82", fontSize: 14, fontWeight: 700, padding: "6px 2px", fontFamily: "inherit" }}>
+            {cancelLabel}
+          </button>
+        </div>
 
         {/* Progress dots */}
         <div style={{ display: "flex", gap: 3, marginBottom: 24 }}>
@@ -576,29 +584,18 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
 
     </>
   );
-  const footer = (
+  // Bouton du bas : seulement aux comportements (choix multiple), et pendant l'enregistrement.
+  const showFooter = q === 3 || saving;
+  const footer = !showFooter ? null : (
         <div style={{ display: "flex", gap: 8, flexShrink: 0, padding: sheetMode ? "12px 22px max(14px, env(safe-area-inset-bottom))" : embedded ? "10px 14px max(12px, env(safe-area-inset-bottom))" : "20px 34px 20px", background: embedded ? "#f1f0ee" : "#fff" }}>
-          {step > 0 ? (
-            <button
-              onClick={goBack}
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(0,0,0,0.12)", background: "#fff", color: "#172018", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
-            >
-              ← Retour
-            </button>
-          ) : (
-            <button
-              onClick={closeAnimated}
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(0,0,0,0.12)", background: "#fff", color: "#7b7f82", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
-            >
-              {cancelLabel}
-            </button>
-          )}
           <button
             onClick={goNext}
-            disabled={saving || (q === -1 && !plannedIntensity) || !answered}
-            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(212,64,0,0.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 14px 28px rgba(212,64,0,0.20)", opacity: (q === -1 && !plannedIntensity) || !answered ? 0.45 : 1 }}
+            disabled={saving}
+            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(212,64,0,0.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 14px 28px rgba(212,64,0,0.20)" }}
           >
-            {saving ? <span aria-label="Enregistrement" style={{ width: 16, height: 16, border: "2px solid currentColor", borderTopColor: "transparent", borderRadius: "50%", display: "inline-block", animation: "spinBtn 0.7s linear infinite" }} /> : step === total - 1 ? "Valider ✓" : q === 3 && behaviors.length === 0 ? "Rien de particulier →" : "Suivant →"}
+            {saving
+              ? <span aria-label="Enregistrement" style={{ width: 16, height: 16, border: "2px solid currentColor", borderTopColor: "transparent", borderRadius: "50%", display: "inline-block", animation: "spinBtn 0.7s linear infinite" }} />
+              : behaviors.length ? "Continuer →" : "Rien de tout ça →"}
           </button>
         </div>
   );
@@ -608,7 +605,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     return (
       <div style={{ color: "#171b1f", paddingTop: 4 }}>
         {body}
-        <div style={{ position: "sticky", bottom: footerOffset, margin: "14px -14px 0", background: "#f1f0ee", zIndex: 2 }}>{footer}</div>
+        {footer && <div style={{ position: "sticky", bottom: footerOffset, margin: "14px -14px 0", background: "#f1f0ee", zIndex: 2 }}>{footer}</div>}
         {scoreSlot && createPortal(renderBuildingScore(scoreSize), scoreSlot)}
       </div>
     );
