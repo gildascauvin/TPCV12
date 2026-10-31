@@ -9,7 +9,7 @@ description: Paywall, priming Elite, abonnements Stripe et achats intégrés iOS
 - `src/components/paywall/PrimingJourneyModal.tsx` : l'écran d'offre Elite. UN SEUL composant pour l'onboarding (étape `ob_pay`) et toute l'app. Gère la croix, l'offre de sortie et la feuille de perte.
 - `src/components/paywall/PaywallModal.tsx` : formulaire de paiement Stripe (`CheckoutForm`, carte + Apple/Google Pay). Exporte `PRICING`, `PAYWALL_CTA_LABEL`, `PAYWALL_TESTIMONIALS`, `PAYWALL_AVATARS`, `getStripePromise`, type `Billing`.
 - `src/components/paywall/PricingPriming.tsx` : contenu de l'offre : `ElitePlanCard`, `ElitePrice` (interne), `OfferRows`, `planFeatures`, `PrimingExtras` (vidéos + FAQ), `PricingSideLink` (« Inviter mon coach » / démo coach), `TRIAL_DAYS`, `PRICING_PRIMING_GUARANTEE_CAPTION`, `paywallSimIos`.
-- `src/components/paywall/RiskTimeline.tsx` : frise Aujourd'hui / (coach : Demain matin) / Jour 7 / Jour 14 sous le titre (aussi utilisée par `InsightSteps.tsx`).
+- `src/components/paywall/RiskTimeline.tsx` : frise de réassurance sous le titre (31/10) : Aujourd'hui · 0 € (coach : + « Tes sportifs sont gratuits, toujours. ») / Pendant l'essai · Annulable en 1 clic / Jour 14 · 1er paiement. Pas de « Rappel » : aucun rappel n'est envoyé.
 - `src/components/paywall/ExitOffer.tsx` + `src/lib/exitOffer.ts` : offre de sortie DEPART30.
 - `src/components/paywall/LossSheet.tsx` : feuille de perte à la fermeture.
 - `src/components/paywall/NativeCheckout.tsx` : `NativePurchasePanel` (achat Apple/Google, restaurer, mentions légales) et `NativeCheckout` (même bloc porté dans le footer de `PaywallModal`).
@@ -52,6 +52,7 @@ description: Paywall, priming Elite, abonnements Stripe et achats intégrés iOS
 - Suppression de compte (`/api/account/delete`) supprime aussi le client RevenueCat.
 
 ## Écran d'offre (PrimingJourneyModal) : état actuel
+- Carte Elite (31/10) : formules + ancrage, puis « En plus du gratuit » + frise de valeur façon Levels (`valueSteps`/`ValuePath`, `PricingPriming.tsx`) : 1 Ajuste (Dès demain ; coach Demain matin, ou « Invite tes sportifs ce soir » si `noAthletes`), 2 Comprends (Jour 7, bilan), 3 Anticipe (Semaine 3+). Plus de liste de fonctionnalités (`planFeatures` supprimé) ni de ligne « 0 € aujourd'hui, 1er prélèvement… » sous le prix. Étape surlignée : `primingHitIndex` (decision/first → Ajuste, insight → Comprends, progress/checklist → aucune) ; en onboarding prop `tried` → Ajuste + « Ce que tu viens d'essayer ».
 - Desktop : modale centrée ; dès 900 px de large, titre + `RiskTimeline` à gauche, carte Elite à droite. Mobile : plein écran, achat dans le bas fixe. Charte sombre (`DARK_CARD_BG`, bouton `#D44000`, Stripe thème `night`).
 - **Plus de carte Gratuit ni de « Continuer en Gratuit » (30/10), onboarding comme app** : la croix est la seule sortie. Carte Elite « En plus du gratuit ».
 - Formules empilées (`OfferRows`, radios, annuel présélectionné) à la place de l'ancien toggle. Web : annuel « 6,50 €/mois » en gros + ~~108 €~~ 78 € par an, badge d'économie calculé ; mensuel « Sans engagement ». iOS (ou `?pwios=1`) : prix facturé en gros.

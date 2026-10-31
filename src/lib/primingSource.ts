@@ -141,7 +141,8 @@ export function primingTitles(role: "athlete" | "coach", source: PrimingSource, 
   return { eyebrow, title: t[0], sub: t[1] };
 }
 
-/** Ligne Elite surlignée (index dans PLAN_FEATURES.elite) selon le déclencheur, -1 = aucune. */
+/** Étape surlignée de la frise de valeur (valueSteps : Ajuste, Comprends, Anticipe) selon le déclencheur, -1 = aucune.
+    Les tests n'ont pas d'étape à eux depuis la frise du 31/10. */
 export function primingHitIndex(source: PrimingSource): number {
-  return { decision: 0, insight: 1, progress: 2, first: 0, checklist: -1 }[source];
+  return { decision: 0, insight: 1, progress: -1, first: 0, checklist: -1 }[source];
 }

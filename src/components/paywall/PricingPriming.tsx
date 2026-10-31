@@ -34,64 +34,52 @@ export function paywallSimIos(): boolean {
 
 export const PRICING_PRIMING_GUARANTEE_CAPTION = "✓ Annulation en 1 clic, sans engagement.";
 
-type Feature = { title: string; text: string };
+type ValueStep = { verb: string; when: string; text: string };
 
-/* Mesures gratuites, décisions payantes (freemium v2). `de` = « de trail », « d'Hyrox »… ou "". */
-export function planFeatures(role: "athlete" | "coach", sportDe: string | null): { free: Feature[]; elite: Feature[] } {
-  const de = sportDe ? ` ${sportDe}` : "";
-  return role === "athlete" ? {
-    free: [
-      { title: "Construis ton entraînement", text: `Un programme${de} sur mesure, importé, ou un modèle.` },
-      { title: "Renseigne ta forme", text: "Ton ressenti en 10 secondes, ta montre synchronisée." },
-      { title: "Fais tes séances", text: "Chrono, charges, difficulté ressentie." },
-    ],
-    elite: [
-      { title: "Ajuste chaque séance à ta forme", text: "Alléger, maintenir ou pousser, pour plus de progrès et moins de blessures." },
-      { title: "Comprends ce qui fait bouger ta forme", text: "Récupération, charge et comportements, expliqués." },
-      { title: "Sache où tu en es, test par test", text: `Chaque test${de} situé par rapport à sa cible : tes forces, tes faiblesses, quoi travailler en priorité.` },
-    ],
-  } : {
-    free: [
-      { title: "Programme tes sportifs", text: `Sur mesure, importé ou modèle${de}, assigné en un geste.` },
-      { title: "Invite-les", text: "Ils renseignent leur forme et leurs séances." },
-      { title: "Suis leurs points forme", text: "Les scores de chacun, sans relance." },
-    ],
-    elite: [
-      { title: "Sache chaque matin qui alléger, et de combien", text: "Une décision par sportif, sur sa forme et sa charge." },
-      { title: "Comprends pourquoi un sportif décroche", text: "Avant qu'il se blesse ou stagne." },
-      { title: "Repère la priorité de chaque sportif", text: "Ses tests situés par rapport à leur cible : forces et faiblesses, sportif par sportif." },
-    ],
-  };
+/* Frise de la valeur façon Levels (31/10, Gildas) : verbe, échéance, ce qu'il obtient. Le paiement est dans
+   RiskTimeline, la carte ne parle que de valeur. */
+export function valueSteps(role: "athlete" | "coach", noAthletes?: boolean): ValueStep[] {
+  return role === "athlete" ? [
+    { verb: "Ajuste", when: "Dès demain", text: "Ton point forme en 10 secondes, ta séance s'ajuste au bon cran. Le soir, ThePerfClub vérifie si le dosage était juste." },
+    { verb: "Comprends", when: "Jour 7", text: "Ton premier bilan : ce qui fait vraiment bouger ta forme. Soirée, sommeil, stress : chez toi, pas en moyenne." },
+    { verb: "Anticipe", when: "Semaine 3+", text: "ThePerfClub connaît tes signaux. Tu sais quels jours pousser, et tu vois venir la baisse avant la séance ratée." },
+  ] : [
+    noAthletes
+      ? { verb: "Ajuste", when: "Dès demain", text: "Invite tes sportifs ce soir : demain matin, une décision par sportif, alléger, maintenir ou pousser." }
+      : { verb: "Ajuste", when: "Demain matin", text: "Les points forme de ton groupe arrivent : une décision par sportif, alléger, maintenir ou pousser." },
+    { verb: "Comprends", when: "Jour 7", text: "Le bilan de ton groupe : qui décroche, qui force, les séances que tu écris trop légères." },
+    { verb: "Anticipe", when: "Semaine 3+", text: "Tu vois venir la baisse de chaque sportif avant la blessure ou la stagnation." },
+  ];
 }
 
 const mono = "var(--font-mono), monospace";
 
-function FeatureList({ items, elite, hitIndex, hitLabel }: { items: Feature[]; elite: boolean; hitIndex?: number; hitLabel?: string }) {
+function ValuePath({ steps, hitIndex, hitLabel }: { steps: ValueStep[]; hitIndex?: number; hitLabel?: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
-      {items.map((f, i) => {
-        const hit = elite && i === hitIndex;
+      {steps.map((s, i) => {
+        const hit = i === hitIndex;
         return (
-          <div key={f.title} style={{
-            display: "grid", gridTemplateColumns: "20px 1fr", gap: 10,
-            padding: hit ? "9px 10px" : "8px 0", margin: hit ? "2px -10px" : 0,
-            borderTop: i === 0 || hit || (elite && i - 1 === hitIndex) ? "1px solid transparent" : "1px solid rgba(255,255,255,.06)",
+          <div key={s.verb} style={{
+            display: "grid", gridTemplateColumns: "26px 1fr", gap: 12, position: "relative",
+            padding: hit ? "10px 10px 12px" : "4px 0 14px", margin: hit ? "0 -10px 6px" : 0,
             background: hit ? "rgba(255,138,85,.08)" : "transparent", borderRadius: hit ? 12 : 0,
           }}>
-            <div style={{
-              width: 20, height: 20, borderRadius: "50%", marginTop: 1, fontSize: 11,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              background: elite ? "rgba(212,64,0,.28)" : "rgba(255,255,255,.10)",
-              color: elite ? "#ffb08a" : "rgba(255,255,255,.7)",
-            }}>{elite ? "★" : "✓"}</div>
+            {i < steps.length - 1 && !hit && <span style={{ position: "absolute", left: 12, top: 32, bottom: 2, width: 2, background: "rgba(255,138,85,.22)" }} />}
+            <span style={{
+              width: 26, height: 26, borderRadius: "50%", display: "grid", placeItems: "center", position: "relative", zIndex: 1,
+              fontFamily: mono, fontSize: 12, fontWeight: 700, color: hit ? "#fff" : "#ffb08a",
+              background: hit ? "#f04a08" : "rgba(212,64,0,.16)", border: hit ? "none" : "1.5px solid rgba(255,138,85,.55)",
+            }}>{i + 1}</span>
             <div style={{ minWidth: 0 }}>
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 8px", fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, lineHeight: 1.3, color: elite ? "#fff" : "rgba(255,255,255,.82)" }}>
-                {f.title}
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "4px 10px" }}>
+                <span style={{ fontFamily: "var(--font-display)", fontSize: 15.5, fontWeight: 700, color: "#fff" }}>{s.verb}</span>
+                <span style={{ fontFamily: mono, fontSize: 10.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "rgba(255,255,255,.5)" }}>{s.when}</span>
                 {hit && hitLabel && (
-                  <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#fff", background: "#D44000", borderRadius: 999, padding: "4px 7px" }}>{hitLabel}</span>
+                  <span style={{ alignSelf: "center", fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#fff", background: "#D44000", borderRadius: 999, padding: "4px 7px" }}>{hitLabel}</span>
                 )}
               </div>
-              <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.58)", lineHeight: 1.45, marginTop: 2 }}>{f.text}</div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,.62)", lineHeight: 1.45, marginTop: 3 }}>{s.text}</div>
             </div>
           </div>
         );
@@ -198,13 +186,11 @@ function ElitePrice({ role, billing, setBilling, athleteCount }: { role: "athlet
   const anchor = role === "athlete"
     ? <>Le prix d&apos;<b style={{ color: "#fff" }}>une seule séance</b> avec un préparateur physique, pour toute l&apos;année.</>
     : <>Avec {n} sportifs : <b style={{ color: "#fff" }}>{money((promo ? pa.perMonth : sp ? annual / 12 : p.annualMonthly) / n)} par sportif</b> et par mois. Sportifs illimités.</>;
-  const days = sp?.trial ?? TRIAL_DAYS;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <OfferRows rows={rows} billing={billing} setBilling={setBilling} />
       {promo && <div style={{ fontSize: 12.5, color: "#7fdb8f", fontWeight: 700 }}>Code DEPART30 appliqué.</div>}
       <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.62)", lineHeight: 1.5, marginTop: 4 }}>{anchor}</div>
-      <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.5)", lineHeight: 1.5 }}>0 € aujourd&apos;hui, 1er prélèvement après tes {days} jours offerts.</div>
     </div>
   );
 }
@@ -235,11 +221,10 @@ export function PricingSideLink({ role, athleteSelfId, name }: { role: "athlete"
 }
 
 /* Carte Elite, mise en avant. `cta` = bouton d'achat (absent en mobile : bas fixe). */
-export function ElitePlanCard({ role, billing, setBilling, sportDe, hitIndex, hitLabel, cta, sideLink, athleteCount }: {
-  role: "athlete" | "coach"; billing: Billing; setBilling: (b: Billing) => void; sportDe: string | null;
+export function ElitePlanCard({ role, billing, setBilling, noAthletes, hitIndex, hitLabel, cta, sideLink, athleteCount }: {
+  role: "athlete" | "coach"; billing: Billing; setBilling: (b: Billing) => void; noAthletes?: boolean;
   hitIndex: number; hitLabel?: string; cta?: React.ReactNode; sideLink?: React.ReactNode; athleteCount?: number;
 }) {
-  const f = planFeatures(role, sportDe);
   return (
     <div style={{
       borderRadius: 20, padding: "20px 20px 18px", display: "flex", flexDirection: "column", gap: 14, minWidth: 0,
@@ -251,7 +236,7 @@ export function ElitePlanCard({ role, billing, setBilling, sportDe, hitIndex, hi
       </div>
       <ElitePrice role={role} billing={billing} setBilling={setBilling} athleteCount={athleteCount} />
       <div style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: ".07em", textTransform: "uppercase", color: "rgba(255,138,85,.85)", margin: "4px 0 -6px" }}>En plus du gratuit</div>
-      <FeatureList items={f.elite} elite hitIndex={hitIndex} hitLabel={hitLabel} />
+      <ValuePath steps={valueSteps(role, noAthletes)} hitIndex={hitIndex} hitLabel={hitLabel} />
       {cta && <><div style={{ flex: 1 }} />{cta}</>}
       {sideLink}
     </div>

@@ -38,6 +38,8 @@ interface Props {
   athleteCount?: number;
   /** Coach : a-t-il déjà invité ou suivi un sportif ? (frise « Demain matin »). undefined = lu dans le contexte. */
   hasAthletes?: boolean;
+  /** Onboarding : il vient d'essayer la décision, l'étape « Ajuste » porte « Ce que tu viens d'essayer ». */
+  tried?: boolean;
 }
 
 /* Priming Elite (2026-10-07, POC https://claude.ai/artifact/MgsQY4Fncy8XtVgmNBA9Q5) : modale
@@ -45,7 +47,7 @@ interface Props {
    Gratuit dessous, CTA fixé en bas). Remplace le drawer docké à droite du 2026-09-16. Le titre
    suit ce que l'utilisateur essayait de faire (déclencheur) puis son prénom, son sport et, côté
    coach, ses sportifs. */
-export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, onPurchased, headline, sub, name, athleteSelfId, athleteCount, hasAthletes }: Props) {
+export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, onPurchased, headline, sub, name, athleteSelfId, athleteCount, hasAthletes, tried }: Props) {
   const { isMd, w } = useBreakpoint();
   const { close, exitClass } = useExitAnimation(onDismiss);
   const [{ source, athleteName }] = useState(peekPrimingSource);
@@ -86,8 +88,9 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
   const titles = primingTitles(mode, source, ctx, athleteName);
   const title = headline ?? titles.title;
   const subText = headline ? (sub ?? null) : titles.sub;
-  const hitIndex = primingHitIndex(source);
-  const hitLabel = source === "first" ? "Ce que tu viens d'essayer" : "Ce que tu voulais faire";
+  const hitIndex = tried ? 0 : primingHitIndex(source);
+  const hitLabel = tried || source === "first" ? "Ce que tu viens d'essayer" : "Ce que tu voulais faire";
+  const noAthletes = mode === "coach" && !(hasAthletes ?? (ctx.athleteNames.length > 0));
   const displayName = name ?? ctx.name ?? undefined;
   const native = isNativeApp();
   const columns = isMd && w >= 900;
@@ -146,7 +149,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
         <div style={{ fontFamily: "var(--font-display)", fontSize: isMd ? 29 : 24, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.18, color: "#fff", textWrap: "balance" as React.CSSProperties["textWrap"], marginBottom: 10 }}>{title}</div>
         {subText && <div style={{ fontSize: isMd ? 14.5 : 13.5, lineHeight: 1.55, color: "rgba(255,255,255,.62)", maxWidth: 620 }}>{subText}</div>}
       </div>
-      <div style={{ marginTop: 22 }}><RiskTimeline coach={mode === "coach"} noAthletes={mode === "coach" && !(hasAthletes ?? (ctx?.athleteNames.length ?? 0) > 0)} /></div>
+      <div style={{ marginTop: 22 }}><RiskTimeline coach={mode === "coach"} /></div>
     </div>
   );
   const closeBtn = allowDismiss && (
@@ -164,7 +167,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
           <div style={{ flex: 1, overflowY: "auto" }}>
             <div style={{ padding: "44px 20px 4px" }}>{head}</div>
             <div style={{ padding: "18px 16px 6px", display: "flex", flexDirection: "column", gap: 14 }}>
-              <ElitePlanCard role={mode} billing={billing} setBilling={setBilling} sportDe={ctx.sportDe} hitIndex={hitIndex} hitLabel={hitLabel} sideLink={sideLink} athleteCount={anchorCount} />
+              <ElitePlanCard role={mode} billing={billing} setBilling={setBilling} noAthletes={noAthletes} hitIndex={hitIndex} hitLabel={hitLabel} sideLink={sideLink} athleteCount={anchorCount} />
             </div>
             <div style={{ padding: "14px 16px 20px" }}><PrimingExtras role={mode} /></div>
           </div>
@@ -191,7 +194,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
         <div style={{ flex: 1, overflowY: "auto" }}>
           <div style={{ padding: "34px 32px 8px", display: "grid", gap: columns ? 36 : 22, gridTemplateColumns: columns ? "1fr 1.05fr" : "1fr", alignItems: "start" }}>
             <div style={{ paddingTop: columns ? 4 : 0 }}>{head}</div>
-            <ElitePlanCard role={mode} billing={billing} setBilling={setBilling} sportDe={ctx.sportDe} hitIndex={hitIndex} hitLabel={hitLabel} cta={cta} sideLink={sideLink} athleteCount={anchorCount} />
+            <ElitePlanCard role={mode} billing={billing} setBilling={setBilling} noAthletes={noAthletes} hitIndex={hitIndex} hitLabel={hitLabel} cta={cta} sideLink={sideLink} athleteCount={anchorCount} />
           </div>
           <div style={{ padding: "18px 32px 28px" }}><PrimingExtras role={mode} /></div>
         </div>
