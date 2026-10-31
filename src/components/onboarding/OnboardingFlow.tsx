@@ -26,7 +26,7 @@ import Actions from "@/components/onboarding/Actions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, PROGRAM_QUESTION_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
 import { COUNT_OPTIONS, HealthStepBody, WeekStepBody, PlannedWeekBody, NotifStepBody, AppPushStepBody, StreakTitle, type ObCount, type WeekSession } from "@/components/onboarding/EliteSteps";
-import { InsightStepBody, insightTitle, payHeadline, payHeadlineCoach, decideOptions, decideLead, decideOptionsCoach, decideLeadCoach, contrastTitle, contrastTitleCoach, pickWords, pickWordsCoach, lowestAnswer, lowWords, sportFamily, answerRows, testFor, type Answers, type Pick, type PickCoach } from "@/components/onboarding/InsightSteps";
+import { InsightStepBody, insightTitle, payHeadline, payHeadlineCoach, decideOptions, decideLead, decideOptionsCoach, decideLeadCoach, contrastTitle, contrastTitleCoach, weekCostLine, pickWords, pickWordsCoach, lowestAnswer, lowWords, sportFamily, answerRows, testFor, type Answers, type Pick, type PickCoach } from "@/components/onboarding/InsightSteps";
 import { SessionTemplateCard } from "@/components/programs/SessionTemplateCard";
 import AnalysisReveal, { ReadingReveal, type AnalysisStep } from "@/components/onboarding/AnalysisReveal";
 import { computeAutoregSuggestion } from "@/lib/autoregulation";
@@ -2311,6 +2311,31 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         </QuestionShell>
       );
     }
+    /* Enjeu chiffré avec ses réponses (2026-10-31, chantier douleur) : séances jusqu'à son échéance, sinon sur
+       3 mois ; coach : séances par semaine du groupe annoncé (ob_count). Repris par ob_week et la feuille de perte. */
+    const obStake = ((): { sessions?: number; deadlineLabel?: string; perWeek?: number } => {
+      // Jours connus seulement (programme généré, importé ou claimé) : jamais le repli « 4 » d'obProgramDays.
+      const knownDays = hasClaimedProgram || obHas === "import" || (obHas === "generate" && obDays.length > 0);
+      if (!knownDays || obProgramOk === false) return {};
+      const perWeek = obProgramDays();
+      if (coach) {
+        const n = obCount ? ({ "1-5": 5, "6-15": 10, "16-30": 20, "30+": 30 } as const)[obCount] : null;
+        return { perWeek: n ? n * perWeek : undefined };
+      }
+      const dl = obGoal === "competition" && obDeadline ? new Date(`${obDeadline}T12:00:00`) : null;
+      const weeks = dl ? Math.floor((dl.getTime() - new Date(`${today}T12:00:00`).getTime()) / (7 * 86400000)) : 0;
+      if (dl && weeks >= 1) return { sessions: weeks * perWeek, deadlineLabel: dl.toLocaleDateString("fr-FR", { day: "numeric", month: "long" }) };
+      return { sessions: 13 * perWeek };
+    })();
+    const weekSub = (dir: "low" | "high" | null): string => {
+      const cost = weekCostLine(obPick, dir);
+      const stakeTxt = coach
+        ? `Dès demain, chacun de tes sportifs arrive comme ça${obStake.perWeek ? ` : ${obStake.perWeek} séances par semaine, chacune sur sa vraie forme` : ""}.`
+        : !obStake.sessions ? ""
+        : obStake.deadlineLabel ? `D'ici le ${obStake.deadlineLabel}, ${obStake.sessions} séances, chacune sur ta vraie forme.`
+        : `Sur 3 mois, ${obStake.sessions} séances, chacune sur ta vraie forme.`;
+      return [cost, stakeTxt].filter(Boolean).join(" ");
+    };
     /* La jauge de décision de /today (la primitive), sur sa séance, calée sur son check-in. */
     if (currentStep === "ob_week") {
       const ses = ringSession();
@@ -2318,7 +2343,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       return (
         <QuestionShell {...common} dark eyebrow={coach ? "Ton instinct, avec une règle" : "Ton ressenti, avec une règle"}
           title={coach ? capS(contrastTitleCoach(obPick as PickCoach | null, sug, coachFirst)) : contrastTitle(obPick as Pick | null, sug)}
-          sub={coach ? "Dès demain, chacun de tes sportifs arrive comme ça." : undefined}
+          sub={weekSub(sug?.dir ?? null) || undefined}
           onSkip={() => obAdvance()}
           cta={{ label: coach ? "Continuer" : "C'est parti", onClick: () => obAdvance() }}>
           <WeekStepBody key={`${ses.name}-${obCheckinScore}`} sessions={[{ id: "ob-ring", date: today, name: ses.name, notes: ses.notes ?? null, target_difficulty: ses.target_difficulty }]}
@@ -2384,9 +2409,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       const ringName = ringSession().name;
       const headline = coach ? capS(payHeadlineCoach(answers, coachFirst, sportForCopy, ringName)) : payHeadline(answers, false, sportForCopy, ringName);
       const pickLine = obPick ? (coach ? pickWordsCoach[obPick as PickCoach] : pickWords[obPick as Pick]) ?? "" : "";
+      /* 2e phrase = le coût de ne rien faire, au moment d'hésiter (2026-10-31, chantier douleur). */
       const paySub = coach
-        ? `${pickLine ? pickLine + " " : ""}Son point forme de 10 secondes le matin, ta décision en un tap. Et chaque semaine, le bilan de ton groupe.`
-        : `${pickLine ? pickLine + " " : ""}ThePerfClub te donne la règle chaque matin, et vérifie chaque soir.`;
+        ? `${pickLine ? pickLine + " " : ""}À l'œil, on voit la blessure trop tard. Son point forme de 10 secondes le matin, ta décision en un tap.`
+        : `${pickLine ? pickLine + " " : ""}Au feeling, c'est le même plateau. ThePerfClub te donne la règle chaque matin.`;
       return (
         <OnboardingBackground variant="dark">
           {obPayStage === "priming" ? (
@@ -2396,7 +2422,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
               onContinue={() => setObPayStage("paywall")}
               onDismiss={() => { posthog.capture("onboarding_pay_free"); done(); }}
               onPurchased={() => { posthog.capture("onboarding_pay_purchased"); done(); }}
-              headline={headline} sub={paySub} name={name.trim() || undefined}
+              headline={headline} sub={paySub} name={name.trim() || undefined} lossStake={obStake}
               athleteSelfId={invitedAthlete || coach ? undefined : eliteUid ?? (dbgProgRef.current ? "demo" : undefined)} />
           ) : (
             <PaywallModal mode={coach ? "coach" : "athlete"} allowDismiss initialBilling={obBilling}

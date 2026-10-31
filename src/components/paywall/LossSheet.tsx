@@ -19,20 +19,33 @@ export function markLossSheetSeen() {
   try { localStorage.setItem(DAY_KEY, new Date().toDateString()); } catch { /* stockage bloqué */ }
 }
 
-export default function LossSheet({ mode, onStay, onLeave }: { mode: "athlete" | "coach"; onStay: () => void; onLeave: () => void }) {
+/* Enjeu de l'onboarding (2026-10-31, chantier douleur) : ses propres réponses, pas des chiffres
+   d'illustration. Sportif : séances jusqu'à son échéance (deadlineLabel) ou sur 3 mois ; coach : séances par
+   semaine de son groupe. Absent (paywall de l'app) : textes génériques. */
+export type LossStake = { sessions?: number; deadlineLabel?: string; perWeek?: number };
+
+export default function LossSheet({ mode, onStay, onLeave, stake }: { mode: "athlete" | "coach"; onStay: () => void; onLeave: () => void; stake?: LossStake }) {
   const coach = mode === "coach";
+  /* Douleur conséquence, pas symptôme (skill storytelling-tpc, 2026-10-31) : il perd son objectif, pas sa séance de demain. */
+  const title = coach
+    ? "Tu reviens à l'œil. Et aux blessures qu'on voit trop tard."
+    : stake?.deadlineLabel ? "Tu prépares ton échéance au feeling." : "Tu reviens au feeling. Et au même plateau.";
+  const keeps = coach
+    ? "Tu gardes tes programmes et les points forme de ton groupe. Les décisions, le radar et les bilans s'arrêtent ici."
+    : "Tu gardes ton programme et ton point forme. Les décisions du matin et tes bilans s'arrêtent ici.";
+  const lead = coach
+    ? (stake?.perWeek ? `${stake.perWeek} séances par semaine dans ton groupe, décidées sans savoir qui est cuit. ` : "")
+    : stake?.sessions ? `${stake.deadlineLabel ? `D'ici le ${stake.deadlineLabel}` : "Sur 3 mois"}, ${stake.sessions} séances décidées sans savoir si tu pouvais pousser. ` : "";
   return createPortal(
     <div onClick={e => { if (e.target === e.currentTarget) onStay(); }} style={{ position: "fixed", inset: 0, zIndex: 2147483600, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
       <div style={{ width: "100%", maxWidth: 520, background: "#12161b", color: "#fff", borderRadius: "24px 24px 0 0", borderTop: "1px solid rgba(255,255,255,.12)", padding: "10px 20px max(20px, env(safe-area-inset-bottom))", animation: "sheetUp .22s cubic-bezier(0.2,0,0,1)" }}>
         <style>{`@keyframes sheetUp { from { transform: translateY(100%) } to { transform: none } }`}</style>
         <div style={{ width: 38, height: 4, borderRadius: 2, background: "rgba(255,255,255,.2)", margin: "0 auto 18px" }} />
         <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2 }}>
-          {coach ? "Demain matin, tu ne sauras pas qui alléger." : "Ta séance de demain ne s'ajustera pas."}
+          {title}
         </div>
         <div style={{ fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,.62)", marginTop: 8 }}>
-          {coach
-            ? "Tu gardes tes programmes et les points forme de ton groupe. Les décisions, le radar et les bilans s'arrêtent ici."
-            : "Tu gardes ton programme et ton point forme. Les décisions du matin et tes bilans s'arrêtent ici."}
+          {lead}{keeps}
         </div>
         <div style={{ display: "grid", gap: 8, marginTop: 20 }}>
           <button onClick={onStay} style={{ height: 52, borderRadius: 999, border: 0, background: "#d44000", color: "#fff", fontSize: 15.5, fontWeight: 800, cursor: "pointer" }}>Garder mes 14 jours offerts</button>

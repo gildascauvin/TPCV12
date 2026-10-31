@@ -5,7 +5,7 @@ import { NativePurchasePanel } from "./NativeCheckout";
 import { useEffect, useRef, useState } from "react";
 import posthog from "posthog-js";
 import { ElitePlanCard, PrimingExtras, PricingSideLink, PRICING_PRIMING_GUARANTEE_CAPTION, paywallSimIos } from "./PricingPriming";
-import LossSheet, { lossSheetDue, markLossSheetSeen } from "./LossSheet";
+import LossSheet, { lossSheetDue, markLossSheetSeen, type LossStake } from "./LossSheet";
 import { RiskTimeline } from "./RiskTimeline";
 import ExitOffer from "./ExitOffer";
 import { acceptExitOffer, exitOfferEligible, markExitOfferSeen } from "@/lib/exitOffer";
@@ -40,6 +40,8 @@ interface Props {
   hasAthletes?: boolean;
   /** Onboarding : il vient d'essayer la décision, l'étape « Ajuste » porte « Ce que tu viens d'essayer ». */
   tried?: boolean;
+  /** Onboarding : son enjeu chiffré (échéance, séances), repris par la feuille de perte. */
+  lossStake?: LossStake;
 }
 
 /* Priming Elite (2026-10-07, POC https://claude.ai/artifact/MgsQY4Fncy8XtVgmNBA9Q5) : modale
@@ -47,7 +49,7 @@ interface Props {
    Gratuit dessous, CTA fixé en bas). Remplace le drawer docké à droite du 2026-09-16. Le titre
    suit ce que l'utilisateur essayait de faire (déclencheur) puis son prénom, son sport et, côté
    coach, ses sportifs. */
-export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, onPurchased, headline, sub, name, athleteSelfId, athleteCount, hasAthletes, tried }: Props) {
+export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, onPurchased, headline, sub, name, athleteSelfId, athleteCount, hasAthletes, tried, lossStake }: Props) {
   const { isMd, w } = useBreakpoint();
   const { close, exitClass } = useExitAnimation(onDismiss);
   const [{ source, athleteName }] = useState(peekPrimingSource);
@@ -134,7 +136,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
       onDecline={() => { posthog.capture("exit_offer_declined", { plan: mode, source }); close(); }} />
   );
   const lossSheet = lossOpen && (
-    <LossSheet mode={mode}
+    <LossSheet mode={mode} stake={lossStake}
       onStay={() => { posthog.capture("paywall_loss_sheet_stayed", { plan: mode, source }); setLossOpen(false); }}
       onLeave={() => { posthog.capture("paywall_loss_sheet_left", { plan: mode, source }); close(); }} />
   );

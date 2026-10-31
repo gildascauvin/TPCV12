@@ -371,3 +371,29 @@ export function contrastTitleCoach(pick: PickCoach | null, sug: { dir: "low" | "
   return { garde: `Tu aurais gardé la séance. ${n} peut pousser, série par série.`, pousse: `Ton instinct avait raison. ThePerfClub te dit de combien pousser ${n}.`, oeil: `Tu aurais allégé. ${n} peut pousser, série par série.` }[p];
 }
 export const pickWordsCoach: Record<PickCoach, string> = { garde: "Tu gardes la séance prévue.", oeil: "Tu allèges à l'œil.", aveugle: "Tu le découvres pendant la séance.", pousse: "Tu pousses à l'instinct." };
+
+/* ── ob_week, sous-titre (2026-10-31, chantier douleur, skill storytelling-tpc) : ce que son réflexe coûte,
+   porté par le programme figé, le ressenti ou l'œil, jamais par la personne. Le titre (contrastTitle) reste :
+   c'est la preuve de valeur. Vide si la séance ne bouge pas ou si la question a été passée. ── */
+export function weekCostLine(pick: Pick | PickCoach | null, dir: "low" | "high" | null): string {
+  if (!pick || !dir) return "";
+  const low: Record<string, string> = {
+    force: "Un programme figé te l'aurait fait faire quand même.",
+    feeling: "Au ressenti, on allège trop ou pas assez.",
+    saute: "Un programme figé ne te laisse que ce choix : la faire ou la sauter.",
+    pousse: "Au ressenti, on pousse parfois un jour où il faut alléger.",
+    garde: "Un programme figé la lui aurait fait faire quand même.",
+    oeil: "À l'œil, on allège trop ou pas assez.",
+    aveugle: "Sinon, on le découvre à la blessure.",
+  };
+  const high: Record<string, string> = {
+    force: "Un programme figé t'aurait laissé en dessous de ta forme.",
+    feeling: "Au ressenti, on allège trop ou pas assez.",
+    saute: "Une séance sautée un bon jour, c'est une séance perdue.",
+    pousse: "Au ressenti, on pousse trop ou pas assez.",
+    garde: "Un programme figé l'aurait laissé en dessous de sa forme.",
+    oeil: "À l'œil, on allège trop ou pas assez.",
+    aveugle: "Sinon, il passe à côté d'un bon jour.",
+  };
+  return (dir === "low" ? low : high)[pick] ?? "";
+}

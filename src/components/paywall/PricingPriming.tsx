@@ -40,13 +40,13 @@ type ValueStep = { verb: string; when: string; text: string };
    RiskTimeline, la carte ne parle que de valeur. */
 export function valueSteps(role: "athlete" | "coach", noAthletes?: boolean): ValueStep[] {
   return role === "athlete" ? [
-    { verb: "Ajuste", when: "Dès demain", text: "Ton point forme en 10 secondes, ta séance s'ajuste au bon cran. Le soir, ThePerfClub vérifie si le dosage était juste." },
+    { verb: "Ajuste", when: "Dès demain", text: "Ta séance s'ajuste au bon cran chaque matin. Les bons jours tu pousses, les autres tu allèges, sans culpabiliser." },
     { verb: "Comprends", when: "Jour 7", text: "Ton premier bilan : ce qui fait vraiment bouger ta forme. Soirée, sommeil, stress : chez toi, pas en moyenne." },
     { verb: "Anticipe", when: "Semaine 3+", text: "ThePerfClub connaît tes signaux. Tu sais quels jours pousser, et tu vois venir la baisse avant la séance ratée." },
   ] : [
     noAthletes
-      ? { verb: "Ajuste", when: "Dès demain", text: "Invite tes sportifs ce soir : demain matin, une décision par sportif, alléger, maintenir ou pousser." }
-      : { verb: "Ajuste", when: "Demain matin", text: "Les points forme de ton groupe arrivent : une décision par sportif, alléger, maintenir ou pousser." },
+      ? { verb: "Ajuste", when: "Dès demain", text: "Invite tes sportifs ce soir : dès demain matin, tu pousses ceux qui peuvent et tu protèges les autres, avant la séance." }
+      : { verb: "Ajuste", when: "Demain matin", text: "Une décision par sportif chaque matin. Tu pousses ceux qui peuvent, tu protèges les autres, avant la séance." },
     { verb: "Comprends", when: "Jour 7", text: "Le bilan de ton groupe : qui décroche, qui force, les séances que tu écris trop légères." },
     { verb: "Anticipe", when: "Semaine 3+", text: "Tu vois venir la baisse de chaque sportif avant la blessure ou la stagnation." },
   ];

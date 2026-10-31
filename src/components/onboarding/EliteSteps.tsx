@@ -104,6 +104,13 @@ export function PlannedWeekBody({ sessions, program, today }: {
    jauge de décision de /today (AutoregButtons en anneau, la primitive), calée sur son vrai check-in ; il
    décide lui-même. La suite de la semaine dessous, recalculée sur la même forme. subject : côté coach,
    la séance de son sportif (« Sa forme », « sa semaine »). */
+/* Sous l'anneau de ob_week (2026-10-31, chantier douleur) : le soulagement, en image vécue, à la place du
+   conseil technique (la jauge et la séance barrée le montrent déjà). */
+export function reliefLine(dir: "low" | "high", subject?: string): string {
+  if (subject) return dir === "low" ? `Tu protèges ${subject} aujourd'hui, pour pousser les bons jours.` : `Tu pousses ${subject} sans hésiter : sa forme le permet aujourd'hui.`;
+  return dir === "low" ? "Tu allèges aujourd'hui sans culpabiliser. Tu pousseras les bons jours." : "Tu pousses sans hésiter : ta forme le permet aujourd'hui.";
+}
+
 export function WeekStepBody({ sessions, program, checkinScore, acclimatation, today, decide = false, subject }: {
   sessions: WeekSession[];
   program: { name: string; sport: string; template: ProgramTemplate } | null;
@@ -173,7 +180,7 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
               {/* Comme /today depuis le 2026-10-28 : anneau en grand, titre au centre, plus d'encart. */}
               <AlertBox variant="bare"
                 alert={{ border: `${color ?? "#ffffff"}66`, glow: color ?? "#ffffff", text: sug
-                  ? `${autoregHeadline(sug.dir)}\n${autoregAdvice(sug.dir, planned, subject)}`
+                  ? `${autoregHeadline(sug.dir)}\n${reliefLine(sug.dir, subject)}`
                   : subject ? `Dans sa zone\nLa forme de ${subject} ce matin colle à la séance prévue : garde-la telle quelle.` : "Dans ta zone\nTa forme de ce matin colle à la séance prévue : garde-la telle quelle." }}
                 actions={<div ref={setSlot} className="autoreg-slot" />} />
             </div>
