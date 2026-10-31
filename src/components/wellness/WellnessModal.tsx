@@ -612,6 +612,8 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
       <div style={{ color: "#171b1f", paddingTop: 4 }}>
         {body}
         {footer && <div style={{ position: "sticky", bottom: footerOffset, margin: "14px -14px 0", background: "#f1f0ee", zIndex: 2 }}>{footer}</div>}
+        {/* Sans bouton du bas (31/10) : de l'air sous la dernière ligne de l'échelle, au-dessus de la barre d'accueil. */}
+        {!footer && <div style={{ height: `calc(${footerOffset + 28}px + env(safe-area-inset-bottom, 0px))` }} />}
         {scoreSlot && createPortal(renderBuildingScore(scoreSize), scoreSlot)}
       </div>
     );
