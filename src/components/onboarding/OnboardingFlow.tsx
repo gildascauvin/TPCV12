@@ -493,19 +493,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [name, setName]         = useState(pendingData?.name || "");
   const [email, setEmail]       = useState("");
   const emailInputRef = useRef<HTMLInputElement>(null);
-  /* Hauteur du clavier (visualViewport), pour garder le bouton d'inscription au-dessus. 0 quand la
-     vue est déjà redimensionnée (app native) ou sans clavier. */
-  const [keyboardInset, setKeyboardInset] = useState(0);
-  useEffect(() => {
-    const vv = typeof window !== "undefined" ? window.visualViewport : null;
-    if (!vv) return;
-    const update = () => {
-      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      setKeyboardInset(inset > 80 ? Math.round(inset) : 0);
-    };
-    vv.addEventListener("resize", update); vv.addEventListener("scroll", update); update();
-    return () => { vv.removeEventListener("resize", update); vv.removeEventListener("scroll", update); };
-  }, []);
+  /* Téléphone (pointeur tactile) : pendant la saisie, le bouton d'inscription passe sous le champ email
+     au lieu du bas d'écran, que le clavier iOS recouvre (31/10, retour Gildas : le bouton fixe déplacé
+     au-dessus du clavier se plaçait mal dans Safari). */
+  const [touchDevice, setTouchDevice] = useState(false);
+  useEffect(() => { setTouchDevice(!!window.matchMedia?.("(pointer: coarse)").matches); }, []);
   const [saving, setSaving]     = useState(false);
   const [accountFieldFocus, setAccountFieldFocus] = useState(false);
   const [error, setError]       = useState<string | null>(null);
@@ -1685,6 +1677,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     // Format vérifié ici (31/10) : « gildas@ » partait chez Supabase, qui répondait en anglais.
     const emailValid = name.trim().length > 0 && EMAIL_RE.test(email.trim());
     const manualSignup = accountFieldFocus || name.trim().length > 0 || email.trim().length > 0;
+    // Passage prénom → email : pas de « blur » visible entre les deux champs (le bouton clignoterait).
+    const accountBlur = () => setTimeout(() => setAccountFieldFocus(!!(document.activeElement as HTMLElement | null)?.closest?.("#ob-account-form")), 60);
+    const inlineCta = touchDevice && accountFieldFocus;
 
     const content = (
       <>
@@ -1777,11 +1772,23 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Prénom</div>
           {/* Formulaire (31/10) : sur iPhone le clavier cache le bouton du bas, la touche Entrée doit donc valider. */}
           <form id="ob-account-form" noValidate onSubmit={e => { e.preventDefault(); if (!saving && emailValid) handleFinish(); }}>
-          <input type="text" value={name} onChange={e => setName(e.target.value)} onFocus={() => setAccountFieldFocus(true)} onBlur={() => setAccountFieldFocus(false)} placeholder="ex : Alex" style={inputStyle}
+          <input type="text" value={name} onChange={e => setName(e.target.value)} onFocus={() => setAccountFieldFocus(true)} onBlur={accountBlur} placeholder="ex : Alex" style={inputStyle}
             autoComplete="given-name" autoCapitalize="words" maxLength={40} enterKeyHint="next"
             onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); emailInputRef.current?.focus(); } }} />
           <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Email</div>
-          <input ref={emailInputRef} type="email" inputMode="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={254} enterKeyHint="go" value={email} onChange={e => setEmail(e.target.value)} onFocus={() => setAccountFieldFocus(true)} onBlur={() => setAccountFieldFocus(false)} placeholder="toi@exemple.com" style={{ ...inputStyle, marginBottom: 0 }} />
+          <input ref={emailInputRef} type="email" inputMode="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={254} enterKeyHint="go" value={email} onChange={e => setEmail(e.target.value)} onFocus={() => { setAccountFieldFocus(true); setTimeout(() => document.getElementById("ob-inline-cta")?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 350); }} onBlur={accountBlur} placeholder="toi@exemple.com" style={{ ...inputStyle, marginBottom: 0 }} />
+          {inlineCta && (
+            <button id="ob-inline-cta" type="submit" disabled={saving || !emailValid}
+              // Garde le clavier ouvert : sans ça le champ perd le focus, le bouton se déplace avant le clic.
+              onPointerDown={e => e.preventDefault()}
+              style={{
+                width: "100%", height: 52, marginTop: 14, borderRadius: 16, border: "none",
+                background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900,
+                opacity: (saving || !emailValid) ? 0.5 : 1, cursor: (saving || !emailValid) ? "default" : "pointer",
+              }}>
+              {saving ? "Création…" : role === "coach" ? "Activer mon espace coach →" : "Activer mon espace →"}
+            </button>
+          )}
           </form>
         </div>
       </>
@@ -1820,9 +1827,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       <div>
         {content}
         <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, background: "#070a0d",
-          /* Au-dessus du clavier (31/10) : sur iPhone, un bloc fixe en bas reste derrière le clavier. */
-          padding: keyboardInset > 0 ? "10px 20px 10px" : "14px 20px calc(24px + env(safe-area-inset-bottom, 0px))",
-          transform: keyboardInset > 0 ? `translateY(-${keyboardInset}px)` : undefined }}>
+          padding: "14px 20px calc(24px + env(safe-area-inset-bottom, 0px))", display: inlineCta ? "none" : undefined }}>
           <div style={{ maxWidth: colMaxWidth, margin: "0 auto", display: "flex", gap: 10 }}>{ctaButtons}</div>
         </div>
         <div style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,.55)", marginTop: 14, lineHeight: 1.6 }}>
