@@ -84,7 +84,7 @@ export function PlannedWeekBody({ sessions, program, today }: {
   // Toute sa première semaine, comme l'aperçu de prod (les 7 prochains jours).
   const end = new Date(`${today}T12:00:00`); end.setDate(end.getDate() + 6);
   const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
-  const week = sessions.filter(s => (s.target_difficulty ?? 0) > 0 && s.date <= endStr);
+  const week = sessions.filter(s => s.target_difficulty !== 0 && s.date <= endStr);
   return (
     <div>
       <div style={{ margin: "0 -20px 8px" }}>
@@ -126,7 +126,7 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
   // Les 7 prochains jours : sa première semaine.
   const end = new Date(`${today}T12:00:00`); end.setDate(end.getDate() + 6);
   const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
-  const week = sessions.filter(s => (s.target_difficulty ?? 0) > 0 && s.date <= endStr).map(s => {
+  const week = sessions.filter(s => s.target_difficulty !== 0 && s.date <= endStr).map(s => {
     const planned = s.target_difficulty ?? 5;
     return { s, planned, sug: computeAutoregSuggestion(sim, planned, base) };
   });
@@ -269,14 +269,14 @@ export function NotifStepBody({ hour, setHour, sessionName, coachName, error, co
   streak?: boolean;
   /** Coach : alerte récup fragile + résumé du matin (notifs de prod depuis iOS 1.1). */
   coach?: boolean;
-  /** Coach : le sportif qu'il vient d'imaginer, à la place de Thomas. */
+  /** Coach : le sportif qu'il vient d'imaginer, à la place de Karim (le sportif de la démo d'avant l'inscription). */
   athleteName?: string;
 }) {
   const clock = `${String(hour).padStart(2, "0")}:00`;
-  const who = athleteName?.trim() || "Thomas";
+  const who = athleteName?.trim() || "Karim";
   const pushes = coach ? [
     { title: `${who} : récup fragile, séance dure prévue`, body: "ThePerfClub recommande d'alléger. Tu valides ?", when: "maintenant" },
-    { title: "2 sportifs à regarder ce matin", body: `${who === "Thomas" ? "Thomas M." : who} · Léa P.`, when: clock },
+    { title: "2 sportifs à regarder ce matin", body: `${who === "Karim" ? "Karim H." : who} · Léa G.`, when: clock },
   ] : streak ? [
     { title: "Jour 2 sur 5 · Comment tu te sens ?", body: "10 secondes pour continuer ta série et ajuster ta séance.", when: "demain" },
     { title: "Jour 3 sur 5 · Ta norme se précise", body: sessionName ? `${sessionName} : fais ton point forme pour l'ajuster.` : "Fais ton point forme pour ajuster ta séance.", when: "après-demain" },

@@ -50,7 +50,7 @@ export default function Actions({ variant = "light", onNext, nextLabel, nextDisa
     <button
       onClick={() => { if (!nextDisabled) onNext(); }}
       disabled={nextDisabled}
-      style={{ width: "100%", height: 52, borderRadius: 16, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: nextDisabled ? "default" : "pointer", opacity: nextDisabled ? 0.45 : 1, boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}
+      style={{ width: "100%", minHeight: 52, padding: "8px 16px", borderRadius: 16, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: nextDisabled ? "default" : "pointer", opacity: nextDisabled ? 0.45 : 1, boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}
     >
       {nextLabel}
     </button>

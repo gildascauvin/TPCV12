@@ -293,8 +293,10 @@ export function decideLead(a: Answers): string {
 /* Titre de l'écran séance ajustée : son choix face à la règle. Pas de chiffre ici : la carte de prod juste
    dessous dit déjà « -3 points » et réécrit les séries, un % dans le titre ne collait pas avec elle. */
 export function contrastTitle(pick: Pick | null, sug: { dir: "low" | "high"; reco: number } | null): string {
-  const p = pick ?? "force";
-  if (!sug) return { force: "Ton ressenti avait raison : on la garde comme prévu.", feeling: "Tu aurais allégé au ressenti. Ton état permet de la garder telle quelle.", saute: "Tu l'aurais sautée. Ton état permet de la faire, telle quelle.", pousse: "Tu aurais poussé. Ton état dit de la garder comme prévu." }[p];
+  /* Question passée (31/10) : pas de « ton ressenti avait raison » pour une réponse jamais donnée. */
+  if (!pick) return !sug ? "Ta forme colle à ta séance\u00a0: on la garde comme prévu." : sug.dir === "low" ? "Ta forme est en dessous\u00a0: ThePerfClub allège ta séance, série par série." : "Ta forme le permet\u00a0: ThePerfClub pousse ta séance, série par série.";
+  const p = pick;
+  if (!sug) return { force: "Ton ressenti avait raison\u00a0: on la garde comme prévu.", feeling: "Tu aurais allégé au ressenti. Ton état permet de la garder telle quelle.", saute: "Tu l'aurais sautée. Ton état permet de la faire, telle quelle.", pousse: "Tu aurais poussé. Ton état dit de la garder comme prévu." }[p];
   if (sug.dir === "low") return { force: "Tu l'aurais faite comme prévu. ThePerfClub l'allège, série par série.", feeling: "Tu aurais allégé au ressenti. ThePerfClub te dit de combien, série par série.", saute: "Tu l'aurais sautée. ThePerfClub la garde, allégée série par série.", pousse: "Tu aurais poussé. ThePerfClub l'allège, série par série." }[p];
   return { force: "Tu l'aurais faite comme prévu. Ton état permet de pousser, série par série.", pousse: "Ton ressenti avait raison. ThePerfClub te dit de combien pousser, série par série.", feeling: "Tu aurais allégé. Ton état permet de pousser, série par série.", saute: "Tu l'aurais sautée. Ton état permet même de pousser." }[p];
 }
@@ -314,9 +316,10 @@ export function decideLeadCoach(a: Answers, name: string): string {
   return k ? `${name} : ${QPHRASE[k]} ${answerWord(k, a[k])}` : `${name} est en forme`;
 }
 export function contrastTitleCoach(pick: PickCoach | null, sug: { dir: "low" | "high" } | null, n: string): string {
-  const p = pick ?? "garde";
+  if (!pick) return !sug ? `Sa forme colle à la séance\u00a0: ${n} la garde comme prévu.` : sug.dir === "low" ? `Sa forme est en dessous\u00a0: ThePerfClub allège ${n}, série par série.` : `Sa forme le permet\u00a0: ${n} peut pousser, série par série.`;
+  const p = pick;
   if (p === "aveugle") return sug?.dir === "low" ? `Sans point forme, tu l'aurais vu pendant la séance. Là, tu allèges ${n} avant.` : `Sans point forme, tu ne l'aurais pas su. Là, tu sais où en est ${n} avant la séance.`;
-  if (!sug) return { garde: `Ton instinct avait raison : la séance de ${n} reste comme prévu.`, oeil: `Tu aurais allégé. ${n} peut la faire telle quelle.`, pousse: `Tu l'aurais poussé. Son état dit de garder la séance.` }[p];
+  if (!sug) return { garde: `Ton instinct avait raison\u00a0: la séance de ${n} reste comme prévu.`, oeil: `Tu aurais allégé. ${n} peut la faire telle quelle.`, pousse: `Tu l'aurais poussé. Son état dit de garder la séance.` }[p];
   if (sug.dir === "low") return { garde: `Tu aurais gardé la séance de ${n}. ThePerfClub l'allège, série par série.`, oeil: `Tu aurais allégé à l'œil. ThePerfClub te dit de combien pour ${n}.`, pousse: `Tu l'aurais poussé. ThePerfClub allège ${n}, série par série.` }[p];
   return { garde: `Tu aurais gardé la séance. ${n} peut pousser, série par série.`, pousse: `Ton instinct avait raison. ThePerfClub te dit de combien pousser ${n}.`, oeil: `Tu aurais allégé. ${n} peut pousser, série par série.` }[p];
 }

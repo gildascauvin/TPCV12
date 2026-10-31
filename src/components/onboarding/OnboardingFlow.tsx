@@ -272,18 +272,28 @@ function GoogleIcon() {
 
 
 function EmailSentScreen({ email }: { email: string }) {
+  const domain = email.split("@")[1]?.toLowerCase() ?? "";
+  const mailbox = /gmail|googlemail/.test(domain) ? { name: "Gmail", url: "https://mail.google.com" }
+    : /outlook|hotmail|live\.|msn/.test(domain) ? { name: "Outlook", url: "https://outlook.live.com/mail/" }
+    : /yahoo/.test(domain) ? { name: "Yahoo Mail", url: "https://mail.yahoo.com" }
+    : /icloud|me\.com|mac\.com/.test(domain) ? { name: "iCloud Mail", url: "https://www.icloud.com/mail" }
+    : /orange|wanadoo/.test(domain) ? { name: "Orange Mail", url: "https://messagerie.orange.fr" }
+    : null;
   return (
     <div style={{ textAlign: "center" }}>
       <div style={{ fontSize: 36, marginBottom: 10 }}>📬</div>
       <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 8 }}>Vérifie tes emails</div>
       <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.6, marginBottom: 18 }}>
-        On a envoyé un lien à <strong>{email}</strong>.<br />
+        On a envoyé un lien à <strong style={{ overflowWrap: "anywhere" }}>{email}</strong>.<br />
         Clique dessus pour activer ton compte et accéder à ton espace.
       </div>
-      <a href="https://mail.google.com" target="_blank" rel="noopener noreferrer"
-        style={{ display: "inline-block", padding: "12px 24px", borderRadius: 12, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 13, fontWeight: 800, textDecoration: "none" }}>
-        Ouvrir Gmail →
-      </a>
+      {/* Bouton selon la messagerie (31/10) : « Ouvrir Gmail » s'affichait aussi pour une adresse iCloud ou Outlook. */}
+      {mailbox && (
+        <a href={mailbox.url} target="_blank" rel="noopener noreferrer"
+          style={{ display: "inline-block", padding: "12px 24px", borderRadius: 12, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 13, fontWeight: 800, textDecoration: "none" }}>
+          Ouvrir {mailbox.name} →
+        </a>
+      )}
     </div>
   );
 }
@@ -414,6 +424,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [obDays, setObDays] = useState<number[]>([0, 2, 4]); // 0 = lundi
   const [obInvites, setObInvites] = useState<InviteRow[]>([{ name: "", email: "" }]);
   const [obInviteBusy, setObInviteBusy] = useState(false);
+  const [obInvitesSent, setObInvitesSent] = useState(false);
   const [obInviteCode, setObInviteCode] = useState<string | null>(null);
   const [obFinishing, setObFinishing] = useState(false);
   const [obError, setObError] = useState<string | null>(null);
@@ -1163,7 +1174,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           .order("date").limit(6);
         if (error) console.error("[ensureWeek] sessions error:", error);
         const rows = (data ?? []) as WeekSession[];
-        const ok = !error && rows.length > 0;
+        // Même filtre que l'affichage (EliteSteps) : un programme importé sans difficulté (null) compte, un jour à 0 non.
+        const ok = !error && rows.some(r => r.target_difficulty !== 0);
         setObWeekSessions(rows);
         setObProgramOk(ok);
         return ok;
@@ -1786,7 +1798,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
               // Garde le clavier ouvert : sans ça le champ perd le focus, le bouton se déplace avant le clic.
               onPointerDown={e => e.preventDefault()}
               style={{
-                width: "100%", height: 52, marginTop: 14, borderRadius: 16, border: "none",
+                width: "100%", minHeight: 52, padding: "8px 16px", marginTop: 14, borderRadius: 16, border: "none",
                 background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900,
                 opacity: (saving || !emailValid) ? 0.5 : 1, cursor: (saving || !emailValid) ? "default" : "pointer",
               }}>
@@ -1810,7 +1822,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           type="submit" form="ob-account-form"
           disabled={saving || !emailValid}
           style={{
-            flex: 1, height: 52, borderRadius: 16, border: "none",
+            flex: 1, minHeight: 52, padding: "8px 16px", borderRadius: 16, border: "none",
             background: "linear-gradient(180deg,#f04a08,#d44000)",
             color: "#fff", fontSize: 15, fontWeight: 900, cursor: (saving || !emailValid) ? "default" : "pointer",
             opacity: (saving || !emailValid) ? 0.5 : 1,
@@ -1914,7 +1926,16 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     const back = prevStep && !backBlocked ? () => setStepIdx(path.indexOf(prevStep)) : undefined;
     // Bandeau photo : le sport choisi (ou reconnu), sinon le programme claimé, sinon l'image par défaut.
     const cover = sportCover(obSport || matched?.value) ?? claimedCover ?? DEFAULT_ONBOARDING_COVER;
-    const common = { index: idx, total: post.length, cover, onBack: back };
+    // Frise par thème : programme, point forme, puis sportifs et notifications. Barre courante remplie selon l'avancée.
+    const THEMES: StepId[][] = [
+      ["ob_sport", "ob_count", "ob_program", "ob_import", "ob_goal", "ob_weak", "ob_days", "ob_plan"],
+      ["ob_health", "ob_decide", "ob_insight", "ob_week"],
+      ["ob_invite", "ob_notif"],
+    ];
+    const themeSteps = THEMES.map(t => post.filter(st => t.includes(st))).filter(t => t.length);
+    const curTheme = themeSteps.findIndex(t => t.includes(currentStep));
+    const segments = themeSteps.map((t, k) => k < curTheme ? 1 : k > curTheme ? 0 : (t.indexOf(currentStep) + 1) / t.length);
+    const common = { index: idx, total: post.length, segments: curTheme >= 0 ? segments : undefined, cover, onBack: back };
     const errorLine = obError ? <p style={{ fontSize: 13, color: "#fca5a5", marginTop: 12 }}>{obError}</p> : null;
 
     if (currentStep === "ob_sport") {
@@ -2339,6 +2360,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           {obPayStage === "priming" ? (
             <PrimingJourneyModal mode={coach ? "coach" : "athlete"} billing={obBilling} setBilling={setObBilling} allowDismiss
               athleteCount={coach && obCount ? ({ "1-5": 5, "6-15": 10, "16-30": 20, "30+": 30 } as const)[obCount] : undefined}
+              hasAthletes={coach ? obInvitesSent : undefined}
               onContinue={() => setObPayStage("paywall")}
               onDismiss={() => { posthog.capture("onboarding_pay_free"); done(); }}
               onPurchased={() => { posthog.capture("onboarding_pay_purchased"); done(); }}
@@ -2370,6 +2392,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
               setObError(`Invitation non envoyée à ${failed.join(", ")}. Vérifie l'adresse et réessaie, ou passe cette étape.`);
               return;
             }
+            setObInvitesSent(true);
             obAdvance();
           } }}>
           <InviteForm inviteCode={obInviteCode} invites={obInvites} setInvites={setObInvites} error={obError} readyMessage />

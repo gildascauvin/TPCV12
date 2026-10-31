@@ -2,7 +2,7 @@
 
 import { isNativeApp } from "@/lib/nativeGoogleAuth";
 import { NativePurchasePanel } from "./NativeCheckout";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import posthog from "posthog-js";
 import { ElitePlanCard, PrimingExtras, PricingSideLink, PRICING_PRIMING_GUARANTEE_CAPTION, paywallSimIos } from "./PricingPriming";
 import LossSheet, { lossSheetDue, markLossSheetSeen } from "./LossSheet";
@@ -36,6 +36,8 @@ interface Props {
   athleteSelfId?: string;
   /** Coach : nombre de sportifs annoncé à l'inscription (ancrage « Avec N sportifs »). */
   athleteCount?: number;
+  /** Coach : a-t-il déjà invité ou suivi un sportif ? (frise « Demain matin »). undefined = lu dans le contexte. */
+  hasAthletes?: boolean;
 }
 
 /* Priming Elite (2026-10-07, POC https://claude.ai/artifact/MgsQY4Fncy8XtVgmNBA9Q5) : modale
@@ -43,7 +45,7 @@ interface Props {
    Gratuit dessous, CTA fixé en bas). Remplace le drawer docké à droite du 2026-09-16. Le titre
    suit ce que l'utilisateur essayait de faire (déclencheur) puis son prénom, son sport et, côté
    coach, ses sportifs. */
-export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, onPurchased, headline, sub, name, athleteSelfId, athleteCount }: Props) {
+export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, onPurchased, headline, sub, name, athleteSelfId, athleteCount, hasAthletes }: Props) {
   const { isMd, w } = useBreakpoint();
   const { close, exitClass } = useExitAnimation(onDismiss);
   const [{ source, athleteName }] = useState(peekPrimingSource);
@@ -69,6 +71,16 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
   };
   // Titre personnalisé : on attend le contexte (préchargé par usePaywall, quasi toujours prêt)
   // plutôt que d'afficher un titre générique qui changerait sous les yeux.
+  /* Échap ferme comme la croix (31/10, accessibilité clavier), seulement quand ni l'offre de sortie ni la
+     feuille de perte ne sont ouvertes (elles ont leurs propres boutons). Déclaré avant le retour anticipé
+     (ordre des hooks) ; la fonction de fermeture passe par une ref. */
+  const escCloseRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (!allowDismiss || exitOpen || lossOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") escCloseRef.current?.(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [allowDismiss, exitOpen, lossOpen]);
   if (!ctx) return <div style={backdrop} />;
 
   const titles = primingTitles(mode, source, ctx, athleteName);
@@ -112,6 +124,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
     }
     close();
   };
+  escCloseRef.current = requestClose;
   const exitOffer = exitOpen && (
     <ExitOffer mode={mode} billing={billing} setBilling={setBilling}
       onAccept={() => { posthog.capture("exit_offer_accepted", { plan: mode, source, billing }); acceptExitOffer(); onContinue(); }}
@@ -133,7 +146,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
         <div style={{ fontFamily: "var(--font-display)", fontSize: isMd ? 29 : 24, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.18, color: "#fff", textWrap: "balance" as React.CSSProperties["textWrap"], marginBottom: 10 }}>{title}</div>
         {subText && <div style={{ fontSize: isMd ? 14.5 : 13.5, lineHeight: 1.55, color: "rgba(255,255,255,.62)", maxWidth: 620 }}>{subText}</div>}
       </div>
-      <div style={{ marginTop: 22 }}><RiskTimeline coach={mode === "coach"} /></div>
+      <div style={{ marginTop: 22 }}><RiskTimeline coach={mode === "coach"} noAthletes={mode === "coach" && !(hasAthletes ?? (ctx?.athleteNames.length ?? 0) > 0)} /></div>
     </div>
   );
   const closeBtn = allowDismiss && (

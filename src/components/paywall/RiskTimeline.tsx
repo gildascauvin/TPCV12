@@ -6,10 +6,11 @@
 
 const MONO: React.CSSProperties = { fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase" };
 
-export function RiskTimeline({ coach }: { coach?: boolean }) {
+/* noAthletes (31/10) : coach sans sportif invité, pas de « leurs points forme arrivent demain ». */
+export function RiskTimeline({ coach, noAthletes }: { coach?: boolean; noAthletes?: boolean }) {
   const steps = [
     { ic: "✓", t: "Aujourd'hui", s: `Accès complet, 0 €. ${coach ? "Tes sportifs sont gratuits, toujours." : "Ton premier verdict arrive ce soir."}`, now: true },
-    ...(coach ? [{ ic: "☀", t: "Demain matin", s: "Les points forme de tes sportifs arrivent : qui pousser, qui alléger." }] : []),
+    ...(coach ? [{ ic: "☀", t: "Demain matin", s: noAthletes ? "Invite un sportif : son premier point forme arrive le lendemain matin." : "Les points forme de tes sportifs arrivent : qui pousser, qui alléger." }] : []),
     { ic: "📊", t: "Jour 7", s: coach ? "Ton premier bilan du groupe : qui décroche, qui force." : "Ton premier bilan de la semaine." },
     { ic: "€", t: "Jour 14", s: `${coach ? "2e bilan du groupe" : "2e bilan"}, puis premier paiement. Annulation en 1 clic avant.` },
   ];

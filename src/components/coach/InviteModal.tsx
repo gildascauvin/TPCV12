@@ -334,7 +334,8 @@ export function InviteForm({ inviteCode, invites, setInvites, error, sandboxMode
           onChange={e => setInvites(arr => arr.map((v, idx) => idx === i ? { ...v, name: e.target.value } : v))}
           onKeyDown={e => e.key === "Enter" && invite.email.trim() && handleInvite()}
           placeholder="Prénom"
-          autoFocus={i === 0}
+          // Pas de clavier d'office dans l'onboarding (31/10) : il cachait le message WhatsApp prêt et le bouton.
+          autoFocus={i === 0 && !readyMessage}
           style={{ flex: 1, minWidth: 0, boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none" }}
         />
         <input

@@ -404,6 +404,13 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
       )}
     </div>
   );
+  // Échap ferme comme la croix (31/10).
+  useEffect(() => {
+    if (!allowDismiss || !onClose) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
   const closeBtn = allowDismiss && onClose && (
     <button onClick={close} aria-label="Fermer" style={{ position: "absolute", top: 14, right: 14, width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)", cursor: "pointer", fontSize: 19, color: "rgba(255,255,255,.75)", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5 }}>×</button>
   );

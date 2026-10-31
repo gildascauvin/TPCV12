@@ -5,6 +5,7 @@ import type { Billing } from "./PaywallModal";
 import { INTERVIEWS } from "./interviews";
 import ShareButton from "@/components/sessions/ShareButton";
 import { isNativeApp } from "@/lib/nativeGoogleAuth";
+import { isAndroidApp } from "@/lib/native";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getStoreProducts, PRODUCT_IDS, trialDays } from "@/lib/nativePurchases";
@@ -56,7 +57,7 @@ export function planFeatures(role: "athlete" | "coach", sportDe: string | null):
       { title: "Suis leurs points forme", text: "Les scores de chacun, sans relance." },
     ],
     elite: [
-      { title: "Sais chaque matin qui alléger, et de combien", text: "Une décision par sportif, sur sa forme et sa charge." },
+      { title: "Sache chaque matin qui alléger, et de combien", text: "Une décision par sportif, sur sa forme et sa charge." },
       { title: "Comprends pourquoi un sportif décroche", text: "Avant qu'il se blesse ou stagne." },
       { title: "Repère la priorité de chaque sportif", text: "Ses tests situés par rapport à leur cible : forces et faiblesses, sportif par sportif." },
     ],
@@ -258,9 +259,12 @@ export function ElitePlanCard({ role, billing, setBilling, sportDe, hitIndex, hi
 }
 
 function faqItems(role: "athlete" | "coach") {
+  const cancelWhere = !isNativeApp() ? "en un clic depuis ton profil"
+    : isAndroidApp() ? "depuis tes abonnements Google Play" : "depuis tes abonnements App Store";
   return [
-    { q: "Vais-je être facturé automatiquement à la fin des 14 jours offerts ?", a: "Oui, sauf annulation avant la fin des 14 jours, en un clic depuis ton profil, sans engagement." },
-    { q: "Puis-je annuler à tout moment ?", a: "Oui, en un clic depuis ton profil, sans justification ni délai de préavis." },
+    // Dans les apps, la résiliation passe par l'App Store ou Google Play (31/10).
+    { q: "Vais-je être facturé automatiquement à la fin des 14 jours offerts ?", a: `Oui, sauf annulation avant la fin des 14 jours, ${cancelWhere}, sans engagement.` },
+    { q: "Puis-je annuler à tout moment ?", a: `Oui, ${cancelWhere}, sans justification ni délai de préavis.` },
     { q: "Je garde quoi si je reste en Gratuit ?", a: "Tout ce que tu as saisi : programmes, séances, forme et mesures. Seules les décisions et les analyses sont réservées à Elite." },
     role === "coach"
       ? { q: "Puis-je ajouter autant de sportifs que je veux ?", a: "Oui, sans surcoût, quel que soit le nombre de sportifs que tu coaches." }
@@ -281,7 +285,7 @@ export function PrimingExtras({ role }: { role: "athlete" | "coach" }) {
             <div key={v.slug} style={{ flex: "0 0 220px", background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, overflow: "hidden" }}>
               <div style={{ position: "relative", aspectRatio: "16/9", background: "#111" }}>
                 <img src={`/testimonials/${v.slug}.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                <div style={{ fontFamily: mono, position: "absolute", bottom: 8, right: 8, fontSize: 10, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,.55)", padding: "3px 8px", borderRadius: 8 }}>▶ YouTube</div>
+
               </div>
               <div style={{ padding: "10px 12px 12px" }}>
                 <div style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, color: "#fff" }}>{v.name}</div>

@@ -138,7 +138,7 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
     {
       title: coach ? "Vois qui est vraiment en forme" : "Découvre ce qui pèse sur tes séances",
       desc: coach
-        ? "Sommeil, stress, courbatures et comportements de chacun de tes sportifs : un score calculé chaque matin."
+        ? "Sommeil, stress, courbatures et comportements de chacun de tes sportifs, lus chaque matin."
         : "Soirée, stress, sommeil, séances trop dures : ton bilan montre ce qui pèse vraiment sur tes séances. Chez toi, pas en moyenne.",
       illustration: coach ? <AhaRadarPreview /> : <AhaBilanPreview />,
     },
@@ -249,7 +249,7 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
   const nextBtn = (
     <button
       onClick={onNext}
-      style={{ flex: 1, height: 52, borderRadius: 16, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}
+      style={{ flex: 1, minHeight: 52, padding: "8px 16px", borderRadius: 16, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}
     >
       Continuer →
     </button>

@@ -488,8 +488,14 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         {q === 0 && (
           <div>
             {physioReady && <PhysioTeaser label="⌚ Nuit mesurée" text="Renseigne ton ressenti pour le comparer à tes mesures de la nuit." chips={["7h30", "48 bpm", "Zone"]} />}
-            {renderScale("sleep", who ? `😴 Comment a dormi ${who} ?` : "😴 Comment as-tu dormi ?", "Qualité et récupération pendant le sommeil", sleep, setSleep, () => { if (bedtime != null) autoAdvance(); })}
-            <div style={{ marginTop: 18 }}>
+            {renderScale("sleep", who ? `😴 Comment a dormi ${who} ?` : "😴 Comment as-tu dormi ?", "Qualité et récupération pendant le sommeil", sleep, setSleep, () => {
+              if (bedtime != null) { autoAdvance(); return; }
+              /* Heure du coucher pas encore donnée (31/10) : elle était sous le pli, la feuille ne bougeait pas.
+                 La feuille monte et la question vient à l'écran. */
+              if (sheetMode && sheetH < SHEET_MAX) setSheetH(SHEET_MAX);
+              setTimeout(() => document.getElementById("wq-bedtime")?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 280);
+            })}
+            <div id="wq-bedtime" style={{ marginTop: 18, scrollMarginBottom: 24 }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#7b7f82", marginBottom: 8 }}>
                 Heure de coucher
               </div>

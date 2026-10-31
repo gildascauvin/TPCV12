@@ -23,8 +23,11 @@ const MUTED = "#6b7177";
 const LINE = "rgba(0,0,0,.10)";
 const PAGE = "#f1f0ee";
 
-export function QuestionShell({ index, total, cover, title, sub, onSkip, skipLabel = "Passer", skipBottom = false, onBack, cta, children, dark = false, eyebrow }: {
+export function QuestionShell({ index, total, segments, cover, title, sub, onSkip, skipLabel = "Passer", skipBottom = false, onBack, cta, children, dark = false, eyebrow }: {
   index: number; total: number; cover: string;
+  /* Frise par thème (31/10, Gildas : 10 barres après l'inscription, c'était décourageant) : une barre par thème
+     (programme, point forme, sportifs et notifications), remplie selon l'avancée dans le thème (0 à 1). */
+  segments?: number[];
   title: React.ReactNode; sub?: React.ReactNode;
   onSkip?: () => void; skipLabel?: string; onBack?: () => void;
   /* « Plus tard » sous le bouton principal (écrans de permission : Apple Santé, notifications). */
@@ -56,11 +59,21 @@ export function QuestionShell({ index, total, cover, title, sub, onSkip, skipLab
           <button type="button" onClick={onSkip} style={{ marginLeft: "auto", border: 0, background: "transparent", color: headInk, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>{skipLabel}</button>
         )}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${total}, 1fr)`, gap: 4 }}>
-        {Array.from({ length: total }, (_, k) => (
-          <i key={k} style={{ height: 4, borderRadius: 999, background: k <= index ? ORANGE : onPhoto ? "rgba(255,255,255,.4)" : "rgba(255,255,255,.14)" }} />
-        ))}
-      </div>
+      {segments ? (
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${segments.length}, 1fr)`, gap: 6 }}>
+          {segments.map((f, k) => (
+            <i key={k} style={{ height: 4, borderRadius: 999, overflow: "hidden", background: onPhoto ? "rgba(255,255,255,.4)" : "rgba(255,255,255,.14)" }}>
+              <i style={{ display: "block", height: "100%", borderRadius: 999, background: ORANGE, transformOrigin: "left", transform: `scaleX(${f})`, transition: "transform .3s cubic-bezier(.23,1,.32,1)" }} />
+            </i>
+          ))}
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${total}, 1fr)`, gap: 4 }}>
+          {Array.from({ length: total }, (_, k) => (
+            <i key={k} style={{ height: 4, borderRadius: 999, background: k <= index ? ORANGE : onPhoto ? "rgba(255,255,255,.4)" : "rgba(255,255,255,.14)" }} />
+          ))}
+        </div>
+      )}
     </>
   );
   return (

@@ -73,6 +73,8 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
   const [portalLoading, setPortalLoading] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [nativeBilling, setNativeBilling] = useState<"monthly" | "annual">("annual");
+  // Web (31/10) : « S'abonner » ouvre l'écran d'offre (choix mensuel/annuel), puis le formulaire.
+  const [payForm, setPayForm] = useState(false);
   const [sandboxGateOpen, setSandboxGateOpen] = useState(false);
   /* Coach : onglets "Mon profil" / "Mes sportifs" (2026-10-04). Un sportif retiré ici disparaît
      aussi des pages coach, qui gardent leur liste en state : on recharge à la fermeture. */
@@ -352,24 +354,25 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
         </div>
       </div>
 
-      {/* App iOS : même écran d'offre que partout ailleurs, qui déclenche directement l'achat Apple. */}
-      {profile && paywallOpen && isNativeApp() && (
+      {/* Même écran d'offre que partout ailleurs : achat Apple direct dans l'app, formulaire Stripe ensuite sur le web. */}
+      {profile && paywallOpen && (isNativeApp() || !payForm) && (
         <PrimingJourneyModal
           mode={profile.mode as "athlete" | "coach"}
           billing={nativeBilling}
           setBilling={setNativeBilling}
           allowDismiss
-          onContinue={() => {}}
-          onDismiss={() => setPaywallOpen(false)}
+          onContinue={() => setPayForm(true)}
+          onDismiss={() => { setPaywallOpen(false); setPayForm(false); }}
           onPurchased={() => { setPaywallOpen(false); window.location.reload(); }}
         />
       )}
-      {profile && paywallOpen && !isNativeApp() && (
+      {profile && paywallOpen && !isNativeApp() && payForm && (
         <PaywallModal
           mode={profile.mode as "athlete" | "coach"}
           allowDismiss
-          onClose={() => setPaywallOpen(false)}
-          onSuccess={() => { setPaywallOpen(false); router.refresh(); }}
+          initialBilling={nativeBilling}
+          onClose={() => setPayForm(false)}
+          onSuccess={() => { setPaywallOpen(false); setPayForm(false); router.refresh(); }}
         />
       )}
       {profile && sandboxGateOpen && (
