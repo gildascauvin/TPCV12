@@ -16,7 +16,7 @@ export function isOffline() {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }
 
-function isNetworkFailure(err: { message?: string } | null | undefined) {
+export function isNetworkFailure(err: { message?: string } | null | undefined) {
   const m = (err?.message ?? "").toLowerCase();
   return isOffline() || m.includes("failed to fetch") || m.includes("load failed") || m.includes("networkerror") || m.includes("network request failed");
 }

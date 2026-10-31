@@ -44,6 +44,10 @@ import ProgramBanner from "@/components/programs/ProgramBanner";
 import { scrollIntoViewX } from "@/lib/scrollIntoViewX";
 import { ACTIVITY_RECONDUIRE, ACTIVITY_LABEL_CHANGED } from "@/components/layout/ActivityPill";
 import { toast } from "@/lib/toast";
+import { updateOwnSession, isOffline, isNetworkFailure, notifyQueued } from "@/lib/offlineSessions";
+import { enqueueOfflineAction } from "@/lib/offlineStore";
+import { localWellness } from "@/lib/offlineWellness";
+import { withDeviceScore } from "@/lib/deviceWellnessDb";
 import { haptic } from "@/lib/native";
 import { undoableDelete } from "@/lib/undoable";
 
@@ -409,13 +413,15 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   });
 
   const saveComplete = useCallback(async (data: { rpe: number; duration: number }) => {
+    if (!completing) return;
+    // Comme l'accueil (31/10) : file hors ligne, et fenêtre gardée avec un message si l'écriture échoue.
+    const saved = await updateOwnSession(supabase, completing, { done: true, ...data });
+    if (!saved) { toast("Séance non enregistrée. Réessaie dans un instant."); return false; }
     haptic("success");
     notifyOnboardingProgressSoon();
-    if (!completing) return;
-    const { data: saved } = await supabase.from("sessions").update({ done: true, ...data }).eq("id", completing.id).select().single();
-    if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+    setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
     setCompleting(null);
-    router.refresh();
+    if (!isOffline()) router.refresh();
   }, [supabase, completing, router]);
 
   /* Autosave universel (2026-09-06) — création ET édition, un seul upsert : `id` absent = créer
@@ -449,7 +455,17 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     undoableDelete({
       key: `session:${session.id}`,
       message: "Séance supprimée",
-      commit: async () => { await supabase.from("sessions").delete().eq("id", session.id); router.refresh(); },
+      commit: async () => {
+        const { error } = await supabase.from("sessions").delete().eq("id", session.id);
+        // Échec (31/10) : la séance revient à l'écran avec un message.
+        if (error) {
+          console.error("[séance] suppression", error);
+          setSessions(prev => prev.some(s => s.id === session.id) ? prev : [...prev, session]);
+          toast("Séance non supprimée. Réessaie dans un instant.");
+          return;
+        }
+        router.refresh();
+      },
       undo: () => setSessions(prev => prev.some(s => s.id === session.id) ? prev : [...prev, session]),
     });
   }, [supabase, router]);
@@ -527,6 +543,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
       target_difficulty,
       done: false,
     }).select().single();
+    if (!saved) toast("Séance non dupliquée. Réessaie dans un instant.");
     if (saved) {
       setSessions(prev => [...prev, saved as Session]);
       toast("Séance dupliquée", {
@@ -547,10 +564,31 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   }) => {
     notifyOnboardingProgressSoon();
     const today = format(new Date(), "yyyy-MM-dd");
-    const { data: saved } = await supabase.from("wellness_daily")
-      .upsert({ user_id: userId, date: today, ...data }, { onConflict: "user_id,date" })
-      .select().single();
-    if (saved) setWellnessList(prev => { const w = prev.filter(x => x.date !== today); return [...w, saved as WellnessDaily]; });
+    /* Comme l'accueil (31/10) : montre prise en compte, file hors ligne sur coupure réseau, et la fenêtre
+       reste ouverte avec un message si l'écriture échoue (avant : fermée sans rien enregistrer). */
+    const queue = async () => {
+      await enqueueOfflineAction({ id: crypto.randomUUID(), type: "wellness", at: new Date().toISOString(), date: today,
+        sleep: data.sleep, bedtime: data.bedtime, stress: data.stress, recovery: data.recovery, motivation: data.motivation, behaviors: data.behaviors });
+      notifyQueued();
+      const local = localWellness(data, today);
+      setWellnessList(prev => [...prev.filter(x => x.date !== today), local]);
+    };
+    if (isOffline()) await queue();
+    else {
+      const payload = await withDeviceScore(supabase, userId, today, data);
+      const { data: saved, error: saveErr } = await supabase.from("wellness_daily")
+        .upsert({ user_id: userId, date: today, ...payload }, { onConflict: "user_id,date" })
+        .select().single();
+      if (saveErr || !saved) {
+        if (!isNetworkFailure(saveErr)) {
+          console.error("[point forme] enregistrement", saveErr);
+          toast("Point forme non enregistré. Réessaie dans un instant.");
+          return false;
+        }
+        await queue();
+      } else setWellnessList(prev => { const w = prev.filter(x => x.date !== today); return [...w, saved as WellnessDaily]; });
+    }
+    haptic("success");
     setShowWellness(false);
     if (pendingStartSession) {
       const toStart = pendingStartSession;
@@ -756,15 +794,18 @@ export default function WeekClient({ userId, userName, userSport = null, initial
               const original = { notes: autoregTarget.notes, target_difficulty: autoregTarget.target_difficulty };
               const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
               const target_difficulty = applyAutoregDifficulty(autoregTarget.target_difficulty ?? 6, pct);
-              const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", autoregTarget.id).select().single();
-              if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+              // Même écriture que l'accueil (31/10) : file hors ligne, et erreur remontée au lieu d'une décision « appliquée » à tort.
+              const saved = await updateOwnSession(supabase, autoregTarget, { notes, target_difficulty });
+              if (!saved) { setAutoregPreview(null); toast("Séance non modifiée. Réessaie dans un instant."); throw new Error("séance non modifiée"); }
+              setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
               setAutoregPreview(null);
               return original;
             }}
             onUndo={async (original) => {
               if (!original) return;
-              const { data: saved } = await supabase.from("sessions").update({ notes: original.notes, target_difficulty: original.target_difficulty }).eq("id", autoregTarget.id).select().single();
-              if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+              const saved = await updateOwnSession(supabase, autoregTarget, { notes: original.notes, target_difficulty: original.target_difficulty });
+              if (!saved) { toast("Séance non modifiée. Réessaie dans un instant."); throw new Error("séance non modifiée"); }
+              setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
               setAutoregPreview(null);
               setDecisionTick(t => t + 1);
             }}
@@ -1075,8 +1116,10 @@ export default function WeekClient({ userId, userName, userSport = null, initial
               date: format(addDays(dates[r.dayIndex], 7 * (w + 1)), "yyyy-MM-dd"),
               done: false,
             })));
-            const { data: saved } = await supabase.from("sessions").insert(inserts).select();
-            if (saved) setSessions(prev => [...prev, ...(saved as Session[])]);
+            const { data: saved, error: insErr } = await supabase.from("sessions").insert(inserts).select();
+            // Échec (31/10) : message, et la fenêtre reste ouverte pour réessayer.
+            if (insErr || !saved) { console.error("[reconduire]", insErr); toast("Séances non reconduites. Réessaie dans un instant."); return; }
+            setSessions(prev => [...prev, ...(saved as Session[])]);
             setShowReconduire(false);
             // Confirmation + retour arrière (2026-10-27).
             if (saved && saved.length > 0) toast(`${saved.length} séance${saved.length > 1 ? "s" : ""} reconduite${saved.length > 1 ? "s" : ""}`, {

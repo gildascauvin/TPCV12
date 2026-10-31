@@ -139,7 +139,8 @@ interface Props {
     base_score: number;
     score: number;
     plannedIntensity?: PlannedIntensity | null;
-  }) => Promise<void>;
+  /* false = non enregistré (31/10) : la fenêtre reste ouverte sur la dernière question, l'appelant affiche l'erreur. */
+  }) => Promise<void | boolean>;
   /* Pose d'abord "Qu'as-tu prévu aujourd'hui ?" (aucune séance au planning ce jour-là). */
   askPlan?: boolean;
   onClose: () => void;
@@ -363,7 +364,8 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     const motivation_ = m;
     setSaving(true);
     const { base_score, score } = computeWellnessScore(sleep, stress, recovery, motivation_, behaviors);
-    await onSave({ sleep, stress, recovery, motivation: motivation_, behaviors, bedtime, base_score, score, plannedIntensity: askPlan ? plannedIntensity : null });
+    const ok = await onSave({ sleep, stress, recovery, motivation: motivation_, behaviors, bedtime, base_score, score, plannedIntensity: askPlan ? plannedIntensity : null });
+    if (ok === false) { setSaving(false); return; }
     /* Reco du matin figée côté serveur (2026-10-23) ; le coach lié est prévenu depuis elle si elle dit
        d'alléger. Remplace /api/push/event, qui recalculait la reco avec le moteur générique. */
     if (!offline) fetch("/api/sessions/proposal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subject ? { date, athleteUserId: subject.userId } : { date }) })

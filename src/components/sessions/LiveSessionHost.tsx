@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/lib/toast";
 import { haptic } from "@/lib/native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
@@ -103,11 +104,12 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
     if (s) setLive(s);
   }
   async function finish(data: { rpe: number; duration: number }) {
-    haptic("success");
-    notifyOnboardingProgressSoon();
     if (notesTimer.current) clearTimeout(notesTimer.current);
     const saved = await updateOwnSession(supabase, live!, { done: true, ...data, notes: live!.notes, paused_at: null });
-    if (!saved) return;
+    // Échec réel (31/10) : message, fenêtre gardée, pas d'écran de résultat (avant : retour muet puis résultat affiché).
+    if (!saved) { toast("Séance non enregistrée. Réessaie dans un instant."); return false; }
+    haptic("success");
+    notifyOnboardingProgressSoon();
     rememberLive(null);
     setCompleting(false);
     setOpen(false);

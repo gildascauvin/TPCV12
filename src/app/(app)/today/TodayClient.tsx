@@ -53,9 +53,10 @@ import type { ConseilsData } from "@/lib/conseilsData";
 const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
 import { PLANNED_RPE, PLANNED_LABEL, plannedPlaceholderLine, type PlannedIntensity } from "@/lib/plannedIntensity";
 import { isLive, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from "@/lib/liveSession";
-import { isOffline, notifyQueued, updateOwnSession } from "@/lib/offlineSessions";
+import { isOffline, isNetworkFailure, notifyQueued, updateOwnSession } from "@/lib/offlineSessions";
 import { enqueueOfflineAction, readOfflineQueue } from "@/lib/offlineStore";
 import { computeWellnessScore } from "@/lib/wellness";
+import { localWellness } from "@/lib/offlineWellness";
 import { usePhysioData, physioDecisionInputs, requestPhysioReplay } from "@/lib/physioData";
 import { withWatchEstimates } from "@/lib/watchEstimates";
 import WatchPrompt from "@/components/conseils/WatchPrompt";
@@ -76,15 +77,6 @@ const DuplicateModal = dynamic(() => import("@/components/sessions/DuplicateModa
 
 /* ─── helpers ─── */
 /* Jauge de difficulté statique — mêmes paliers/couleurs que la constante de design du projet. */
-/* Point forme fait hors ligne, en attente d'envoi : reconstruit pour l'affichage (le serveur recalcule
-   le score à l'envoi, montre comprise). */
-function localWellness(d: { sleep: number; stress: number; recovery: number; motivation: number; behaviors: string[]; bedtime: string }, date: string): WellnessDaily {
-  const { base_score, score } = computeWellnessScore(d.sleep, d.stress, d.recovery, d.motivation, d.behaviors);
-  return {
-    id: `offline-${date}`, user_id: "", date, sleep: d.sleep, stress: d.stress, recovery: d.recovery, motivation: d.motivation,
-    base_score, score, behaviors: d.behaviors, bedtime: d.bedtime, created_at: new Date().toISOString(),
-  };
-}
 
 
 // TodaySessionCard déplacée dans src/components/sessions/TodaySessionCard.tsx (2026-10-04, partagée avec Coach Control).
@@ -560,13 +552,17 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         const notes = !futureDay && autoregTargetTop.notes ? autoregTargetTop.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTargetTop.notes;
         const target_difficulty = applyAutoregDifficulty(autoregTargetTop.target_difficulty ?? 6, pct);
         const saved = await updateOwnSession(supabase, autoregTargetTop, { notes, target_difficulty });
-        if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved : s));
+        /* Échec réel (hors ligne = mis en file, jamais null) : AutoregButtons efface la décision au lieu de
+           l'afficher « appliquée » (31/10). */
+        if (!saved) { toast("Séance non modifiée. Réessaie dans un instant."); throw new Error("séance non modifiée"); }
+        setAllSessions(prev => prev.map(s => s.id === saved.id ? saved : s));
         return original;
       }}
       onUndo={async (original) => {
         if (!original) return;
         const saved = await updateOwnSession(supabase, autoregTargetTop, { notes: original.notes, target_difficulty: original.target_difficulty });
-        if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved : s));
+        if (!saved) { toast("Séance non modifiée. Réessaie dans un instant."); throw new Error("séance non modifiée"); }
+        setAllSessions(prev => prev.map(s => s.id === saved.id ? saved : s));
       }}
     />
   ) : todaySessions.length === 0 ? (
@@ -678,12 +674,13 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     plannedIntensity?: PlannedIntensity | null;
   }) => {
     notifyOnboardingProgressSoon();
-    haptic("success");
     const { plannedIntensity, ...wellnessData } = data;
     data = wellnessData;
     /* Hors ligne : point forme mis en attente (score recalculé par le serveur à l'envoi, montre
-       comprise), affiché tout de suite, et la suite (démarrer / terminer la séance) continue. */
-    if (isOffline()) {
+       comprise), affiché tout de suite, et la suite (démarrer / terminer la séance) continue.
+       Aussi quand l'envoi échoue sur une coupure réseau (31/10). */
+    const queueOffline = async () => {
+      haptic("success");
       await enqueueOfflineAction({
         id: crypto.randomUUID(), type: "wellness", at: new Date().toISOString(), date: selectedDate,
         sleep: data.sleep, bedtime: data.bedtime, stress: data.stress, recovery: data.recovery, motivation: data.motivation, behaviors: data.behaviors,
@@ -699,15 +696,23 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         if (started) { setAllSessions(prev => prev.map(x => x.id === started.id ? started : x)); openLiveSession(started.id); }
       }
       if (pendingCompleteSession) { const p = pendingCompleteSession; setPendingCompleteSession(null); setCompleting(p); }
-      return;
-    }
+    };
+    if (isOffline()) { await queueOffline(); return; }
     // Montre (Apple Santé via l'app iOS) : sommeil mesuré + FC au repos du jour intégrés au score s'ils existent.
     const payload = await withDeviceScore(supabase, userId, selectedDate, data);
-    const { data: saved } = await supabase
+    const { data: saved, error: saveErr } = await supabase
       .from("wellness_daily")
       .upsert({ user_id: userId, date: selectedDate, ...payload }, { onConflict: "user_id,date" })
       .select().single();
-    if (saved) {
+    /* Échec (31/10) : avant, la fenêtre se fermait avec la vibration de succès sans rien enregistrer. */
+    if (saveErr || !saved) {
+      if (isNetworkFailure(saveErr)) { await queueOffline(); return; }
+      console.error("[point forme] enregistrement", saveErr);
+      toast("Point forme non enregistré. Réessaie dans un instant.");
+      return false;
+    }
+    haptic("success");
+    {
       setWellness(saved as WellnessDaily);
       setBaselineHistory(prev => [...prev.filter(x => x.date !== (saved as WellnessDaily).date), saved as WellnessDaily]);
       setCheckinReplay(n => n + 1);
@@ -736,12 +741,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   }, [supabase, userId, selectedDate, router, pendingCompleteSession, pendingStartSession, saveSession, refreshAnalyticsSoon]);
 
   const saveComplete = useCallback(async (data: { rpe: number; duration: number }) => {
-    haptic("success");
-    notifyOnboardingProgressSoon();
     if (!completing) return;
     // Hors ligne : mis en attente et affiché tout de suite (updateOwnSession).
     const saved = await updateOwnSession(supabase, completing, { done: true, ...data });
-    if (saved) setAllSessions((prev) => prev.map((s) => s.id === saved.id ? saved : s));
+    /* Échec réel (31/10) : la fenêtre reste ouverte et prévient ; avant, elle se fermait et l'écran de résultat s'affichait. */
+    if (!saved) { toast("Séance non enregistrée. Réessaie dans un instant."); return false; }
+    haptic("success");
+    notifyOnboardingProgressSoon();
+    setAllSessions((prev) => prev.map((s) => s.id === saved.id ? saved : s));
     setCompleting(null);
     refreshAnalyticsSoon();
     if (!isOffline()) router.refresh();
@@ -754,7 +761,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       key: `session:${session.id}`,
       message: "Séance supprimée",
       commit: async () => {
-        await supabase.from("sessions").delete().eq("id", session.id);
+        const { error } = await supabase.from("sessions").delete().eq("id", session.id);
+        // Échec (31/10) : la séance revient à l'écran et on prévient, au lieu de réapparaître au rechargement.
+        if (error) {
+          console.error("[séance] suppression", error);
+          setAllSessions((prev) => prev.some((s) => s.id === session.id) ? prev : [...prev, session]);
+          toast("Séance non supprimée. Réessaie dans un instant.");
+          return;
+        }
         refreshAnalyticsSoon();
         if (!isOffline()) router.refresh();
       },
@@ -790,6 +804,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       target_difficulty,
       done: false,
     }).select().single();
+    if (!saved) toast("Séance non dupliquée. Réessaie dans un instant.");
     if (saved) {
       setAllSessions((prev) => [...prev, saved as Session]);
       toast("Séance dupliquée", {

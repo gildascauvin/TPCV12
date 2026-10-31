@@ -372,7 +372,13 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
     const decision = getAutoregDecision(sessionId);
     track("undo", decision?.pct ?? null);
     setUndoing(true);
-    await onUndo?.(decision?.original ?? record?.original ?? undefined);
+    try {
+      await onUndo?.(decision?.original ?? record?.original ?? undefined);
+    } catch {
+      // Retour arrière non enregistré (31/10) : la décision reste affichée telle quelle, l'appelant prévient.
+      setUndoing(false);
+      return;
+    }
     saveDecisionRecord(sessionId, null);
     setRecord(null);
     setUndoing(false);

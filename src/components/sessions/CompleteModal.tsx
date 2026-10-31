@@ -15,7 +15,8 @@ import { rpeInsight, type RatedSession, type RpeInsight } from "@/lib/rpeInsight
 
 interface CompleteModalProps {
   session: Session;
-  onSave: (data: { rpe: number; duration: number }) => Promise<void>;
+  /* false = non enregistrée (31/10) : la fenêtre reste ouverte, pas d'écran de résultat. */
+  onSave: (data: { rpe: number; duration: number }) => Promise<void | boolean>;
   onClose: () => void;
 }
 
@@ -67,8 +68,9 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
   async function handleSave() {
     if (rpe == null) return;
     setSaving(true);
-    await onSave({ rpe, duration });
+    const ok = await onSave({ rpe, duration });
     setSaving(false);
+    if (ok === false) return;
     // Écran de résultat pour tous (2026-10-22) : ce que la séance a appris ; la comparaison au cœur
     // s'y ajoute quand la montre l'a mesurée. Aussi à la correction d'une séance déjà notée.
     if (hasHeart) invalidatePhysio();

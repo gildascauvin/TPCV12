@@ -586,16 +586,15 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     const notes = !future && session.notes ? session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : session.notes;
     const target_difficulty = applyAutoregDifficulty(session.target_difficulty ?? 6, pct);
     const result = await callSessionAPI({ action: "update", athleteId, sessionId: session.id, data: { notes, target_difficulty } });
-    if (result.ok) {
-      setSessions(prev => prev.map(s => s.id === session.id ? { ...s, notes, target_difficulty } : s));
-    }
+    // Échec (31/10) : erreur remontée, la carte ne passe pas en « Plan cohérent » à tort.
+    if (!result.ok) { toast("Séance non modifiée. Réessaie dans un instant."); throw new Error("séance non modifiée"); }
+    setSessions(prev => prev.map(s => s.id === session.id ? { ...s, notes, target_difficulty } : s));
   }
 
   async function undoAutoregAdjust(athleteId: string, session: CoachViewSession, original: { notes: string | null; target_difficulty: number | null }) {
     const result = await callSessionAPI({ action: "update", athleteId, sessionId: session.id, data: original });
-    if (result.ok) {
-      setSessions(prev => prev.map(s => s.id === session.id ? { ...s, ...original } : s));
-    }
+    if (!result.ok) { toast("Séance non modifiée. Réessaie dans un instant."); throw new Error("séance non modifiée"); }
+    setSessions(prev => prev.map(s => s.id === session.id ? { ...s, ...original } : s));
   }
 
   function markAutoregDecided(athleteId: string) {
