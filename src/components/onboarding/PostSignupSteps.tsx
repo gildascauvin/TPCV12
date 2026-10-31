@@ -5,6 +5,7 @@ import Image from "next/image";
 import SportPicker from "@/components/programs/SportPicker";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { DARK_CARD_BG } from "@/lib/theme";
+import { catalogEntry, findCatalogEntry } from "@/lib/sportCatalog";
 
 /* Questions post-signup (2026-10-05, POC https://claude.ai/artifact/GBoj2wydy4kK8N8skjTAwW#v2ob).
    Analogie : l'app est livrée sans device, ces écrans sont l'achat/la configuration du device (le
@@ -172,16 +173,23 @@ export const GOAL_OPTIONS: { value: ObGoal; icon: string; label: string; hint?: 
   { value: "mixte", icon: "⚖️", label: "Un peu de tout" },
 ];
 
-/* « Volume » = capacité de travail, « intensité » : dits dans les mots du sport (31/10, retour Gildas :
-   « Gagner en volume » était ambigu pour un coureur). Famille : sportFamily() d'InsightSteps. */
-const GOAL_WORDS: Record<"force" | "endurance" | "collectif" | "mixte", Partial<Record<ObGoal, { label: string; hint: string }>>> = {
+/* « Volume » = capacité de travail, « intensité » : dits dans les mots du sport (31/10, retours Gildas :
+   « Gagner en volume » était ambigu ; « match » pour les sports collectifs, « combat » pour le combat).
+   Famille lue dans le catalogue des sports ; sport hors catalogue : famille de sportFamily(). */
+type GoalFamily = "force" | "endurance" | "collectif" | "combat" | "athle" | "mixte";
+const GOAL_WORDS: Record<GoalFamily, Partial<Record<ObGoal, { label: string; hint: string }>>> = {
   force: { volume: { label: "Encaisser plus de travail", hint: "Plus de séries et de répétitions" }, intensite: { label: "Soulever plus lourd", hint: "Des charges plus proches de ton max" } },
   endurance: { volume: { label: "Tenir plus longtemps", hint: "Plus de kilomètres, des sorties plus longues" }, intensite: { label: "Aller plus vite", hint: "Fractionné, allure, VMA" } },
   collectif: { volume: { label: "Tenir tout le match", hint: "Répéter les efforts sans baisser" }, intensite: { label: "Être plus explosif", hint: "Sprints, sauts, changements de direction" } },
+  combat: { volume: { label: "Tenir tout le combat", hint: "Garder ton rythme jusqu'au dernier round" }, intensite: { label: "Être plus explosif", hint: "Vitesse, puissance, explosivité" } },
+  athle: { volume: { label: "Encaisser plus de travail", hint: "Plus de répétitions, sans te griller" }, intensite: { label: "Aller plus vite", hint: "Vitesse, explosivité, départs" } },
   mixte: {},
 };
-export function goalOptionsFor(family: keyof typeof GOAL_WORDS) {
-  return GOAL_OPTIONS.map(g => ({ ...g, ...(GOAL_WORDS[family][g.value] ?? {}) }));
+const FAM_TO_GOAL: Record<string, GoalFamily> = { Force: "force", Endurance: "endurance", "Sports collectifs": "collectif", Combat: "combat", "Athlétisme": "athle" };
+export function goalOptionsFor(sport: string, fallback: "force" | "endurance" | "collectif" | "mixte") {
+  const e = catalogEntry(sport) ?? findCatalogEntry(sport);
+  const fam: GoalFamily = e ? (FAM_TO_GOAL[e.fam] ?? "mixte") : /combat|boxe|judo|mma|lutte|karat|jiu|kick|muay|taekwondo/i.test(sport) ? "combat" : fallback;
+  return GOAL_OPTIONS.map(g => ({ ...g, ...(GOAL_WORDS[fam][g.value] ?? {}) }));
 }
 
 export function DeadlineField({ value, onChange }: { value: string; onChange: (v: string) => void }) {

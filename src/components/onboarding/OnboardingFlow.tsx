@@ -1958,7 +1958,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           title={coach ? "L'objectif de ton programme ?" : "Ton objectif pour les prochaines semaines ?"}
           onSkip={() => { setObGoal(null); obAdvance(); }}
           cta={comp ? { label: "Continuer", onClick: () => obAdvance(), disabled: !obDeadline } : undefined}>
-          {goalOptionsFor(sportFamily(obChosenSport())).map(g => (
+          {goalOptionsFor(obChosenSport(), sportFamily(obChosenSport())).map(g => (
             <div key={g.value}>
               <OptionCard icon={g.icon} label={g.label} hint={g.hint} on={obGoal === g.value}
                 onClick={() => { setObGoal(g.value); if (g.value !== "competition") obAdvance(); }} />
