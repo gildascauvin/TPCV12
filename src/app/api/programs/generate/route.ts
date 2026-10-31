@@ -152,7 +152,7 @@ function formatPrescription(spec: ParsedExercise, shape: Shape, phase: number): 
   // olympiques et leurs tirages gardent l'ancien calcul (séries courtes, % de l'arraché/épaulé).
   const OLYMPIC_RE = /arrach|épaul|jeté|tirage (arraché|épaulé)|complexe|power clean|power snatch/i;
   if (spec.mode === "load" && !spec.wordUnit && spec.unit === "" && spec.baseIntensityPct !== null
-      && spec.baseQty <= 8 && !OLYMPIC_RE.test(spec.name)) {
+      && !OLYMPIC_RE.test(spec.name)) {
     const delta = mult.intensity[phase];
     const isDeload = phase === 3;
     // Au-delà de 6 reps (hypertrophie), seules les charges bougent : pas de « 4×9 ».
@@ -167,8 +167,17 @@ function formatPrescription(spec: ParsedExercise, shape: Shape, phase: number): 
   const isDurationLike = spec.mode === "duration" || spec.unit === "s" || spec.unit === "m";
   // Intervalles ("8×1 min", "6×2 min") : la durée d'une répétition ne bouge pas, seul le nombre de
   // répétitions progresse ; l'arrondi à 5 transformait "8×1 min" en "10×5 min".
-  const isInterval = spec.mode === "duration" && spec.unit === "min" && spec.baseSets > 1;
-  const qty = isInterval ? spec.baseQty : isDurationLike ? Math.max(5, roundTo5(rawQty)) : Math.max(1, Math.round(rawQty));
+  const isInterval = (spec.mode === "duration" && spec.unit === "min" && spec.baseSets > 1)
+    || (spec.unit === "m" && spec.baseSets > 1); // « 10×100m » : on ajoute ou retire des répétitions, jamais des mètres
+  // 2026-10-31 : les reps sans %, les gainages, les tours et les répétitions comptées ne baissent plus
+  // (on retire des séries) ; une durée continue baisse au plus à 80 %, 60 % en décharge. Avant, la forme
+  // « affûtage » divisait tout par 3 en décharge : sortie longue de 90 → 30 min, « Nordic 2×2 ».
+  const keepsQty = (spec.mode === "load" && spec.baseIntensityPct === null && (spec.unit === "" || spec.unit === "s") && spec.baseSets > 1);
+  const durationFactor = phase === 3 ? 0.6 : Math.max(0.8, mult.qty[phase]);
+  const qty = isInterval || keepsQty ? spec.baseQty
+    : spec.wordUnit ? Math.max(spec.unit === "rep" ? 2 : 1, Math.round(spec.baseQty * mult.sets[phase]))
+    : spec.mode === "duration" ? Math.max(5, roundTo5(spec.baseQty * durationFactor))
+    : isDurationLike ? Math.max(5, roundTo5(rawQty)) : Math.max(1, Math.round(rawQty));
   const suffix = spec.suffix ? ` ${spec.suffix}` : "";
 
   if (spec.mode === "duration") {
@@ -473,21 +482,21 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
     volume: ["Back squat — 5×5@72%", "Développé couché — 5×5@72%", "Rowing barre — 4×8@70%", "Pallof press tenu — 3×30s par côté"],
     intensite: ["Back squat — 4×3@82%", "Développé couché — 4×3@82%", "Tirage horizontal — 3×10"],
     recuperation: ["Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
-    test: ["Squat : tentative de maximum", "Développé couché : tentative de maximum", "Soulevé de terre : tentative de maximum", "Bilan technique (vidéo)"],
+    test: ["Back squat : montée jusqu'à un max du jour (singles)", "Back squat : 2×3 à 85 % du max du jour", "Bilan technique (vidéo)"],
   },
   powerlifting_bench: {
     technique: ["Squat pause 2 s — 4×3@65%", "Développé couché pause 2 s — 4×3@65%", "Pallof press tenu — 3×30s par côté", "Squat cosaque — 2×8 par côté"],
     volume: ["Back squat — 5×5@72%", "Développé couché — 5×5@72%", "Rowing barre — 4×8@70%", "Pallof press tenu — 3×30s par côté"],
     intensite: ["Back squat — 4×3@82%", "Développé couché — 4×3@82%", "Tirage horizontal — 3×10"],
     recuperation: ["Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
-    test: ["Squat : tentative de maximum", "Développé couché : tentative de maximum", "Soulevé de terre : tentative de maximum", "Bilan technique (vidéo)"],
+    test: ["Développé couché : montée jusqu'à un max du jour (singles)", "Développé couché : 2×3 à 85 % du max du jour", "Bilan technique (vidéo)"],
   },
   powerlifting_deadlift: {
     technique: ["Squat pause 2 s — 4×3@65%", "Développé couché pause 2 s — 4×3@65%", "Pallof press tenu — 3×30s par côté", "Squat cosaque — 2×8 par côté"],
     volume: ["Back squat — 5×5@72%", "Développé couché — 5×5@72%", "Rowing barre — 4×8@70%", "Pallof press tenu — 3×30s par côté"],
     intensite: ["Back squat — 4×3@82%", "Développé couché — 4×3@82%", "Tirage horizontal — 3×10"],
     recuperation: ["Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
-    test: ["Squat : tentative de maximum", "Développé couché : tentative de maximum", "Soulevé de terre : tentative de maximum", "Bilan technique (vidéo)"],
+    test: ["Soulevé de terre : montée jusqu'à un max du jour (singles)", "Soulevé de terre : 2×3 à 85 % du max du jour", "Bilan technique (vidéo)"],
   },
   halterophilie_snatch: {
     technique: ["Arraché suspendu — 5×2@65%", "Épaulé suspendu + jeté — 4×2@65%", "Squat arraché — 3×3 (barre légère, 2 s en bas)", "Extension lombaire — 3×10"],
@@ -2290,26 +2299,35 @@ const PUISSANCE_FORCE: Archetype = { name: "Force", type: "intensite", exercises
 const PUISSANCE_PUISSANCE: Archetype = { name: "Puissance", type: "intensite", exercises: [
   "Épaulé — 4×3@70%", "Arraché puissance — 4×3@65%", "Push press — 4×4@65%", "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
 ]};
-const PUISSANCE_PLYO: Archetype = { name: "Pliométrie", type: "intensite", exercises: [
-  "Box jump — 4×5", "Sauts en contrebas (depth jump) — 4×5", "Bondissements — 4×20m", "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
+const PUISSANCE_PLYO: Archetype = { name: "Pliométrie verticale", type: "intensite", exercises: [
+  "Box jump — 4×5", "Sauts en contrebas (depth jump) — 4×5", "Squat jump chargé — 3×5@30%", "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
+]};
+const PUISSANCE_PLYO_H: Archetype = { name: "Pliométrie horizontale", type: "intensite", exercises: [
+  "Bonds horizontaux enchaînés — 4×5", "Triple bond sans élan — 4×3", "Sauts de haies basses enchaînés — 4×5", "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
 ]};
 const PUISSANCE_SPRINT: Archetype = { name: "Sprint", type: "intensite", exercises: [
-  "Départs blocs — 6×20m (récup 4 min)", "Sprint 30m — 5 reps", "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
+  "Sprint 20 m départ accroupi — 6 reps (récup 3 min)", "Sprint 30 m départ debout — 4 reps (récup 4 min)", "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
 ]};
-const PUISSANCE_PRIORITY: Archetype[] = [PUISSANCE_FORCE, PUISSANCE_PUISSANCE, PUISSANCE_PLYO, PUISSANCE_PLYO, PUISSANCE_SPRINT];
+const PUISSANCE_PRIORITY: Archetype[] = [PUISSANCE_FORCE, PUISSANCE_PUISSANCE, PUISSANCE_PLYO, PUISSANCE_PLYO_H, PUISSANCE_SPRINT];
 function selectPuissanceExplosivite(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => PUISSANCE_PRIORITY[i % PUISSANCE_PRIORITY.length]);
 }
 
 // ---- Perte de poids : varié plutôt que mono-modal — musculation (préserve la masse musculaire
 // en déficit calorique) et cardio en alternance, 1 à 2× chacun selon le nombre de jours.
-const PDP_MUSCU: Archetype = { name: "Musculation full-body", type: "volume", exercises: [
-  "Squat — 4×10@65%", "Développé couché — 4×10@65%", "Tirage horizontal — 4×10@65%", "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
+const PDP_MUSCU: Archetype = { name: "Musculation full-body A", type: "volume", exercises: [
+  "Back squat — 4×10@60%", "Développé couché — 4×10@65%", "Tirage horizontal — 4×10", "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
 ]};
-const PDP_CARDIO: Archetype = { name: "Cardio", type: "intensite", exercises: [
+const PDP_MUSCU_B: Archetype = { name: "Musculation full-body B", type: "volume", exercises: [
+  "Soulevé de terre roumain — 4×10@60%", "Développé militaire — 4×10@60%", "Tirage vertical — 4×10", "Fentes marchées — 3×10 par jambe", "Planche — 3×40s",
+]};
+const PDP_CARDIO: Archetype = { name: "Cardio fractionné", type: "intensite", exercises: [
   "Vélo ou rameur fractionné — 8×2 min effort / 1 min récup", "Circuit cardio — 4 tours :\nBurpees — 10\nKettlebell swing — 15\nSquat jump — 10",
 ]};
-const PDP_PRIORITY: Archetype[] = [PDP_MUSCU, PDP_CARDIO, PDP_MUSCU, PDP_CARDIO];
+const PDP_CARDIO_B: Archetype = { name: "Cardio endurance", type: "volume", exercises: [], variants: [
+  "Vélo, rameur ou marche rapide en endurance fondamentale — 45 min", "Footing ou elliptique en endurance fondamentale — 40 min",
+]};
+const PDP_PRIORITY: Archetype[] = [PDP_MUSCU, PDP_CARDIO, PDP_MUSCU_B, PDP_CARDIO_B];
 function selectPertePoids(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => PDP_PRIORITY[i % PDP_PRIORITY.length]);
 }
@@ -3055,12 +3073,108 @@ function selectReeducationPeriostite(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => PERIOSTITE_PRIORITY[i % PERIOSTITE_PRIORITY.length]);
 }
 
+// ---- Endurance outdoor (2026-10-31, demandé par Gildas : « s'inspirer de programmes connus »).
+// Trail et vélo : modèle polarisé (Seiler) — beaucoup de facile, deux séances dures nettement
+// séparées, une sortie longue. Vélo : zones de Coggan en % de FTP. Natation : séries à l'allure seuil
+// (CSS), technique et aérobie, vitesse. Ski : force, puissance, endurance de force (descentes
+// longues) et proprioception. Les échauffements et retours au calme restent fixes (entre parenthèses).
+const TRAIL_COTES: Archetype = { name: "Côtes", type: "intensite", exercises: [
+  "Échauffement en endurance (15 min)", "Côtes longues à effort soutenu — 5×4 min (récup descente en trottinant)", "Retour au calme (10 min)",
+]};
+const TRAIL_FACILE_RENFO: Archetype = { name: "Sortie facile + renfo", type: "volume", exercises: [
+  "Sortie facile vallonnée — 50 min (tu peux parler)", "Fente bulgare — 3×10 par jambe", "Montées sur pointes sur marche — 3×15", "Planche — 3×40s",
+]};
+const TRAIL_SEUIL: Archetype = { name: "Seuil vallonné", type: "intensite", exercises: [
+  "Échauffement en endurance (15 min)", "Seuil en terrain vallonné — 3×8 min (récup 2 min)", "Retour au calme (10 min)",
+]};
+const TRAIL_LONGUE: Archetype = { name: "Sortie longue", type: "volume", exercises: [], variants: [
+  "Sortie longue trail D+ 400 m — 90 min (marche dans les montées raides)", "Sortie longue trail D+ 600 m — 100 min (descentes travaillées, marche dans les montées raides)",
+]};
+const TRAIL_FACILE: Archetype = { name: "Footing facile", type: "recuperation", exercises: [], variants: [
+  "Footing facile sur terrain souple — 40 min", "Footing facile + 6 lignes droites de 20 s — 40 min",
+]};
+const TRAIL_DESCENTE: Archetype = { name: "Technique de descente", type: "technique", exercises: [
+  "Échauffement en endurance (15 min)", "Descentes techniques rapides — 6×2 min (récup en remontant au pas)", "Squat excentrique lent 4 s — 3×8",
+]};
+function selectTrail(n: number): Archetype[] {
+  if (n <= 3) return [TRAIL_COTES, TRAIL_FACILE_RENFO, TRAIL_LONGUE].slice(0, Math.max(1, n));
+  const base = [TRAIL_COTES, TRAIL_FACILE_RENFO, TRAIL_SEUIL, TRAIL_LONGUE, TRAIL_FACILE, TRAIL_DESCENTE];
+  if (n === 4) return base.slice(0, 4);
+  if (n === 5) return [TRAIL_COTES, TRAIL_FACILE_RENFO, TRAIL_SEUIL, TRAIL_FACILE, TRAIL_LONGUE];
+  return Array.from({ length: n }, (_, i) => base[i % base.length]);
+}
+
+const VELO_SEUIL: Archetype = { name: "Seuil (sweet spot)", type: "intensite", exercises: [
+  "Échauffement progressif (15 min)", "Sweet spot à 88-93 % de FTP — 3×12 min (récup 4 min)", "Retour au calme (10 min)",
+]};
+const VELO_LONGUE: Archetype = { name: "Sortie longue en endurance", type: "volume", exercises: [], variants: [
+  "Sortie endurance Z2 (56-75 % de FTP) — 120 min", "Sortie endurance Z2 avec 3 montées au tempo — 150 min",
+]};
+const VELO_VO2: Archetype = { name: "VO2max", type: "intensite", exercises: [
+  "Échauffement progressif avec 3 accélérations (15 min)", "Intervalles VO2max à 110-120 % de FTP — 5×4 min (récup 4 min)", "Retour au calme (10 min)",
+]};
+const VELO_FORCE_SPRINT: Archetype = { name: "Force et sprints", type: "volume", exercises: [
+  "Force en côte, cadence 50-60 tr/min, 80-85 % de FTP — 4×5 min (récup 3 min)", "Sprints départ lancé — 6×12s (effort maximal) (récup 5 min)",
+]};
+const VELO_RENFO: Archetype = { name: "Renfo cycliste", type: "technique", exercises: [
+  "Back squat — 3×6@70%", "Soulevé de terre roumain — 3×8@60%", "Fente bulgare — 3×8 par jambe", "Planche — 3×40s",
+]};
+const VELO_RECUP: Archetype = { name: "Récupération active", type: "recuperation", exercises: [], variants: [
+  "Sortie très facile Z1, cadence souple — 45 min", "Home trainer très facile — 40 min",
+]};
+function selectCyclisme(n: number): Archetype[] {
+  if (n <= 3) return [VELO_SEUIL, VELO_LONGUE, VELO_VO2].slice(0, Math.max(1, n));
+  const base = [VELO_SEUIL, VELO_RENFO, VELO_VO2, VELO_LONGUE, VELO_FORCE_SPRINT, VELO_RECUP];
+  return Array.from({ length: n }, (_, i) => base[i % base.length]);
+}
+
+const NAGE_AERO: Archetype = { name: "Technique et aérobie", type: "volume", exercises: [
+  "Échauffement 400 m varié (crawl, dos, éducatifs)", "Éducatifs crawl : rattrapé, 3 temps, poing fermé — 8×50m effort facile (récup 15s)", "Série aérobie — 4×300m effort modéré (récup 30s)", "Retour au calme 200 m souple",
+]};
+const NAGE_SEUIL: Archetype = { name: "Seuil (CSS)", type: "intensite", exercises: [
+  "Échauffement 400 m dont 4×50 m progressifs", "Série au seuil — 10×100m effort allure seuil (récup 15s)", "Pull-buoy aérobie — 4×100m effort modéré (récup 20s)", "Retour au calme 200 m souple",
+]};
+const NAGE_VITESSE: Archetype = { name: "Vitesse, départs et virages", type: "intensite", exercises: [
+  "Échauffement 400 m dont 4×25 m rapides", "Sprints — 12×25m effort maximal (récup 45s)", "Départs plongés + 15 m rapides — 6 reps (récup 1 min)", "Virages culbute rapides — 8 reps (récup 30s)", "Retour au calme 300 m souple",
+]};
+const NAGE_ENDURANCE: Archetype = { name: "Endurance longue", type: "volume", exercises: [
+  "Échauffement 300 m", "Série longue — 3×600m effort modéré (récup 45s)", "Retour au calme 200 m souple",
+]};
+const NAGE_PPG: Archetype = { name: "Préparation physique à sec", type: "technique", exercises: [
+  "Tractions — 4×6", "Rotations externes élastique — 3×15", "Hollow hold — 3×30s", "Squat jump — 3×6",
+]};
+function selectNatation(n: number): Archetype[] {
+  const base = [NAGE_AERO, NAGE_SEUIL, NAGE_VITESSE, NAGE_ENDURANCE, NAGE_PPG];
+  return Array.from({ length: n }, (_, i) => base[i % base.length]);
+}
+
+const SKI_FORCE: Archetype = { name: "Force", type: "intensite", exercises: [
+  "Back squat — 4×5@78%", "Fente bulgare — 3×8@50% par jambe", "Nordic hamstring — 3×5", "Gainage latéral — 3×30s par côté",
+]};
+const SKI_PUISSANCE: Archetype = { name: "Puissance et pliométrie", type: "intensite", exercises: [
+  "Sauts latéraux par-dessus un banc — 4×8", "Squat jump — 4×6", "Bonds latéraux unipodaux (patineur) — 4×6 par jambe", "Sprints courts en côte — 6×15m (récup 2 min)",
+]};
+const SKI_ENDURANCE_FORCE: Archetype = { name: "Endurance de force", type: "volume", exercises: [
+  "Circuit descente — 4 tours (récup 2 min) :\nSquat lent en position de ski — 40 s\nSauts latéraux en continu — 40 s\nFentes latérales alternées — 40 s", "Montées de côte en continu — 3×3 min",
+]};
+const SKI_PROPRIO: Archetype = { name: "Équilibre et mobilité", type: "technique", exercises: [
+  "Équilibre unipodal sur coussin, yeux fermés — 3×30s par jambe", "Squat pistol assisté — 3×5 par jambe", "Mobilité hanches et chevilles (10 min)",
+]};
+function selectSki(n: number): Archetype[] {
+  const base = [SKI_FORCE, SKI_ENDURANCE_FORCE, SKI_PUISSANCE, SKI_PROPRIO];
+  return Array.from({ length: n }, (_, i) => base[i % base.length]);
+}
+
 // Contexte optionnel pour les curriculums qui changent de structure au fil du programme (triathlon :
 // séances focus en base, bricks ensuite). Les autres sélecteurs l'ignorent.
 interface CurriculumContext { week: number; duration: number; level?: string }
 const SPORT_CURRICULUM: Partial<Record<SportCategory, (dayCount: number, ctx?: CurriculumContext) => Archetype[]>> = {
   endurance: selectEndurance,
   sprint: selectSprint,
+  trail: selectTrail,
+  cyclisme: selectCyclisme,
+  natation: selectNatation,
+  ski: selectSki,
   halterophilie: selectHalterophilie,
   halterophilie_snatch: selectSnatchSpecialization,
   powerlifting: selectPowerlifting,
