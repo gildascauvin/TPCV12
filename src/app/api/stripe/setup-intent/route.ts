@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 export async function POST() {
   try {
     const secretKey = process.env.STRIPE_SECRET_KEY;
-    if (!secretKey) return NextResponse.json({ error: "STRIPE_SECRET_KEY manquant" }, { status: 500 });
+    if (!secretKey) { console.error("[stripe/setup-intent] STRIPE_SECRET_KEY manquant"); return NextResponse.json({ error: "unavailable" }, { status: 500 }); }
 
     const stripe = new Stripe(secretKey);
     const supabase = await createClient();
@@ -18,14 +18,15 @@ export async function POST() {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (profileError) return NextResponse.json({ error: `Profil: ${profileError.message}` }, { status: 500 });
+    if (profileError) { console.error("[stripe/setup-intent] profil", profileError); return NextResponse.json({ error: "unavailable" }, { status: 500 }); }
 
     let customerId = profile?.stripe_customer_id ?? undefined;
 
     if (!customerId) {
       const customer = await stripe.customers.create({ email: user.email });
       customerId = customer.id;
-      await supabase.from("profiles").update({ stripe_customer_id: customerId }).eq("user_id", user.id);
+      const { error: custErr } = await supabase.from("profiles").update({ stripe_customer_id: customerId }).eq("user_id", user.id);
+      if (custErr) console.error("[stripe/setup-intent] stripe_customer_id", custErr);
     }
 
     const setupIntent = await stripe.setupIntents.create({
@@ -36,7 +37,8 @@ export async function POST() {
 
     return NextResponse.json({ clientSecret: setupIntent.client_secret });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    // Détail dans les logs, jamais à l'écran (31/10) : le message est traduit côté PaywallModal.
+    console.error("[stripe/setup-intent]", err);
+    return NextResponse.json({ error: "unavailable" }, { status: 500 });
   }
 }

@@ -7,7 +7,7 @@ import posthog from "posthog-js";
 import type { PurchasesStoreProduct } from "@revenuecat/purchases-capacitor";
 import { createClient } from "@/lib/supabase/client";
 import { isAndroidApp, storeName } from "@/lib/native";
-import { getStoreProducts, purchasePlan, restorePurchases, PRODUCT_IDS, type Billing } from "@/lib/nativePurchases";
+import { getStoreProducts, purchasePlan, restorePurchases, trialDays, PRODUCT_IDS, type Billing } from "@/lib/nativePurchases";
 
 /* Pendant iOS de CheckoutForm (PaywallModal.tsx) : même emplacement (footer porté dans le drawer),
    même onSuccess, mais l'achat passe par Apple (feuille système, Face ID). Le montant affiché vient
@@ -20,20 +20,6 @@ const TERMS_URL = "https://www.apple.com/legal/internet-services/itunes/dev/stde
 const ANDROID_TERMS_URL = "https://www.theperfclub.com/conditions-generales-dutilisation/";
 const PRIVACY_URL = "https://www.theperfclub.com/politique-de-confidentialite/";
 
-function trialDays(p: PurchasesStoreProduct | undefined): number | null {
-  // Google Play (2026-10-28) : l'essai est la phase gratuite de l'offre par défaut du forfait.
-  const free = p?.defaultOption?.freePhase;
-  if (free) {
-    const n = free.billingPeriod.value * (free.billingCycleCount || 1);
-    const u = free.billingPeriod.unit;
-    return u === "DAY" ? n : u === "WEEK" ? n * 7 : u === "MONTH" ? n * 30 : null;
-  }
-  const intro = p?.introPrice;
-  if (!intro || intro.price !== 0) return null;
-  const n = intro.periodNumberOfUnits * (intro.cycles || 1);
-  const unit = intro.periodUnit;
-  return unit === "DAY" ? n : unit === "WEEK" ? n * 7 : unit === "MONTH" ? n * 30 : null;
-}
 
 /* Bloc d'achat Apple autonome (messages, mentions, bouton, restaurer, liens). Utilisé directement
    par l'écran d'offre (PrimingJourneyModal) sur iOS, où il remplace l'enchaînement offre → paiement :
@@ -53,9 +39,13 @@ export function NativePurchasePanel({
   const [busy, setBusy] = useState<"buy" | "restore" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
+  /* Chargement de l'offre store (31/10) : 20 s au plus (70 s avant, bouton gris tout ce temps), phrase
+     simple à l'écran et bouton « Réessayer » ; le détail technique reste dans la console. */
   useEffect(() => {
     let alive = true;
+    setLoadError(null); setProduct(undefined);
     (async () => {
       const { data: { user } } = await createClient().auth.getUser();
       if (!alive) return;
@@ -66,21 +56,21 @@ export function NativePurchasePanel({
         // pas, l'appel peut ne jamais se terminer. On affiche alors un message, avec le détail.
         const products = await Promise.race([
           getStoreProducts(user.id),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("délai global dépassé")), 70000)),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("délai global dépassé")), 20000)),
         ]);
         if (alive) setProduct(products[PRODUCT_IDS[mode][billing]]);
         if (alive && !products[PRODUCT_IDS[mode][billing]]) {
           const found = Object.keys(products);
-          setLoadError(`Offre indisponible sur ${storeName()} pour le moment (${PRODUCT_IDS[mode][billing]} absent ; la boutique a renvoyé ${found.length} produit(s)${found.length ? " : " + found.join(", ") : ""}).`);
+          console.error(`[iap] ${PRODUCT_IDS[mode][billing]} absent ; ${found.length} produit(s) : ${found.join(", ")}`);
+          setLoadError(`L'offre ${storeName()} ne s'est pas chargée.`);
         }
       } catch (e) {
         console.error("[iap] products", e);
-        const detail = e instanceof Error ? e.message : String(e);
-        if (alive) setLoadError(`Impossible de charger l'offre ${isAndroidApp() ? "Google Play" : "App Store"} (${detail}).`);
+        if (alive) setLoadError(`L'offre ${isAndroidApp() ? "Google Play" : "App Store"} ne s'est pas chargée.`);
       }
     })();
     return () => { alive = false; };
-  }, [mode, billing]);
+  }, [mode, billing, attempt]);
 
   async function buy() {
     if (!userId) return;
@@ -116,7 +106,10 @@ export function NativePurchasePanel({
   return (
     <div>
       {loadError && (
-        <div style={{ color: "#ff8a8a", fontSize: 12, textAlign: "center", margin: "0 0 10px", lineHeight: 1.45 }}>{loadError}</div>
+        <div style={{ color: "#ffb3a7", fontSize: 13, textAlign: "center", margin: "0 0 10px", lineHeight: 1.45 }}>
+          {loadError}{" "}
+          {userId && <button type="button" onClick={() => setAttempt(a => a + 1)} style={{ background: "none", border: "none", color: "#ff8a5c", fontWeight: 800, fontSize: 13, cursor: "pointer", padding: 0 }}>Réessayer</button>}
+        </div>
       )}
       {!loadError && !product && (
         <Skel dark h={14} w="60%" style={{ margin: "0 auto 10px" }} />

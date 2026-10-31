@@ -2334,6 +2334,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         <OnboardingBackground variant="dark">
           {obPayStage === "priming" ? (
             <PrimingJourneyModal mode={coach ? "coach" : "athlete"} billing={obBilling} setBilling={setObBilling} allowDismiss
+              athleteCount={coach && obCount ? ({ "1-5": 5, "6-15": 10, "16-30": 20, "30+": 30 } as const)[obCount] : undefined}
               onContinue={() => setObPayStage("paywall")}
               onDismiss={() => { posthog.capture("onboarding_pay_free"); done(); }}
               onPurchased={() => { posthog.capture("onboarding_pay_purchased"); done(); }}

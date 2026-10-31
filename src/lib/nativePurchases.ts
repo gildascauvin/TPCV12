@@ -109,3 +109,19 @@ export async function restorePurchases(userId: string): Promise<{ restored: bool
   const { status } = await syncServer();
   return { restored: status === "athlete" || status === "coach" };
 }
+
+/* Jours d'essai lus dans le produit du store (partagé par l'écran d'offre et le bloc d'achat). */
+export function trialDays(p: PurchasesStoreProduct | undefined): number | null {
+  // Google Play (2026-10-28) : l'essai est la phase gratuite de l'offre par défaut du forfait.
+  const free = p?.defaultOption?.freePhase;
+  if (free) {
+    const n = free.billingPeriod.value * (free.billingCycleCount || 1);
+    const u = free.billingPeriod.unit;
+    return u === "DAY" ? n : u === "WEEK" ? n * 7 : u === "MONTH" ? n * 30 : null;
+  }
+  const intro = p?.introPrice;
+  if (!intro || intro.price !== 0) return null;
+  const n = intro.periodNumberOfUnits * (intro.cycles || 1);
+  const unit = intro.periodUnit;
+  return unit === "DAY" ? n : unit === "WEEK" ? n * 7 : unit === "MONTH" ? n * 30 : null;
+}

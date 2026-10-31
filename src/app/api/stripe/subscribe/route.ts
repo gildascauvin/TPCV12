@@ -5,11 +5,33 @@ import { createClient } from "@/lib/supabase/server";
 // Doit rester en phase avec TRIAL_DAYS dans PricingPriming.tsx/PaywallModal.tsx (copie affichée).
 const TRIAL_DAYS = 14;
 
+/* Messages en français pour l'écran de paiement (31/10 : « Unauthorized », « No customer » ou une 500
+   non JSON s'affichaient tels quels, une carte refusée donnait un message vague). */
+function stripeErrorFr(e: unknown): string {
+  const err = e as { type?: string; code?: string; decline_code?: string };
+  if (err?.type === "StripeCardError") {
+    if (err.code === "expired_card") return "Ta carte a expiré. Essaie une autre carte.";
+    if (err.code === "incorrect_cvc") return "Le code de sécurité de ta carte est incorrect.";
+    if (err.code === "authentication_required") return "Ta banque demande une validation. Réessaie et valide dans ton application bancaire.";
+    return "Ta carte a été refusée. Essaie une autre carte.";
+  }
+  return "Le paiement n'a pas pu aboutir. Réessaie dans un instant.";
+}
+
 export async function POST(request: Request) {
+  try {
+    return await handle(request);
+  } catch (e) {
+    console.error("[stripe/subscribe]", e);
+    return NextResponse.json({ error: stripeErrorFr(e) }, { status: 400 });
+  }
+}
+
+async function handle(request: Request) {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "");
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Ta session a expiré. Reconnecte-toi pour continuer." }, { status: 401 });
 
   const { setupIntentId, paymentMethodId: walletPaymentMethodId, plan, billing, promo } = await request.json();
 
@@ -17,7 +39,7 @@ export async function POST(request: Request) {
     ? (plan === "coach" ? process.env.STRIPE_PRICE_COACH_ANNUAL : process.env.STRIPE_PRICE_ATHLETE_ANNUAL)
     : (plan === "coach" ? process.env.STRIPE_PRICE_COACH : process.env.STRIPE_PRICE_ATHLETE);
 
-  if (!priceId) return NextResponse.json({ error: "Invalid plan or missing annual price" }, { status: 400 });
+  if (!priceId) { console.error("[stripe/subscribe] prix manquant", { plan, billing }); return NextResponse.json({ error: "Cette offre est momentanément indisponible. Réessaie dans un instant." }, { status: 400 }); }
 
   /* Offre de sortie (src/lib/exitOffer.ts) : code DEPART30, mensuel ou annuel (coupon -30 % 12 mois sur les deux produits). Code introuvable ou inactif =
      erreur plutôt qu'un abonnement au plein tarif alors que l'écran affichait le prix remisé. */
@@ -37,7 +59,7 @@ export async function POST(request: Request) {
     const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
     paymentMethodId = setupIntent.payment_method as string;
   }
-  if (!paymentMethodId) return NextResponse.json({ error: "No payment method" }, { status: 400 });
+  if (!paymentMethodId) return NextResponse.json({ error: "Ta carte n'a pas été enregistrée. Réessaie." }, { status: 400 });
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -46,7 +68,7 @@ export async function POST(request: Request) {
     .single();
 
   const customerId = profile?.stripe_customer_id;
-  if (!customerId) return NextResponse.json({ error: "No customer" }, { status: 400 });
+  if (!customerId) { console.error("[stripe/subscribe] pas de customer", user.id); return NextResponse.json({ error: "Le paiement n'a pas pu aboutir. Recharge la page et réessaie." }, { status: 400 }); }
 
   // Wallet PMs (Apple Pay / Google Pay) are not attached to the customer automatically
   if (isWallet) {
@@ -82,10 +104,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Le paiement n'a pas pu être confirmé. Vérifie ta carte et réessaie." }, { status: 402 });
   }
 
-  await supabase
+  const { error: statusErr } = await supabase
     .from("profiles")
     .update({ subscription_status: plan as "athlete" | "coach" })
     .eq("user_id", user.id);
+  // Le webhook rattrape, mais on garde une trace si l'accès arrive en retard.
+  if (statusErr) console.error("[stripe/subscribe] subscription_status", statusErr);
 
   return NextResponse.json({ ok: true });
 }

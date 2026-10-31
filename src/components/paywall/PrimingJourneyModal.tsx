@@ -34,6 +34,8 @@ interface Props {
   name?: string;
   /** Sportif : id du compte, pour « Inviter mon coach ». */
   athleteSelfId?: string;
+  /** Coach : nombre de sportifs annoncé à l'inscription (ancrage « Avec N sportifs »). */
+  athleteCount?: number;
 }
 
 /* Priming Elite (2026-10-07, POC https://claude.ai/artifact/MgsQY4Fncy8XtVgmNBA9Q5) : modale
@@ -41,11 +43,13 @@ interface Props {
    Gratuit dessous, CTA fixé en bas). Remplace le drawer docké à droite du 2026-09-16. Le titre
    suit ce que l'utilisateur essayait de faire (déclencheur) puis son prénom, son sport et, côté
    coach, ses sportifs. */
-export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, onPurchased, headline, sub, name, athleteSelfId }: Props) {
+export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, onPurchased, headline, sub, name, athleteSelfId, athleteCount }: Props) {
   const { isMd, w } = useBreakpoint();
   const { close, exitClass } = useExitAnimation(onDismiss);
   const [{ source, athleteName }] = useState(peekPrimingSource);
   const [ctx, setCtx] = useState<PrimingContext | null>(getCachedPrimingContext);
+  // Dans l'app : ses vrais sportifs s'il en a au moins 5, sinon l'exemple à 10 (ElitePrice).
+  const anchorCount = athleteCount ?? ((ctx?.athleteNames.length ?? 0) >= 5 ? ctx?.athleteNames.length : undefined);
   const [exitOpen, setExitOpen] = useState(false);
   const [lossOpen, setLossOpen] = useState(false);
 
@@ -147,7 +151,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
           <div style={{ flex: 1, overflowY: "auto" }}>
             <div style={{ padding: "44px 20px 4px" }}>{head}</div>
             <div style={{ padding: "18px 16px 6px", display: "flex", flexDirection: "column", gap: 14 }}>
-              <ElitePlanCard role={mode} billing={billing} setBilling={setBilling} sportDe={ctx.sportDe} hitIndex={hitIndex} hitLabel={hitLabel} sideLink={sideLink} />
+              <ElitePlanCard role={mode} billing={billing} setBilling={setBilling} sportDe={ctx.sportDe} hitIndex={hitIndex} hitLabel={hitLabel} sideLink={sideLink} athleteCount={anchorCount} />
             </div>
             <div style={{ padding: "14px 16px 20px" }}><PrimingExtras role={mode} /></div>
           </div>
@@ -174,7 +178,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
         <div style={{ flex: 1, overflowY: "auto" }}>
           <div style={{ padding: "34px 32px 8px", display: "grid", gap: columns ? 36 : 22, gridTemplateColumns: columns ? "1fr 1.05fr" : "1fr", alignItems: "start" }}>
             <div style={{ paddingTop: columns ? 4 : 0 }}>{head}</div>
-            <ElitePlanCard role={mode} billing={billing} setBilling={setBilling} sportDe={ctx.sportDe} hitIndex={hitIndex} hitLabel={hitLabel} cta={cta} sideLink={sideLink} />
+            <ElitePlanCard role={mode} billing={billing} setBilling={setBilling} sportDe={ctx.sportDe} hitIndex={hitIndex} hitLabel={hitLabel} cta={cta} sideLink={sideLink} athleteCount={anchorCount} />
           </div>
           <div style={{ padding: "18px 32px 28px" }}><PrimingExtras role={mode} /></div>
         </div>

@@ -3,7 +3,7 @@
 import { Skel } from "@/components/ui/Skeleton";
 import { isNativeApp } from "@/lib/nativeGoogleAuth";
 import NativeCheckout from "@/components/paywall/NativeCheckout";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, PaymentRequestButtonElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -100,21 +100,29 @@ export function CheckoutForm({
   const [error, setError] = useState<string | null>(null);
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
   const [elementReady, setElementReady] = useState(false);
+  // Garde anti double envoi (31/10) : `disabled` ne s'applique qu'au rendu suivant.
+  const submittingRef = useRef(false);
 
   const p = PRICING[mode];
 
   useEffect(() => {
     if (!stripe) return;
-    const amount = promo ? Math.round(exitPrice(mode, billing).now * 100) : billing === "annual" ? p.annual * 100 : p.monthly * 100;
+    /* Rien n'est dû aujourd'hui (31/10) : la feuille Apple Pay / Google Pay affichait « 78,00 € » au
+       moment de payer. Total à 0 €, le prix après l'essai dans le libellé. */
+    const after = promo
+      ? (billing === "annual" ? `${euros(exitPrice(mode, billing).now)} la 1re année` : `${euros(exitPrice(mode, billing).now)}/mois`)
+      : (billing === "annual" ? `${euros(p.annual)}/an` : `${euros(p.monthly)}/mois`);
     const pr = stripe.paymentRequest({
       country: "FR",
       currency: "eur",
-      total: { label: `ThePerfClub — ${billing === "annual" ? "Annuel" : "Mensuel"}`, amount },
+      total: { label: `ThePerfClub · ${TRIAL_DAYS} jours offerts, puis ${after}`, amount: 0 },
       requestPayerName: false,
       requestPayerEmail: false,
     });
     pr.canMakePayment().then(result => { if (result) setPaymentRequest(pr); });
     pr.on("paymentmethod", async (ev) => {
+      if (submittingRef.current) { ev.complete("fail"); return; }
+      submittingRef.current = true;
       setLoading(true);
       setError(null);
       const res = await fetch("/api/stripe/subscribe", {
@@ -125,8 +133,9 @@ export function CheckoutForm({
       if (!res.ok) {
         ev.complete("fail");
         const body = await res.json().catch(() => null);
-        setError(body?.error ?? "Erreur lors de la création de l'abonnement. Réessaie.");
+        setError(body?.error ?? "Le paiement n'a pas pu aboutir. Réessaie.");
         setLoading(false);
+        submittingRef.current = false;
       } else {
         ev.complete("success");
         posthog.capture("trial_started", { plan: mode, billing, method: "wallet", ...(promo ? { promo } : {}), ...(abVariant ? { ab_variant: abVariant } : {}) });
@@ -135,12 +144,13 @@ export function CheckoutForm({
     });
   }, [stripe, billing]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const priceStr = promo ? (billing === "annual" ? `${euros(exitPrice(mode, billing).now)} la 1re année, puis ${p.annual}€/an` : `${euros(exitPrice(mode, billing).now)}/mois pendant 12 mois, puis ${p.monthly}€/mois`) : billing === "annual" ? `${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois (${p.annual}€/an)` : `${p.monthly}€/mois`;
+  const priceStr = promo ? (billing === "annual" ? `${euros(exitPrice(mode, billing).now)} la 1re année, puis ${euros(p.annual)}/an` : `${euros(exitPrice(mode, billing).now)}/mois pendant 12 mois, puis ${euros(p.monthly)}/mois`) : billing === "annual" ? `${euros(p.annualMonthly)}/mois (${euros(p.annual)}/an)` : `${euros(p.monthly)}/mois`;
   const effectiveCtaLabel = ctaLabel ?? PAYWALL_SUBMIT_LABEL;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!stripe || !elements || !elementReady) return;
+    if (!stripe || !elements || !elementReady || submittingRef.current) return;
+    submittingRef.current = true;
     setLoading(true);
     setError(null);
 
@@ -151,8 +161,9 @@ export function CheckoutForm({
       });
 
       if (confirmError) {
-        setError(confirmError.message ?? "Erreur de paiement");
+        setError(confirmError.message ?? "Ta carte n'a pas pu être enregistrée. Vérifie-la et réessaie.");
         setLoading(false);
+        submittingRef.current = false;
         return;
       }
 
@@ -164,8 +175,9 @@ export function CheckoutForm({
 
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        setError(body?.error ?? "Erreur lors de la création de l'abonnement. Réessaie.");
+        setError(body?.error ?? "Le paiement n'a pas pu aboutir. Réessaie.");
         setLoading(false);
+        submittingRef.current = false;
         return;
       }
 
@@ -174,6 +186,7 @@ export function CheckoutForm({
     } catch {
       setError("Le formulaire de paiement n'est pas encore prêt. Réessaie dans un instant.");
       setLoading(false);
+      submittingRef.current = false;
     }
   }
 
@@ -215,7 +228,7 @@ export function CheckoutForm({
                par PRICING_PRIMING_GUARANTEE_CAPTION sur l'écran précédent (priming), pas la peine
                de la répéter une 2e fois juste avant de payer. */
             <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>
-              0€ dû aujourd&apos;hui — {TRIAL_DAYS} jours offerts. Puis {priceStr}
+              0 € dû aujourd&apos;hui, {TRIAL_DAYS} jours offerts. Puis {priceStr}
             </div>
           )}
 
@@ -252,7 +265,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   const { close, exitClass } = useExitAnimation(onClose);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [loadingIntent, setLoadingIntent] = useState(true);
-  const [setupError, setSetupError] = useState<string | null>(null);
+  const [setupError, setSetupError] = useState<"auth" | "other" | null>(null);
   const [footerPortalNode, setFooterPortalNode] = useState<HTMLDivElement | null>(null);
 
   /* Plus de setter (2026-09-16) — le bloc "Facturé annuellement/Modifier" qui l'utilisait a été
@@ -268,16 +281,22 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
     posthog.capture("paywall_form_viewed", { plan: mode, ...(abVariant ? { ab_variant: abVariant } : {}) });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (native) { setLoadingIntent(false); return; }
+  /* Échec du chargement (31/10) : message en français et bouton « Réessayer » (avant : « Erreur: Unauthorized »
+     et un bouton grisé pour toujours). Session expirée : renvoi vers la connexion. */
+  function loadIntent() {
+    setLoadingIntent(true); setSetupError(null);
     fetch("/api/stripe/setup-intent", { method: "POST" })
-      .then(r => r.json())
-      .then((json) => {
-        if (json.error) { setSetupError(`Erreur: ${json.error}`); setLoadingIntent(false); return; }
+      .then(async r => ({ status: r.status, json: await r.json().catch(() => null) }))
+      .then(({ status, json }) => {
+        if (!json?.clientSecret) { setSetupError(status === 401 ? "auth" : "other"); setLoadingIntent(false); return; }
         setClientSecret(json.clientSecret);
         setLoadingIntent(false);
       })
-      .catch(() => { setSetupError("Impossible de charger le formulaire."); setLoadingIntent(false); });
+      .catch(() => { setSetupError("other"); setLoadingIntent(false); });
+  }
+  useEffect(() => {
+    if (native) { setLoadingIntent(false); return; }
+    loadIntent();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Réassurance condensée en une ligne (2026-09-16, 2e itération — retour explicite de Gildas :
@@ -287,8 +306,8 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   const p = PRICING[mode];
   // App iOS (refus App Store 3.1.2(c), 2026-10-09) : montant facturé seul, et le 0€ de l'essai pas plus en vue que lui.
   const due = promo ? (billing === "annual" ? `${euros(exitPrice(mode, billing).now)} (1re année)` : `${euros(exitPrice(mode, billing).now)}/mois`) : billing === "annual"
-    ? native ? `${p.annual}€/an` : `${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois (${p.annual}€/an)`
-    : `${p.monthly}€/mois`;
+    ? native ? `${euros(p.annual)}/an` : `${euros(p.annualMonthly)}/mois (${euros(p.annual)}/an)`
+    : `${euros(p.monthly)}/mois`;
   const endDate = (() => { const d = new Date(); d.setDate(d.getDate() + TRIAL_DAYS); return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long" }); })();
 
   /* Même cadre que le priming (2026-10-07) : modale centrée sur desktop (récap + témoignage à
@@ -356,20 +375,29 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
         🔓 {TRIAL_DAYS} jours offerts
       </span>
       <div style={{ fontFamily: "var(--font-display)", fontSize: isMd ? 24 : 22, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>{headline || "Active Elite"}</div>
-      <div style={{ fontSize: 14, color: "rgba(255,255,255,.6)", marginTop: -4, marginBottom: 6 }}>0€ aujourd&apos;hui · Annulation en 1 clic · Sans engagement</div>
+      <div style={{ fontSize: 14, color: "rgba(255,255,255,.6)", marginTop: -4, marginBottom: 6 }}>0 € aujourd&apos;hui · Annulation en 1 clic · Sans engagement</div>
       {loadingIntent && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "12px 0" }}>
           <Skel dark h={46} r={12} /><div style={{ display: "flex", gap: 10 }}><Skel dark h={46} r={12} /><Skel dark h={46} r={12} /></div><Skel dark h={46} r={12} />
         </div>
       )}
-      {setupError && <div style={{ color: "#ff8a8a", fontSize: 13, textAlign: "center", padding: "12px 0" }}>{setupError}</div>}
+      {setupError && (
+        <div style={{ color: "#ffb3a7", fontSize: 14, textAlign: "center", padding: "12px 0", lineHeight: 1.5 }}>
+          {setupError === "auth" ? "Ta session a expiré. Reconnecte-toi pour continuer." : "Le formulaire de paiement ne s'est pas chargé."}
+          <div style={{ marginTop: 10 }}>
+            {setupError === "auth"
+              ? <a href="/login" style={{ color: "#ff8a5c", fontWeight: 800, textDecoration: "none" }}>Me reconnecter</a>
+              : <button type="button" onClick={loadIntent} style={{ background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.18)", color: "#fff", borderRadius: 12, padding: "10px 18px", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>Réessayer</button>}
+          </div>
+        </div>
+      )}
       {native && (
         <NativeCheckout mode={mode} billing={billing} footerPortalNode={footerPortalNode} onSuccess={onSuccess} abVariant={abVariant} ctaLabel={PAYWALL_CTA_LABEL[mode]} />
       )}
       {!native && clientSecret && (
         <Elements
           stripe={getStripePromise()}
-          options={{ clientSecret, appearance: { theme: "night", variables: { colorPrimary: "#D44000", colorBackground: "#12171c", borderRadius: "12px" } } }}
+          options={{ clientSecret, locale: "fr", appearance: { theme: "night", variables: { colorPrimary: "#D44000", colorBackground: "#12171c", borderRadius: "12px" } } }}
         >
           <CheckoutForm mode={mode} billing={billing} footerPortalNode={footerPortalNode} onSuccess={onSuccess} abVariant={abVariant} showBillingLegal={false} promo={promo} />
         </Elements>

@@ -5,6 +5,10 @@ import type { Billing } from "./PaywallModal";
 import { INTERVIEWS } from "./interviews";
 import ShareButton from "@/components/sessions/ShareButton";
 import { isNativeApp } from "@/lib/nativeGoogleAuth";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { getStoreProducts, PRODUCT_IDS, trialDays } from "@/lib/nativePurchases";
+import { exitOfferAccepted, exitPrice, euros } from "@/lib/exitOffer";
 
 /* Offre Gratuit / Elite (2026-10-07, POC https://claude.ai/artifact/MgsQY4Fncy8XtVgmNBA9Q5).
    Partagé par PrimingJourneyModal.tsx (carte Gratuit retirée le 2026-10-30 : la carte Elite seule,
@@ -113,9 +117,9 @@ export function OfferRows({ rows, billing, setBilling }: { rows: OfferRow[]; bil
             {r.tag && <span style={{ position: "absolute", top: 0, right: 14, transform: "translateY(-50%)", fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#fff", background: "#D44000", borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap" }}>{r.tag}</span>}
             <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: "50%", border: on ? "6px solid #ff8a55" : "2px solid rgba(255,255,255,.35)", transition: "border .15s" }} />
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: "4px 8px", flexWrap: "wrap" }}>
                 <span style={{ fontSize: 14.5, fontWeight: 800 }}>{r.label}</span>
-                {r.badge && <span style={{ fontFamily: mono, fontSize: 9.5, fontWeight: 700, padding: "3px 7px", borderRadius: 999, background: "rgba(47,158,68,.22)", color: "#7fdb8f" }}>{r.badge}</span>}
+                {r.badge && <span style={{ whiteSpace: "nowrap", fontFamily: mono, fontSize: 9.5, fontWeight: 700, padding: "3px 7px", borderRadius: 999, background: "rgba(47,158,68,.22)", color: "#7fdb8f" }}>{r.badge}</span>}
               </span>
               <span style={{ display: "block", fontSize: 12, color: "rgba(255,255,255,.58)", marginTop: 3 }}>{r.small}</span>
             </span>
@@ -133,27 +137,66 @@ export function OfferRows({ rows, billing, setBilling }: { rows: OfferRow[]; bil
    paraît une affaire qu'à côté du mensuel), annuel présélectionné, puis une ligne d'ancrage (validée par Gildas).
    App iOS (refus App Store 3.1.2(c), 2026-10-09) : le montant facturé doit être l'élément de prix le plus visible,
    donc « 78 €/an » en gros et l'équivalent mensuel en petit. */
-function ElitePrice({ role, billing, setBilling }: { role: "athlete" | "coach"; billing: Billing; setBilling: (b: Billing) => void }) {
+/* Prix du store dans les apps (31/10) : le gros prix venait de PRICING alors que la mention légale affiche
+   celui d'Apple / Google (écart visible, risque de refus 3.1.2). Même cache que NativePurchasePanel. */
+type StorePrices = { annual: number; monthly: number; currency: string; annualStr: string; monthlyStr: string; trial: number | null };
+function useStorePrices(role: "athlete" | "coach"): StorePrices | null {
+  const [sp, setSp] = useState<StorePrices | null>(null);
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    let alive = true;
+    (async () => {
+      try {
+        const { data: { user } } = await createClient().auth.getUser();
+        if (!user) return;
+        const products = await getStoreProducts(user.id);
+        const a = products[PRODUCT_IDS[role].annual], m = products[PRODUCT_IDS[role].monthly];
+        if (alive && a && m) setSp({ annual: a.price, monthly: m.price, currency: a.currencyCode, annualStr: a.priceString, monthlyStr: m.priceString, trial: trialDays(a) ?? null });
+      } catch (e) { console.error("[priming] prix store", e); }
+    })();
+    return () => { alive = false; };
+  }, [role]);
+  return sp;
+}
+
+/* Ancrage coach (31/10, Gildas : « cale sur la réponse ») : nombre de sportifs annoncé à l'inscription
+   (ob_count) ou, dans l'app, ses vrais sportifs s'il en a au moins 5 ; sinon 10. */
+function ElitePrice({ role, billing, setBilling, athleteCount }: { role: "athlete" | "coach"; billing: Billing; setBilling: (b: Billing) => void; athleteCount?: number }) {
   const p = PRICING[role];
-  const ios = isNativeApp() || paywallSimIos();
+  const native = isNativeApp();
+  const ios = native || paywallSimIos();
+  const sp = useStorePrices(role);
   const fr = (n: number) => n.toFixed(2).replace(".", ",").replace(",00", "");
-  const saved = p.monthly * 12 - p.annual;
-  const rows: OfferRow[] = [
+  const money = (n: number) => sp ? new Intl.NumberFormat("fr-FR", { style: "currency", currency: sp.currency }).format(n) : `${fr(n)} €`;
+  // Offre de sortie acceptée puis « Retour aux offres » : les prix remisés, ceux que le formulaire appliquera.
+  const promo = !native && exitOfferAccepted();
+  const pa = exitPrice(role, "annual"), pm = exitPrice(role, "monthly");
+  const pending = native && !sp;
+  const annual = sp?.annual ?? p.annual, monthly = sp?.monthly ?? p.monthly;
+  const saved = Math.round((monthly * 12 - annual) * 100) / 100;
+  const rows: OfferRow[] = promo ? [
+    { b: "annual", label: "Annuel", badge: "-30 %", tag: "Meilleur prix", big: ios ? euros(pa.now) : euros(pa.perMonth), unit: ios ? "/an" : "/mois",
+      small: <><s style={{ opacity: .6 }}>{euros(pa.was)}</s> {ios ? "la 1re année" : `${euros(pa.now)} la 1re année`}</> },
+    { b: "monthly", label: "Mensuel", badge: "-30 %", big: euros(pm.now), unit: "/mois", small: <><s style={{ opacity: .6 }}>{euros(pm.was)}</s> pendant 12 mois</> },
+  ] : [
     {
-      b: "annual", label: "Annuel", badge: `-${saved} €`, tag: "Meilleur prix",
-      big: ios ? `${p.annual} €` : `${fr(p.annualMonthly)} €`, unit: ios ? "/an" : "/mois",
-      small: ios ? <>soit {fr(p.annualMonthly)} €/mois</> : <><s style={{ opacity: .6 }}>{p.monthly * 12} €</s> {p.annual} € par an</>,
+      b: "annual", label: "Annuel", badge: pending ? undefined : `-${money(saved)}`, tag: "Meilleur prix",
+      big: pending ? "…" : ios ? (sp ? sp.annualStr : `${p.annual} €`) : `${fr(p.annualMonthly)} €`, unit: ios ? "/an" : "/mois",
+      small: pending ? " " : ios ? <>soit {money(annual / 12)}/mois</> : <><s style={{ opacity: .6 }}>{p.monthly * 12} €</s> {p.annual} € par an</>,
     },
-    { b: "monthly", label: "Mensuel", big: `${p.monthly} €`, unit: "/mois", small: "Sans engagement" },
+    { b: "monthly", label: "Mensuel", big: pending ? "…" : sp ? sp.monthlyStr : `${p.monthly} €`, unit: "/mois", small: "Sans engagement" },
   ];
+  const n = athleteCount && athleteCount > 1 ? athleteCount : 10;
   const anchor = role === "athlete"
     ? <>Le prix d&apos;<b style={{ color: "#fff" }}>une seule séance</b> avec un préparateur physique, pour toute l&apos;année.</>
-    : <>Avec 10 sportifs : <b style={{ color: "#fff" }}>{fr(p.annualMonthly / 10)} € par sportif</b> et par mois. Sportifs illimités.</>;
+    : <>Avec {n} sportifs : <b style={{ color: "#fff" }}>{money((promo ? pa.perMonth : sp ? annual / 12 : p.annualMonthly) / n)} par sportif</b> et par mois. Sportifs illimités.</>;
+  const days = sp?.trial ?? TRIAL_DAYS;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <OfferRows rows={rows} billing={billing} setBilling={setBilling} />
+      {promo && <div style={{ fontSize: 12.5, color: "#7fdb8f", fontWeight: 700 }}>Code DEPART30 appliqué.</div>}
       <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.62)", lineHeight: 1.5, marginTop: 4 }}>{anchor}</div>
-      <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.5)", lineHeight: 1.5 }}>0 € aujourd&apos;hui, 1er prélèvement après tes {TRIAL_DAYS} jours offerts.</div>
+      <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.5)", lineHeight: 1.5 }}>0 € aujourd&apos;hui, 1er prélèvement après tes {days} jours offerts.</div>
     </div>
   );
 }
@@ -184,9 +227,9 @@ export function PricingSideLink({ role, athleteSelfId, name }: { role: "athlete"
 }
 
 /* Carte Elite, mise en avant. `cta` = bouton d'achat (absent en mobile : bas fixe). */
-export function ElitePlanCard({ role, billing, setBilling, sportDe, hitIndex, hitLabel, cta, sideLink }: {
+export function ElitePlanCard({ role, billing, setBilling, sportDe, hitIndex, hitLabel, cta, sideLink, athleteCount }: {
   role: "athlete" | "coach"; billing: Billing; setBilling: (b: Billing) => void; sportDe: string | null;
-  hitIndex: number; hitLabel?: string; cta?: React.ReactNode; sideLink?: React.ReactNode;
+  hitIndex: number; hitLabel?: string; cta?: React.ReactNode; sideLink?: React.ReactNode; athleteCount?: number;
 }) {
   const f = planFeatures(role, sportDe);
   return (
@@ -198,7 +241,7 @@ export function ElitePlanCard({ role, billing, setBilling, sportDe, hitIndex, hi
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#ff8a55" }}>Essayer Elite {TRIAL_DAYS} jours</span>
       </div>
-      <ElitePrice role={role} billing={billing} setBilling={setBilling} />
+      <ElitePrice role={role} billing={billing} setBilling={setBilling} athleteCount={athleteCount} />
       <div style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: ".07em", textTransform: "uppercase", color: "rgba(255,138,85,.85)", margin: "4px 0 -6px" }}>En plus du gratuit</div>
       <FeatureList items={f.elite} elite hitIndex={hitIndex} hitLabel={hitLabel} />
       {cta && <><div style={{ flex: 1 }} />{cta}</>}
