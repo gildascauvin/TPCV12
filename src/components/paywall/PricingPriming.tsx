@@ -167,7 +167,14 @@ function ElitePrice({ role, billing, setBilling, athleteCount }: { role: "athlet
   const ios = native || paywallSimIos();
   const sp = useStorePrices(role);
   const fr = (n: number) => n.toFixed(2).replace(".", ",").replace(",00", "");
-  const money = (n: number) => sp ? new Intl.NumberFormat("fr-FR", { style: "currency", currency: sp.currency }).format(n) : `${fr(n)} €`;
+  /* Montants calculés (mensuel équivalent, économie, prix par sportif) écrits avec la devise et la forme du
+     prix du store lui-même (31/10 : le code devise renvoyé ne correspondait pas toujours, « $ » à l'écran
+     et « € » dans la feuille Apple). */
+  const money = (n: number) => {
+    if (!sp) return `${fr(n)} €`;
+    const num = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+    return sp.annualStr.replace(/\d[\d\s\u00a0\u202f.,]*\d|\d/, num);
+  };
   // Offre de sortie acceptée puis « Retour aux offres » : les prix remisés, ceux que le formulaire appliquera.
   const promo = !native && exitOfferAccepted();
   const pa = exitPrice(role, "annual"), pm = exitPrice(role, "monthly");
