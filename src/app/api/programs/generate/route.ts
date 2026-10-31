@@ -200,7 +200,7 @@ function formatPrescription(spec: ParsedExercise, shape: Shape, phase: number): 
   const isPlyo = /jump|saut|bond|pogo|plyo|lancer|médecine|medecine|sprint/i.test(spec.name);
   const rir = [3, 2, 1, 4][phase];
   const intensityLabel = usesNumericPct ? `@${pct}%`
-    : isRepLine ? (isPlyo || suffixHasEffort ? "" : ` (${rir} ${pluralize("rep", rir)} en réserve)`)
+    : isRepLine ? (isPlyo || suffixHasEffort || spec.suffix.startsWith("(") ? "" : ` (${rir} ${pluralize("rep", rir)} en réserve)`)
     : suffixHasEffort ? "" : ` (${qualitativeEffort(pct)})`;
   return `${spec.name} — ${core}${intensityLabel}${suffix}`;
 }
