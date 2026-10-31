@@ -67,6 +67,7 @@ value_intro → decision_2b → account → ob_sport → ob_count → questions 
 - Démos coach : le sportif s'appelle Karim (AHA et aperçu des notifications), « ton sportif » dans le texte. Titres neutres si `ob_decide` est passé.
 - `ob_pay` coach : `athleteCount` (réponse `ob_count`) et `hasAthletes` (invitations envoyées) passés à `PrimingJourneyModal`.
 - Point forme : ← et « Plus tard » en haut, pas de « Suivant » (les notes avancent seules), bouton seulement aux comportements.
+- Programme claimé (31/10) : photo du sport derrière un dégradé + « NOM · N semaines » en haut de `account` ; `claimDemo` (vraie séance chargée du programme, difficulté 6-9, hors tests) sur `AhaMorningCard` et `AhaDecisionPreview` ; étape 1 « tes {séances du sport} », étape 3 « record ({test}) ». Tests d'exemple de `ob_insight` par sport du catalogue (`testFor` : arraché, squat, développé couché, VMA, FTP, squat jump pour les sports explosifs seulement…).
 - Mode test sans compte : le programme reprend sport, jours, objectif et points faibles choisis (`dbgsport` en repli).
 
 ## Données écrites
@@ -133,7 +134,7 @@ value_intro → decision_2b → account → ob_sport → ob_count → questions 
 - Remplacés le 30/10 par `ob_plan` / `ob_decide` / `ob_insight` : `ob_when`, `ob_mirror`, `ob_checkin`, `ob_control`. Ils restent dans le type `StepId` mais aucun rendu ni path ne les utilise.
 - A/B tests `short-onboarding-signup` et `skip-value-intro` clos, plumbing retiré : plus de `?ab=`, plus de variantes A/B de path.
 - Plus de score de forme avant l'inscription (« on vend pas ça »). Plus de données fictives sportif. Plus de bannières d'activation J0.
-- Personnalisation de l'AHA (séance réelle du claim, prénom) écartée (« overkill »).
+- Prénom dans l'AHA : toujours écarté. La séance réelle du programme claimé, elle, est faite depuis le 31/10 (voir plus haut).
 
 ## Pas encore branché
 `ReplayStepBody` (rejeu Apple Santé réel), `ReviewPromptMock` (note native), Health Connect dans l'onboarding Android : lot natif après validation Play.
