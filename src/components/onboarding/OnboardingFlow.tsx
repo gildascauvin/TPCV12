@@ -59,6 +59,26 @@ function templateWeekRows(tpl: ProgramTemplate): WeekSession[] {
   })).sort((a, b) => a.date.localeCompare(b.date));
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/* Messages Supabase de l'inscription, en français (31/10 : ils s'affichaient en anglais). */
+function signupErrorFr(msg: string): string {
+  const m = msg.toLowerCase();
+  if (m.includes("already registered") || m.includes("already been registered") || m.includes("user already exists")) return "Un compte existe déjà avec cet email.";
+  if (m.includes("rate limit") || m.includes("too many")) return "Trop de tentatives en peu de temps. Réessaie dans quelques minutes.";
+  if ((m.includes("invalid") && m.includes("email")) || m.includes("unable to validate email")) return "Cette adresse email n'est pas valide. Vérifie-la.";
+  if (m.includes("network") || m.includes("fetch")) return "Connexion impossible. Vérifie ton réseau et réessaie.";
+  return "L'inscription n'a pas abouti. Réessaie dans un instant.";
+}
+
+/* fetch avec délai maximum (31/10) : une génération ou un enregistrement bloqué laissait
+   l'écran « Ton programme est prêt » vide, avec un bouton « Un instant… » sans fin. */
+function fetchWithTimeout(input: RequestInfo, init: RequestInit = {}, ms = 20000): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  return fetch(input, { ...init, signal: ctrl.signal }).finally(() => clearTimeout(t));
+}
+
 function localTodayStr(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -463,6 +483,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   /* account */
   const [name, setName]         = useState(pendingData?.name || "");
   const [email, setEmail]       = useState("");
+  const emailInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving]     = useState(false);
   const [accountFieldFocus, setAccountFieldFocus] = useState(false);
   const [error, setError]       = useState<string | null>(null);
@@ -1001,7 +1022,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     const focus: ProgramFocus = obGoal ?? "mixte";
     try {
       const days = [...obDays].sort((a, b) => a - b).map(d => WEEK_DAY_LABELS[d]);
-      const res = await fetch("/api/programs/generate", {
+      const res = await fetchWithTimeout("/api/programs/generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sport: obChosenSport() || "Autre", level: "intermediaire", days: days.length ? days : ["Lun", "Mer", "Ven"],
@@ -1042,7 +1063,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       }
       if (built) {
         const week1 = built.template.weeks[0] ?? {};
-        const res = await fetch("/api/programs", {
+        const res = await fetchWithTimeout("/api/programs", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: built.name, sport: built.sport, level: "intermediaire", focus: built.focus,
@@ -1057,7 +1078,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           if (hasClaimedProgram) localStorage.removeItem("claim_program_id");
           const target = role === "coach" ? (demoAthleteId ? { athlete_id: demoAthleteId } : null) : { user_id: uid };
           if (target) {
-            const a = await fetch(`/api/programs/${programId}/assign`, {
+            const a = await fetchWithTimeout(`/api/programs/${programId}/assign`, {
               method: "POST", headers: { "Content-Type": "application/json" },
               /* Sportif démo du coach : pas d'acclimatation, 1re séance calée sur aujourd'hui (écarts
                  gardés) pour qu'il y ait toujours une décision à prendre le jour de l'inscription. */
@@ -1310,7 +1331,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           email: email.trim(), password: randomPassword,
           ...(emailRedirectTo ? { options: { emailRedirectTo } } : {}),
         });
-        if (signUpErr) { setError(signUpErr.message); setSaving(false); return; }
+        if (signUpErr) { setError(signupErrorFr(signUpErr.message)); setSaving(false); return; }
         const uid = data.user?.id;
         if (!uid) { setError("Erreur lors de la création du compte."); setSaving(false); return; }
         setNewUserId(uid);
@@ -1582,7 +1603,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
 
   const inputStyle: React.CSSProperties = {
     width: "100%", boxSizing: "border-box", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)",
-    borderRadius: 12, padding: "12px 14px", fontSize: 14, fontFamily: "inherit", outline: "none", marginBottom: 12,
+    borderRadius: 12, padding: "12px 14px", fontSize: 16, fontFamily: "inherit", outline: "none", marginBottom: 12,
   };
 
   /* Formulaire de compte — reste une fonction (héritage du chantier fusion decision/account du
@@ -1635,7 +1656,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
        jugé plus lisible qu'un bouton qui change de forme selon ce qu'on tape). Le CTA sticky du
        bas ne sert plus qu'à l'email (`handleFinish`), désactivé tant que Prénom OU Email est
        vide — même garde qu'avant le 09-04. */
-    const emailValid = name.trim().length > 0 && email.trim().length > 0;
+    // Format vérifié ici (31/10) : « gildas@ » partait chez Supabase, qui répondait en anglais.
+    const emailValid = name.trim().length > 0 && EMAIL_RE.test(email.trim());
     const manualSignup = accountFieldFocus || name.trim().length > 0 || email.trim().length > 0;
 
     const content = (
@@ -1727,9 +1749,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           </div>
 
           <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Prénom</div>
-          <input type="text" value={name} onChange={e => setName(e.target.value)} onFocus={() => setAccountFieldFocus(true)} onBlur={() => setAccountFieldFocus(false)} placeholder="ex : Alex" style={inputStyle} />
+          {/* Formulaire (31/10) : sur iPhone le clavier cache le bouton du bas, la touche Entrée doit donc valider. */}
+          <form id="ob-account-form" noValidate onSubmit={e => { e.preventDefault(); if (!saving && emailValid) handleFinish(); }}>
+          <input type="text" value={name} onChange={e => setName(e.target.value)} onFocus={() => setAccountFieldFocus(true)} onBlur={() => setAccountFieldFocus(false)} placeholder="ex : Alex" style={inputStyle}
+            autoComplete="given-name" autoCapitalize="words" maxLength={40} enterKeyHint="next"
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); emailInputRef.current?.focus(); } }} />
           <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Email</div>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} onFocus={() => setAccountFieldFocus(true)} onBlur={() => setAccountFieldFocus(false)} placeholder="toi@exemple.com" style={{ ...inputStyle, marginBottom: 0 }} />
+          <input ref={emailInputRef} type="email" inputMode="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={254} enterKeyHint="go" value={email} onChange={e => setEmail(e.target.value)} onFocus={() => setAccountFieldFocus(true)} onBlur={() => setAccountFieldFocus(false)} placeholder="toi@exemple.com" style={{ ...inputStyle, marginBottom: 0 }} />
+          </form>
         </div>
       </>
     );
@@ -1743,8 +1770,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           >←</button>
         )}
         <button
-          type="button"
-          onClick={() => { if (!saving && emailValid) handleFinish(); }}
+          type="submit" form="ob-account-form"
           disabled={saving || !emailValid}
           style={{
             flex: 1, height: 52, borderRadius: 16, border: "none",
