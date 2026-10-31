@@ -344,6 +344,13 @@ div:has(> .autoreg-slot:only-child:empty) { display: none; }
 html.native body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 /* Plus de voile gris au tap (2026-10-30), aussi dans Safari et la PWA, pas seulement dans l'app. */
 html { -webkit-tap-highlight-color: transparent; }
+/* Zoom iOS (2026-10-31) : un champ de moins de 16 px fait zoomer la page au focus, et l'app iOS (WKWebView)
+   reste zoomée ensuite : tout l'écran paraît collé aux bords. ~25 champs étaient à 10-15 px : 16 px partout
+   au doigt, sans toucher à l'affichage souris. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
+  textarea, select { font-size: 16px !important; }
+}
 html.native input, html.native textarea, html.native [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 
 /* Page Programmes (2026-10-04) : cartes qui se soulèvent au survol, squelette de chargement. */
