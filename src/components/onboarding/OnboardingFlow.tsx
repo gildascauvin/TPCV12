@@ -614,9 +614,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       let tpl: ProgramTemplate | null = null, progName = "", progSport = "";
       if (hasClaimedProgram && wizardTemplate) { tpl = wizardTemplate; progName = claimedProgramName ?? "Programme"; progSport = sport; }
       else if (q.get("dbgprog") !== "none") {
-        progSport = q.get("dbgsport") || "CrossFit"; progName = `Programme ${progSport}`;
+        // Réponses aux questions d'abord (31/10 : choisir Escalade donnait quand même un programme CrossFit).
+        progSport = obChosenSport() || q.get("dbgsport") || "CrossFit"; progName = `Programme ${obSportLabel() || progSport}`;
+        const days = [...obDays].sort((x, y) => x - y).map(d => WEEK_DAY_LABELS[d]);
+        const focus: ProgramFocus = obGoal ?? "competition";
         const r = await fetch("/api/programs/generate", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sport: progSport, level: "intermediaire", days: ["Lun", "Mer", "Jeu", "Sam"], duration: 8, focus: "competition", weaknesses: [] }) }).catch(() => null);
+          body: JSON.stringify({ sport: progSport, level: "intermediaire", days: days.length ? days : ["Lun", "Mer", "Jeu", "Sam"],
+            duration: durationFromDeadline(focus === "competition" ? obDeadline : ""), focus, weaknesses: obWeak }) }).catch(() => null);
         tpl = r?.ok ? ((await r.json()).template ?? null) : null;
       }
       if (!tpl) { setObProgramOk(false); return; }
