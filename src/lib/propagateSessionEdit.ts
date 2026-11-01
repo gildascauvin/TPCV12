@@ -7,8 +7,8 @@ import { parseLine } from "@/lib/exerciseParser";
 
    Règle : on ne propage que les exercices AJOUTÉS ou RETIRÉS d'une séance, jamais les
    prescriptions modifiées (séries, %, charges) — chaque semaine garde sa progression. La séance
-   cible = même nom de séance dans chaque semaine suivante (le jour peut changer d'une semaine à
-   l'autre). Un exercice déjà présent dans la cible n'est pas ajouté une seconde fois. */
+   cible = même nom et même jour dans chaque semaine suivante (repli : même nom un autre jour, si la
+   séance est unique dans sa semaine). Un exercice déjà présent dans la cible n'est pas ajouté une seconde fois. */
 
 type MediaMap = Record<string, ExerciseAttachments>;
 
@@ -71,22 +71,30 @@ export function applyDiffToSession(s: SessionTemplate, diff: LineDiff): SessionT
   return { ...s, notes: rows.map(r => r.line).join("\n") || null, ...(hadMedia || Object.keys(media).length ? { exercise_media: media } : {}) };
 }
 
-/** Séances des semaines après `fromWeekIdx` portant le même nom que la séance éditée. */
-export function followingTargets(template: ProgramTemplate, fromWeekIdx: number, sessionName: string): { weekIdx: number; day: string; sIdx: number }[] {
+/** Séances des semaines après `fromWeekIdx` portant le même nom que la séance éditée : celle du
+ *  même jour en priorité (une séance qui revient lundi et samedi ne contamine pas l'autre jour),
+ *  sinon, si elle est unique dans sa semaine, celle du même nom un autre jour (séance déplacée). */
+export function followingTargets(template: ProgramTemplate, fromWeekIdx: number, sessionName: string, day?: string): { weekIdx: number; day: string; sIdx: number }[] {
   const key = sessionKey(sessionName);
   if (!key) return [];
+  // Repli sur un autre jour seulement si la séance est unique dans sa semaine (sinon ambigu).
+  const src = template.weeks[fromWeekIdx] ?? {};
+  const uniqueInSource = Object.values(src).flatMap(l => (l ?? []) as SessionTemplate[]).filter(s => sessionKey(s.name) === key).length <= 1;
   const out: { weekIdx: number; day: string; sIdx: number }[] = [];
   template.weeks.forEach((w, wi) => {
     if (wi <= fromWeekIdx) return;
-    for (const [day, list] of Object.entries(w)) {
-      ((list ?? []) as SessionTemplate[]).forEach((s, si) => { if (sessionKey(s.name) === key) out.push({ weekIdx: wi, day, sIdx: si }); });
+    const hits: { weekIdx: number; day: string; sIdx: number }[] = [];
+    for (const [d, list] of Object.entries(w)) {
+      ((list ?? []) as SessionTemplate[]).forEach((s, si) => { if (sessionKey(s.name) === key) hits.push({ weekIdx: wi, day: d, sIdx: si }); });
     }
+    const sameDay = day ? hits.filter(h => h.day === day) : [];
+    out.push(...(sameDay.length || (day && !uniqueInSource) ? sameDay : hits));
   });
   return out;
 }
 
-export function applyDiffToFollowingWeeks(template: ProgramTemplate, fromWeekIdx: number, sessionName: string, diff: LineDiff): ProgramTemplate {
-  const targets = followingTargets(template, fromWeekIdx, sessionName);
+export function applyDiffToFollowingWeeks(template: ProgramTemplate, fromWeekIdx: number, sessionName: string, diff: LineDiff, day?: string): ProgramTemplate {
+  const targets = followingTargets(template, fromWeekIdx, sessionName, day);
   const hit = new Set(targets.map(t => `${t.weekIdx}|${t.day}|${t.sIdx}`));
   return {
     ...template,

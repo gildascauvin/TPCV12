@@ -368,7 +368,7 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
   const [editingTarget, setEditingTarget] = useState<EditingTarget | null>(null);
   // État de la séance à l'ouverture du tiroir, pour proposer d'appliquer ajouts/retraits aux semaines suivantes.
   const [editSnapshot, setEditSnapshot] = useState<{ name: string; notes: string | null } | null>(null);
-  const [propagatePrompt, setPropagatePrompt] = useState<{ weekIdx: number; sessionName: string; diff: LineDiff; count: number; firstWeek: number; lastWeek: number } | null>(null);
+  const [propagatePrompt, setPropagatePrompt] = useState<{ weekIdx: number; day: string; sessionName: string; diff: LineDiff; count: number; firstWeek: number; lastWeek: number } | null>(null);
   const [duplicateDay, setDuplicateDay] = useState<{ weekIdx: number; day: string } | null>(null);
   const [saving, setSaving] = useState<"library" | "assign" | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -478,10 +478,10 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
     if (!now) return;
     const diff = diffSessionLines(snap.notes, now.notes);
     if (isEmptyDiff(diff)) return;
-    const targets = followingTargets(template, t.weekIdx, snap.name);
+    const targets = followingTargets(template, t.weekIdx, snap.name, t.day);
     if (!targets.length) return;
     const weeksHit = targets.map(x => x.weekIdx);
-    setPropagatePrompt({ weekIdx: t.weekIdx, sessionName: snap.name, diff, count: targets.length, firstWeek: Math.min(...weeksHit), lastWeek: Math.max(...weeksHit) });
+    setPropagatePrompt({ weekIdx: t.weekIdx, day: t.day, sessionName: snap.name, diff, count: targets.length, firstWeek: Math.min(...weeksHit), lastWeek: Math.max(...weeksHit) });
   }, [pendingCompare, template]);
 
   function moveSessionToDay(fromDay: string, sIdx: number, toDay: string) {
@@ -968,7 +968,7 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
         const weeksLabel = p.firstWeek === p.lastWeek ? `la semaine ${p.firstWeek + 1}` : `les semaines ${p.firstWeek + 1} à ${p.lastWeek + 1}`;
         const list = (xs: string[]) => xs.length <= 3 ? xs.join(", ") : `${xs.slice(0, 3).join(", ")} et ${xs.length - 3} autre${xs.length - 3 > 1 ? "s" : ""}`;
         const apply = () => {
-          setTemplate(prev => applyDiffToFollowingWeeks(prev, p.weekIdx, p.sessionName, p.diff));
+          setTemplate(prev => applyDiffToFollowingWeeks(prev, p.weekIdx, p.sessionName, p.diff, p.day));
           setPropagatePrompt(null);
         };
         return (
