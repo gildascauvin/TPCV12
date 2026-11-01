@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import type { ProgramTemplate, SessionTemplate, WeekTemplate, Session } from "@/types";
 import AddSessionModal from "@/components/sessions/AddSessionModal";
@@ -9,6 +9,7 @@ import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { ExerciseLineView, type ExerciseLineViewData } from "@/components/sessions/ExerciseLineView";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
+import { diffSessionLines, isEmptyDiff, followingTargets, applyDiffToFollowingWeeks, exerciseLabel, type LineDiff } from "@/lib/propagateSessionEdit";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { SessionTemplateCard, avgWeekRpe, loadBarColor } from "@/components/programs/SessionTemplateCard";
@@ -365,6 +366,9 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
   const [weekIdx, setWeekIdx] = useState(0);
   const [showReconduire, setShowReconduire] = useState(false);
   const [editingTarget, setEditingTarget] = useState<EditingTarget | null>(null);
+  // État de la séance à l'ouverture du tiroir, pour proposer d'appliquer ajouts/retraits aux semaines suivantes.
+  const [editSnapshot, setEditSnapshot] = useState<{ name: string; notes: string | null } | null>(null);
+  const [propagatePrompt, setPropagatePrompt] = useState<{ weekIdx: number; sessionName: string; diff: LineDiff; count: number; firstWeek: number; lastWeek: number } | null>(null);
   const [duplicateDay, setDuplicateDay] = useState<{ weekIdx: number; day: string } | null>(null);
   const [saving, setSaving] = useState<"library" | "assign" | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -449,7 +453,36 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
       }),
     }));
     setEditingTarget({ weekIdx, day, sessionIdx: newIdx });
+    setEditSnapshot(null);
   }
+
+  function openEditor(t: EditingTarget) {
+    const s = template.weeks[t.weekIdx]?.[t.day]?.[t.sessionIdx] as SessionTemplate | undefined;
+    setEditSnapshot(s ? { name: s.name, notes: s.notes } : null);
+    setEditingTarget(t);
+  }
+
+  /* Le tiroir enregistre sa dernière frappe juste avant de se fermer : on compare après le rendu
+     suivant, sur le template à jour, pas dans la closure de onClose. */
+  const [pendingCompare, setPendingCompare] = useState<{ t: EditingTarget; snap: { name: string; notes: string | null } } | null>(null);
+  function closeEditor() {
+    if (editingTarget && editSnapshot) setPendingCompare({ t: editingTarget, snap: editSnapshot });
+    setEditingTarget(null);
+    setEditSnapshot(null);
+  }
+  useEffect(() => {
+    if (!pendingCompare) return;
+    const { t, snap } = pendingCompare;
+    setPendingCompare(null);
+    const now = template.weeks[t.weekIdx]?.[t.day]?.[t.sessionIdx] as SessionTemplate | undefined;
+    if (!now) return;
+    const diff = diffSessionLines(snap.notes, now.notes);
+    if (isEmptyDiff(diff)) return;
+    const targets = followingTargets(template, t.weekIdx, snap.name);
+    if (!targets.length) return;
+    const weeksHit = targets.map(x => x.weekIdx);
+    setPropagatePrompt({ weekIdx: t.weekIdx, sessionName: snap.name, diff, count: targets.length, firstWeek: Math.min(...weeksHit), lastWeek: Math.max(...weeksHit) });
+  }, [pendingCompare, template]);
 
   function moveSessionToDay(fromDay: string, sIdx: number, toDay: string) {
     if (fromDay === toDay) return;
@@ -807,7 +840,7 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
                   return (
                     <DraggableProgramSession
                       key={sIdx} day={day} sIdx={sIdx} session={s}
-                      onClick={() => setEditingTarget({ weekIdx, day, sessionIdx: sIdx })}
+                      onClick={() => openEditor({ weekIdx, day, sessionIdx: sIdx })}
                       badgeOverride={isTarget ? { label: formatAutoregPoints(suggestion!.reco), bg: `${suggestionSeverityColor(suggestion!)}22`, color: suggestionSeverityColor(suggestion!) } : undefined}
                       gaugeOverride={isTarget ? applyAutoregDifficulty(s.target_difficulty ?? 5, suggestion!.reco) : undefined}
                       autoregReco={isTarget ? suggestion!.reco : undefined}
@@ -922,11 +955,49 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
             // onClose s'en charge séparément.
             updateSession(editingTarget.weekIdx, editingTarget.day, editingTarget.sessionIdx, { name: data.name, notes: data.notes || null, target_difficulty: data.target_difficulty, exercise_media: data.exercise_media });
           }}
-          onDelete={async () => { removeSession(editingTarget.weekIdx, editingTarget.day, editingTarget.sessionIdx); setEditingTarget(null); }}
-          onClose={() => setEditingTarget(null)}
+          onDelete={async () => { removeSession(editingTarget.weekIdx, editingTarget.day, editingTarget.sessionIdx); setEditingTarget(null); setEditSnapshot(null); }}
+          onClose={closeEditor}
           topOffset={topOffset}
         />
       )}
+
+      {propagatePrompt && (() => {
+        const p = propagatePrompt;
+        const added = p.diff.added.map(a => exerciseLabel(a.line));
+        const removedNames = p.diff.removedKeys.length;
+        const weeksLabel = p.firstWeek === p.lastWeek ? `la semaine ${p.firstWeek + 1}` : `les semaines ${p.firstWeek + 1} à ${p.lastWeek + 1}`;
+        const list = (xs: string[]) => xs.length <= 3 ? xs.join(", ") : `${xs.slice(0, 3).join(", ")} et ${xs.length - 3} autre${xs.length - 3 > 1 ? "s" : ""}`;
+        const apply = () => {
+          setTemplate(prev => applyDiffToFollowingWeeks(prev, p.weekIdx, p.sessionName, p.diff));
+          setPropagatePrompt(null);
+        };
+        return (
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, zIndex: 2147483200 }}
+            onClick={e => { if (e.target === e.currentTarget) setPropagatePrompt(null); }}
+          >
+            <div style={{ background: "#fff", color: "#171b1f", borderRadius: 30, padding: 28, maxWidth: 380, width: "100%", boxShadow: "0 42px 120px rgba(0,0,0,.34)", animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 10 }}>Appliquer aux semaines suivantes ?</div>
+              <div style={{ fontSize: 14, color: "#62686e", lineHeight: 1.5, marginBottom: 8 }}>
+                Chaque semaine du programme est indépendante. Tes changements sur « {p.sessionName} » ne concernent pour l&apos;instant que la semaine {p.weekIdx + 1}.
+              </div>
+              <div style={{ fontSize: 13, color: "#171b1f", lineHeight: 1.5, marginBottom: 8 }}>
+                {added.length > 0 && <div>+ Ajouté : {list(added)}</div>}
+                {removedNames > 0 && <div>− Retiré : {removedNames} exercice{removedNames > 1 ? "s" : ""}</div>}
+              </div>
+              <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.5, marginBottom: 20 }}>
+                On les reporte sur {p.count} séance{p.count > 1 ? "s" : ""} « {p.sessionName} » dans {weeksLabel}. Les séries et charges de chaque semaine ne bougent pas.
+              </div>
+              <button onClick={apply} style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
+                Appliquer aux semaines suivantes
+              </button>
+              <button onClick={() => setPropagatePrompt(null)} style={{ width: "100%", padding: "12px 0", borderRadius: 12, border: "1px solid rgba(0,0,0,.10)", background: "#faf9f7", color: "#555", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                Seulement cette semaine
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
