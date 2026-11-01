@@ -33,7 +33,8 @@ import { computeWellnessBaselineAt, relativeZoneLabel, relativeWellnessByDate, w
 import { pickRelevantAssignment, findProgramForWeek, programWeekTag } from "@/lib/programAssignment";
 import { isThePerfClubProgram, revealLabel } from "@/lib/programReveal";
 import { programSportEmoji } from "@/lib/sportCategories";
-import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { parseAndApply } from "@/lib/loadAdjust";
+import { NO_ADJUST, adjustNotesCharge, adjustDifficultyCharge, type ChargeAdjust } from "@/lib/chargeAdjust";
 import { applyAutoregDifficulty } from "@/lib/autoregulation";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
 import { DARK_CARD_BG } from "@/lib/theme";
@@ -44,6 +45,8 @@ import ProgramBanner from "@/components/programs/ProgramBanner";
 import { scrollIntoViewX } from "@/lib/scrollIntoViewX";
 import { ACTIVITY_RECONDUIRE, ACTIVITY_LABEL_CHANGED } from "@/components/layout/ActivityPill";
 import { toast } from "@/lib/toast";
+import { useSessionSeries } from "@/hooks/useSessionSeries";
+import { newSeriesId } from "@/lib/sessionSeries";
 import { updateOwnSession, isOffline, isNetworkFailure, notifyQueued } from "@/lib/offlineSessions";
 import { enqueueOfflineAction } from "@/lib/offlineStore";
 import { localWellness } from "@/lib/offlineWellness";
@@ -526,15 +529,20 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     }
   }, [supabase, sessions]);
 
-  const handleDragEnd = makePlanningDragEndHandler({ sessions, moveSession: moveSessionToDate, moveExercise }) as (event: DragEndEvent) => void;
+  // Séries (useSessionSeries) : tiroir, glisser de séance ou d'exercice, suppression.
+  const series = useSessionSeries<Session>({
+    editing, sessions, setSessions, toRow: r => r as unknown as Session,
+    deleteOne: s => deleteSession(s), gate: fn => gateInput(fn), onChanged: () => router.refresh(),
+  });
+  const handleDragEnd = makePlanningDragEndHandler({ sessions, moveSession: series.wrapMove(moveSessionToDate), moveExercise: series.wrapExerciseMove(moveExercise) }) as (event: DragEndEvent) => void;
 
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
-  const duplicateSession = useCallback(async (newDate: string, pct: number = 0) => {
+  const duplicateSession = useCallback(async (newDate: string, adjust: ChargeAdjust = NO_ADJUST) => {
     notifyOnboardingProgressSoon();
     if (!duplicating) return;
-    const notes = duplicating.notes ? duplicating.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : duplicating.notes;
-    const target_difficulty = adjustDifficulty(duplicating.target_difficulty ?? 6, pct);
+    const notes = adjustNotesCharge(duplicating.notes, adjust);
+    const target_difficulty = adjustDifficultyCharge(duplicating.target_difficulty ?? 6, adjust);
     const { data: saved } = await supabase.from("sessions").insert({
       user_id: userId,
       name: duplicating.name,
@@ -1101,14 +1109,25 @@ export default function WeekClient({ userId, userName, userSport = null, initial
           (onSave/onConfirm/onDuplicate/onDelete) passe par gateInput() : libre, sauf en sandbox (freemium 2026-09-30)
           (2026-08-19). */}
       {addingDate && (
-        <AddSessionModal date={addingDate} userId={userId} userName={userName ?? "Toi"} sport={userSport} onSave={(data, id) => gateInput(() => saveSession(data, id))} onClose={() => { setAddingDate(null); router.refresh(); }} />
+        <AddSessionModal date={addingDate} userId={userId} userName={userName ?? "Toi"} sport={userSport}
+          onSave={async (data, id) => { const r = await gateInput(() => saveSession(data, id)); series.noteCreated(r); return r as { id: string } | void; }}
+          belowTitle={series.createRow()}
+          onClose={() => { setAddingDate(null); series.resetCreated(); router.refresh(); }} />
       )}
       {showReconduire && (
         <ReconduireModal
           daySlots={dates.map(d => ({ sessions: sessions.filter(s => s.date === format(d, "yyyy-MM-dd")) }))}
           onClose={() => setShowReconduire(false)}
           onConfirm={weeksOut => gateInput(async () => {
+            // Reconduire = répéter : chaque copie rejoint la série de sa séance d'origine (créée au besoin).
+            const seriesOf = new Map<string, string>();
+            weeksOut.flat().forEach(r => { if (r.sourceId && !seriesOf.has(r.sourceId)) seriesOf.set(r.sourceId, sessions.find(x => x.id === r.sourceId)?.series_id ?? newSeriesId()); });
+            const toLink = Array.from(seriesOf).filter(([id]) => !sessions.find(x => x.id === id)?.series_id);
+            const linkRes = await Promise.all(toLink.map(([id, sid]) => supabase.from("sessions").update({ series_id: sid }).eq("id", id)));
+            linkRes.forEach(r => { if (r.error) console.error("[reconduire] série", r.error); });
+            if (toLink.length) setSessions(prev => prev.map(x => seriesOf.has(x.id) && !x.series_id ? { ...x, series_id: seriesOf.get(x.id)! } : x));
             const inserts = weeksOut.flatMap((rows, w) => rows.map(r => ({
+              series_id: r.sourceId ? seriesOf.get(r.sourceId) ?? null : null,
               user_id: userId,
               name: r.name,
               notes: r.notes,
@@ -1142,11 +1161,16 @@ export default function WeekClient({ userId, userName, userSport = null, initial
         <AddSessionModal
           date={editing.date} session={editing} userId={userId} userName={userName ?? "Toi"} sport={userSport}
           onSave={(data, id) => gateInput(() => saveSession(data, id ?? editing.id))}
-          onDelete={() => gateInput(() => deleteSession(editing))}
+          onDelete={() => gateInput(async () => {
+            if (series.tryDelete(editing)) { setEditing(null); return; }
+            await deleteSession(editing);
+          })}
           onDuplicate={draft => { setDuplicating({ ...editing, ...draft }); setEditing(null); }}
-          onClose={() => { setEditing(null); router.refresh(); }}
+          belowTitle={series.editRow(editing)}
+          onClose={() => { series.closeEdit(editing.id); setEditing(null); router.refresh(); }}
         />
       )}
+      {series.modals}
       {duplicating && (
         <DuplicateModal session={duplicating} onDuplicate={(date, _targetAthleteIds, pct) => gateInput(() => duplicateSession(date, pct))} onClose={() => setDuplicating(null)} />
       )}

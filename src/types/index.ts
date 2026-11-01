@@ -59,6 +59,9 @@ export interface WellnessDaily {
 export interface Session {
   id: string;
   user_id: string;
+  /* Série du Planning (migration 047, /api/sessions/series). */
+  series_id?: string | null;
+  series_step?: { inten: number; vol: number } | null;
   date: string;
   name: string;
   notes: string | null;
@@ -106,6 +109,9 @@ export interface CoachAthlete {
 export interface CoachSession {
   id: string;
   coach_id: string;
+  /* Série du Planning (migration 047, /api/sessions/series). */
+  series_id?: string | null;
+  series_step?: { inten: number; vol: number } | null;
   athlete_id: string;
   date: string;
   name: string;
@@ -173,6 +179,7 @@ export interface CoachViewSession {
   target_difficulty: number | null;
   created_at: string;
   _real: boolean;          // true = sessions table, false = coach_sessions
+  series_id?: string | null;
   exercise_media?: Record<string, ExerciseAttachments> | null;
   viewed_by_athlete_at?: string | null;
   viewed_by_coach_at?: string | null;
@@ -203,6 +210,10 @@ export interface SessionTemplate {
   load: SessionLoad;
   type: SessionType;
   exercise_media?: Record<string, ExerciseAttachments> | null;
+  /* Série (2026-11-01, sessionSeries.ts) : séances d'un programme créées ensemble (Répéter, Reconduire,
+     générateur, import). Même identifiant = même structure ; series_step = progression par semaine. */
+  series_id?: string | null;
+  series_step?: { inten: number; vol: number } | null;
 }
 
 export interface WeekTemplate {

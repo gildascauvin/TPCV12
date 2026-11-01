@@ -56,11 +56,13 @@ import ProgramBanner from "@/components/programs/ProgramBanner";
 import { programWeekIndex, findProgramForWeek, type AthleteActiveProgram, programWeekTag } from "@/lib/programAssignment";
 import { programSportEmoji } from "@/lib/sportCategories";
 import { ACTIVITY_LABEL_CHANGED } from "@/components/layout/ActivityPill";
-import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { parseAndApply } from "@/lib/loadAdjust";
+import { adjustNotesCharge, adjustDifficultyCharge, type ChargeAdjust } from "@/lib/chargeAdjust";
 import type { TrendCode, TrendInput } from "@/lib/trainingLoad";
 import { computeWellnessBaselineAt, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, relativeWellnessByDate, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, ExerciseAttachments, WellnessDaily } from "@/types";
 import { toast } from "@/lib/toast";
+import { useSessionSeries } from "@/hooks/useSessionSeries";
 import { haptic } from "@/lib/native";
 
 interface Props {
@@ -625,11 +627,11 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   /* "↻ Reconduire" du bandeau programme (2026-10-01) : duplique la séance du jour vers la semaine
      suivante (date modifiable), même modale et même calcul que le Planning coach. */
   const [reconduire, setReconduire] = useState<{ athlete: CoachAthlete; session: CoachViewSession } | null>(null);
-  async function reconduireTo(newDate: string, targetAthleteIds: string[] | undefined, pct: number) {
+  async function reconduireTo(newDate: string, targetAthleteIds: string[] | undefined, adjust: ChargeAdjust) {
     if (!reconduire) return;
     const src = reconduire.session;
-    const notes = src.notes ? src.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : (src.notes ?? "");
-    const target_difficulty = adjustDifficulty(src.target_difficulty ?? 6, pct);
+    const notes = adjustNotesCharge(src.notes, adjust) ?? "";
+    const target_difficulty = adjustDifficultyCharge(src.target_difficulty ?? 6, adjust);
     const ids = targetAthleteIds?.length ? targetAthleteIds : [reconduire.athlete.id];
     const results = await Promise.all(ids.map(athleteId => callSessionAPI({ action: "add", athleteId, data: { name: src.name, notes, target_difficulty, date: newDate } })));
     setReconduire(null);
@@ -765,6 +767,13 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     headerWellnessMap = relativeWellnessByDate(wHistory, 45);
   }
 
+
+  // Séries (useSessionSeries) dans le tiroir de Coach Control, sur le sportif ouvert.
+  const series = useSessionSeries<CoachViewSession>({
+    athleteId: reviewAthlete?.id, editing: reviewSession, sessions, setSessions,
+    toRow: r => reviewAthlete?.user_id ? realToView(r as unknown as Session, athletes) : demoToView(r as unknown as CoachSession),
+    gate: fn => gateInput(fn),
+  });
   return (
     <>
       {/* Bannière du haut retirée hors sandbox (onboarding in-app, 2026-10-01) : l'étape "Débloque…"
@@ -1214,15 +1223,17 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           } : null}
           athletes={[]}
           initialAthleteId={reviewAthlete.id}
-          onSave={(data, athleteIds, id) => gateInput(() => handleSaveReview(data, athleteIds, id))}
+          onSave={async (data, athleteIds, id) => { const r = await gateInput(() => handleSaveReview(data, athleteIds, id)); if (!reviewSession) series.noteCreated(r); return r as { id: string } | void; }}
+          belowTitle={reviewSession ? series.editRow(reviewSession) : series.createRow()}
           onDuplicate={reviewSession ? (draft => { const a = reviewAthlete; const s = reviewSession; handleCloseReview(); setReconduire({ athlete: a, session: { ...s, ...draft } }); }) : undefined}
-          onClose={handleCloseReview}
+          onClose={() => { if (reviewSession) series.closeEdit(reviewSession.id); series.resetCreated(); handleCloseReview(); }}
           onMarkViewed={() => {
             if (!reviewSession) return;
             callSessionAPI({ action: "update", athleteId: reviewAthlete.id, sessionId: reviewSession.id, data: { viewed_by_coach_at: new Date().toISOString() } });
           }}
         />
       )}
+      {series.modals}
 
       {paywallStep === "priming" && (
         sandboxMode ? (

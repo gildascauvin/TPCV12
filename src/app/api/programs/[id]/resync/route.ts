@@ -46,7 +46,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       const rows = scheduleSessions(template, a.start_date, a.day_anchor)
         .filter(x => x.date > today || (x.date === today && !skipToday))
         .map(({ date, session: s }) => {
-          const base = { date, name: s.name, notes: s.notes, target_difficulty: s.target_difficulty, done: false, program_assignment_id: a.id, exercise_media: mediaForAssignment(s.exercise_media, !!a.user_id && a.user_id === user.id) };
+          const base = { date, name: s.name, notes: s.notes, target_difficulty: s.target_difficulty, done: false, program_assignment_id: a.id, exercise_media: mediaForAssignment(s.exercise_media, !!a.user_id && a.user_id === user.id), series_id: s.series_id ? `${s.series_id}:${a.id}` : null, series_step: s.series_step ?? null };
           return a.user_id ? { ...base, user_id: a.user_id } : { ...base, coach_id: a.coach_id, athlete_id: a.athlete_id };
         });
       if (rows.length) {

@@ -1,4 +1,5 @@
 import type { ProgramTemplate, WeekTemplate, SessionTemplate, ProgramLevel, ProgramFocus, SessionLoad, SessionType } from "@/types";
+import { seriesFromRepeats } from "@/lib/sessionSeries";
 
 // Périodisation par blocs de 4 semaines (MEV → Surcharge → MRV → Deload, terminologie RP) —
 // remplace l'ancienne LOAD_PATTERNS (courbe plate indexée par durée totale, aucune notion de
@@ -3632,6 +3633,7 @@ export async function POST(req: Request) {
     weeks.push(week);
   });
 
-  const template: ProgramTemplate = { weeks };
+  // Séances qui reviennent chaque semaine = séries créées comme telles (sessionSeries.ts).
+  const template: ProgramTemplate = seriesFromRepeats({ weeks });
   return Response.json({ template });
 }

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { WeekSessionCard, type SessionLike } from "@/components/calendar/DayColumn";
-import { adjustDifficulty } from "@/lib/loadAdjust";
+import { NO_ADJUST, adjustDifficultyCharge, type ChargeAdjust } from "@/lib/chargeAdjust";
+import ChargeAdjustPicker, { chargePreviewLine } from "@/components/sessions/ChargeAdjustPicker";
 import { wellnessColor } from "@/lib/wellness";
 import type { CoachAthlete } from "@/types";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
@@ -10,19 +11,11 @@ import { useExitAnimation } from "@/hooks/useExitAnimation";
 
 function scoreColor(s: number) { return wellnessColor(s); }
 
-type Mode = "deload" | "maintien" | "surcharge";
-const CHIP_VALUES = [2.5, 5, 10, 15, 20];
-
-function fmtNum(n: number): string {
-  return n % 1 === 0 ? String(n) : String(n).replace(".", ",");
-}
 
 interface DuplicateModalProps {
   session: SessionLike;
-  /* pct : même convention que ReconduireModal — 0 en mode Maintien, négatif en Décharge, positif
-     en Surcharge. Toujours transmis (jamais optionnel) pour que l'appelant applique l'ajustement
-     de la même façon, qu'il soit nul ou non. */
-  onDuplicate: (newDate: string, targetAthleteIds: string[] | undefined, pct: number) => Promise<void>;
+  /* Réglage Intensité / Séries / Répétitions (chargeAdjust.ts), toujours transmis, même à zéro. */
+  onDuplicate: (newDate: string, targetAthleteIds: string[] | undefined, adjust: ChargeAdjust) => Promise<void>;
   onClose: () => void;
   /* Coach uniquement — permet de dupliquer vers un ou plusieurs sportifs différents de celui
      actuellement consulté, même pattern que ReconduireModal.athletes/sourceAthleteId. Absent =
@@ -37,8 +30,7 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
   const { isMd } = useBreakpoint();
   const { close, exitClass } = useExitAnimation(onClose);
   const [newDate, setNewDate] = useState(defaultDate ?? session.date);
-  const [mode, setMode] = useState<Mode>("maintien");
-  const [customPct, setCustomPct] = useState(10);
+  const [adjust, setAdjust] = useState<ChargeAdjust>(NO_ADJUST);
   const [saving, setSaving] = useState(false);
   const [recipients, setRecipients] = useState<string[]>(() => sourceAthleteId ? [sourceAthleteId] : []);
 
@@ -46,23 +38,16 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
   function toggleRecipient(id: string) {
     setRecipients(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
-  const currentPct = mode === "maintien" ? 0 : mode === "deload" ? -customPct : customPct;
   const canDuplicate = !showRecipients || recipients.length > 0;
 
   async function handleDuplicate() {
     if (!canDuplicate) return;
     setSaving(true);
-    await onDuplicate(newDate, showRecipients ? recipients : undefined, currentPct);
+    await onDuplicate(newDate, showRecipients ? recipients : undefined, adjust);
     setSaving(false);
   }
 
-  const modeCards: { key: Mode; icon: string; label: string; sub: string }[] = [
-    { key: "deload", icon: "📉", label: "Décharge", sub: `−${fmtNum(customPct)}%` },
-    { key: "maintien", icon: "⏸", label: "Maintien", sub: "Identique" },
-    { key: "surcharge", icon: "📈", label: "Surcharge", sub: `+${fmtNum(customPct)}%` },
-  ];
-
-  const newDiff = adjustDifficulty(session.target_difficulty ?? 6, currentPct);
+  const newDiff = adjustDifficultyCharge(session.target_difficulty ?? 6, adjust);
   const previewSession: SessionLike = {
     id: session.id, date: newDate, name: session.name, notes: session.notes,
     duration: session.duration ?? null, rpe: null, done: false, target_difficulty: newDiff,
@@ -106,51 +91,7 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
             />
           </div>
 
-          {/* Mode de charge */}
-          <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
-            Charge de la copie
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: mode !== "maintien" ? 14 : 20 }}>
-            {modeCards.map(m => (
-              <div
-                key={m.key}
-                onClick={() => setMode(m.key)}
-                style={{
-                  border: `2px solid ${mode === m.key ? "#d44000" : "#eee"}`,
-                  background: mode === m.key ? "rgba(212,64,0,.05)" : "#fff",
-                  borderRadius: 16, padding: "12px 8px", textAlign: "center", cursor: "pointer",
-                }}
-              >
-                <div style={{ fontSize: 20, marginBottom: 4 }}>{m.icon}</div>
-                <div style={{ fontSize: 12.5, fontWeight: 800, color: mode === m.key ? "#d44000" : "#171b1f" }}>{m.label}</div>
-                <div style={{ fontSize: 10.5, color: "#8a8f94", marginTop: 2 }}>{m.sub}</div>
-              </div>
-            ))}
-          </div>
-
-          {mode !== "maintien" && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-              {CHIP_VALUES.map(v => {
-                const active = v === customPct;
-                const sign = mode === "deload" ? "−" : "+";
-                return (
-                  <button
-                    key={v}
-                    onClick={() => setCustomPct(v)}
-                    style={{
-                      padding: "9px 16px", borderRadius: 999, fontSize: 14, fontWeight: 800, cursor: "pointer",
-                      border: `1.5px solid ${active ? "#d44000" : "rgba(0,0,0,.12)"}`,
-                      background: active ? "linear-gradient(180deg,#f04a08,#d44000)" : "#fff",
-                      color: active ? "#fff" : "#62686e",
-                      boxShadow: active ? "0 4px 12px rgba(212,64,0,.22)" : "none",
-                    }}
-                  >
-                    {sign}{fmtNum(v)}%
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <ChargeAdjustPicker value={adjust} onChange={setAdjust} />
 
           {/* Sportifs destinataires — coach uniquement */}
           {showRecipients && (
@@ -214,7 +155,7 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
             onDuplicate={() => {}}
             hideActions
             cardStyle={{ cursor: "default" }}
-            adjustPct={currentPct}
+            renderExerciseLine={chargePreviewLine(adjust)}
           />
         </div>
 

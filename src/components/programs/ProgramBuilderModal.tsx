@@ -1,19 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import type { ProgramTemplate, SessionTemplate, WeekTemplate, Session } from "@/types";
 import AddSessionModal from "@/components/sessions/AddSessionModal";
 import ReconduireModal, { type ReconduireOutputRow } from "@/components/sessions/ReconduireModal";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
-import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { NO_ADJUST, adjustNotesCharge, adjustDifficultyCharge, type ChargeAdjust } from "@/lib/chargeAdjust";
+import ChargeAdjustPicker, { chargePreviewLine } from "@/components/sessions/ChargeAdjustPicker";
+import { SeriesChoiceModal, RepeatModal, SeriesRow } from "@/components/sessions/SeriesModals";
 import { ExerciseLineView, type ExerciseLineViewData } from "@/components/sessions/ExerciseLineView";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
-import { diffSessionLines, isEmptyDiff, followingTargets, applyDiffToFollowingWeeks, exerciseLabel, type LineDiff } from "@/lib/propagateSessionEdit";
+import { newSeriesId, editSummary, following, propagateEdit, moveFollowing, deleteFollowing, repeatSession, seriesLabel, hasSessionChange, type SessionState } from "@/lib/sessionSeries";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { SessionTemplateCard, avgWeekRpe, loadBarColor } from "@/components/programs/SessionTemplateCard";
 import AlertBox from "@/components/calendar/AlertBox";
+import PeriodPill from "@/components/calendar/PeriodPill";
 import { computeAutoregSuggestion, suggestionSeverityColor, autoregHeadline, autoregAdvice, formatAutoregPoints, applyAutoregDifficulty } from "@/lib/autoregulation";
 import { relativeZoneLabel } from "@/lib/wellnessBaseline";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
@@ -112,41 +115,29 @@ function DraggableProgramExercise({ day, sIdx, exIdx, view }: { day: string; sId
    position (semaine + jour de la semaine "Lun".."Dim"), jamais de date réelle — même contrainte déjà
    contournée par Reconduire dans ce fichier (`daySlots` positionnel, `date: ""` factice). Modal
    locale dédiée, pas exportée : sélection semaine + jour au lieu d'un date picker. */
-type DuplicateChargeMode = "deload" | "maintien" | "surcharge";
-const DUPLICATE_CHIP_VALUES = [2.5, 5, 10, 15, 20];
-function fmtPct(n: number): string {
-  return n % 1 === 0 ? String(n) : String(n).replace(".", ",");
-}
 
-function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultDay, onClose, onConfirm }: {
-  /* Toutes les séances du jour source — un sélecteur "Séance" n'apparaît que si plusieurs (le
-     déclencheur est par jour, pas par carte, voir la ligne "+ Ajouter une séance"). */
+function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultDay, defaultSourceIdx = 0, onClose, onConfirm }: {
+  /* Toutes les séances du jour source — un sélecteur "Séance" n'apparaît que si plusieurs.
+     Ouvert depuis le pied du tiroir de séance (⎘ Dupliquer), comme au Planning. */
   sessions: SessionTemplate[];
   weeksCount: number;
   defaultWeekIdx: number;
   defaultDay: string;
+  /* Ouvert depuis le tiroir d'une séance (⎘ Dupliquer, comme au Planning) : cette séance-là. */
+  defaultSourceIdx?: number;
   onClose: () => void;
-  /* pct : même convention que ReconduireModal/DuplicateModal — 0 en Maintien, négatif en Décharge,
-     positif en Surcharge. */
-  onConfirm: (sourceIdx: number, targetWeekIdx: number, targetDay: string, pct: number) => void;
+  onConfirm: (sourceIdx: number, targetWeekIdx: number, targetDay: string, adjust: ChargeAdjust) => void;
 }) {
   const { isMd } = useBreakpoint();
   const { close, exitClass } = useExitAnimation(onClose);
-  const [sourceIdx, setSourceIdx] = useState(0);
+  const [sourceIdx, setSourceIdx] = useState(defaultSourceIdx);
   const [targetWeek, setTargetWeek] = useState(defaultWeekIdx);
   const [targetDay, setTargetDay] = useState(defaultDay);
-  const [mode, setMode] = useState<DuplicateChargeMode>("maintien");
-  const [customPct, setCustomPct] = useState(10);
+  const [adjust, setAdjust] = useState<ChargeAdjust>(NO_ADJUST);
   const session = sessions[sourceIdx];
   if (!session) return null;
 
-  const currentPct = mode === "maintien" ? 0 : mode === "deload" ? -customPct : customPct;
-  const modeCards: { key: DuplicateChargeMode; icon: string; label: string; sub: string }[] = [
-    { key: "deload", icon: "📉", label: "Décharge", sub: `−${fmtPct(customPct)}%` },
-    { key: "maintien", icon: "⏸", label: "Maintien", sub: "Identique" },
-    { key: "surcharge", icon: "📈", label: "Surcharge", sub: `+${fmtPct(customPct)}%` },
-  ];
-  const newDiff = adjustDifficulty(session.target_difficulty ?? 6, currentPct);
+  const newDiff = adjustDifficultyCharge(session.target_difficulty ?? 6, adjust);
   const previewSession: SessionTemplate = { ...session, target_difficulty: newDiff };
 
   return (
@@ -216,51 +207,7 @@ function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultD
             </div>
           </div>
 
-          {/* Charge de la copie — même mécanique que ReconduireModal/DuplicateModal (Planning) */}
-          <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
-            Charge de la copie
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: mode !== "maintien" ? 14 : 20 }}>
-            {modeCards.map(m => (
-              <div
-                key={m.key}
-                onClick={() => setMode(m.key)}
-                style={{
-                  border: `2px solid ${mode === m.key ? "#d44000" : "#eee"}`,
-                  background: mode === m.key ? "rgba(212,64,0,.05)" : "#fff",
-                  borderRadius: 16, padding: "12px 8px", textAlign: "center", cursor: "pointer",
-                }}
-              >
-                <div style={{ fontSize: 20, marginBottom: 4 }}>{m.icon}</div>
-                <div style={{ fontSize: 12.5, fontWeight: 800, color: mode === m.key ? "#d44000" : "#171b1f" }}>{m.label}</div>
-                <div style={{ fontSize: 10.5, color: "#8a8f94", marginTop: 2 }}>{m.sub}</div>
-              </div>
-            ))}
-          </div>
-
-          {mode !== "maintien" && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-              {DUPLICATE_CHIP_VALUES.map(v => {
-                const active = v === customPct;
-                const sign = mode === "deload" ? "−" : "+";
-                return (
-                  <button
-                    key={v}
-                    onClick={() => setCustomPct(v)}
-                    style={{
-                      padding: "9px 16px", borderRadius: 999, fontSize: 14, fontWeight: 800, cursor: "pointer",
-                      border: `1.5px solid ${active ? "#d44000" : "rgba(0,0,0,.12)"}`,
-                      background: active ? "linear-gradient(180deg,#f04a08,#d44000)" : "#fff",
-                      color: active ? "#fff" : "#62686e",
-                      boxShadow: active ? "0 4px 12px rgba(212,64,0,.22)" : "none",
-                    }}
-                  >
-                    {sign}{fmtPct(v)}%
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <ChargeAdjustPicker value={adjust} onChange={setAdjust} />
 
           {/* Aperçu — même carte que le builder (SessionTemplateCard), diff avant/après si la
               charge a été ajustée. */}
@@ -269,7 +216,7 @@ function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultD
           </div>
           <SessionTemplateCard
             session={previewSession}
-            adjustPct={currentPct}
+            renderExerciseLine={chargePreviewLine(adjust)}
           />
         </div>
 
@@ -281,7 +228,7 @@ function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultD
             Annuler
           </button>
           <button
-            onClick={() => onConfirm(sourceIdx, targetWeek, targetDay, currentPct)}
+            onClick={() => onConfirm(sourceIdx, targetWeek, targetDay, adjust)}
             style={{ flex: 1, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", borderRadius: 12, padding: "11px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
           >
             ⎘ Dupliquer
@@ -365,11 +312,29 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
   const [template, setTemplate] = useState<ProgramTemplate>(initialTemplate);
   const [weekIdx, setWeekIdx] = useState(0);
   const [showReconduire, setShowReconduire] = useState(false);
+  const [weekMenu, setWeekMenu] = useState(false);
+  const [confirmDeleteWeek, setConfirmDeleteWeek] = useState(false);
+  // Le menu ⋯ des semaines se ferme quand on touche ailleurs.
+  const weekMenuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!weekMenu) return;
+    const onDown = (e: PointerEvent) => { if (!weekMenuRef.current?.contains(e.target as Node)) { setWeekMenu(false); setConfirmDeleteWeek(false); } };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [weekMenu]);
   const [editingTarget, setEditingTarget] = useState<EditingTarget | null>(null);
   // État de la séance à l'ouverture du tiroir, pour proposer d'appliquer ajouts/retraits aux semaines suivantes.
-  const [editSnapshot, setEditSnapshot] = useState<{ name: string; notes: string | null } | null>(null);
-  const [propagatePrompt, setPropagatePrompt] = useState<{ weekIdx: number; day: string; sessionName: string; diff: LineDiff; count: number; firstWeek: number; lastWeek: number } | null>(null);
-  const [duplicateDay, setDuplicateDay] = useState<{ weekIdx: number; day: string } | null>(null);
+  const [editSnapshot, setEditSnapshot] = useState<SessionState | null>(null);
+  /* Séries (sessionSeries.ts) : question « Cette séance / Celle-ci et les suivantes » après une
+     modification, un déplacement ou une suppression d'une séance de série. */
+  const [recurPrompt, setRecurPrompt] = useState<{
+    kind: "edit" | "move" | "delete"; weekIdx: number; day: string; sIdx: number; seriesId: string; sessionName: string;
+    summary?: string; weeks: number[]; before?: SessionState; after?: SessionState; toDay?: string;
+  } | null>(null);
+  // « Répéter chaque semaine jusqu'à Sx » depuis le tiroir d'une séance seule.
+  const [repeatFor, setRepeatFor] = useState<EditingTarget | null>(null);
+
+  const [duplicateDay, setDuplicateDay] = useState<{ weekIdx: number; day: string; sIdx: number } | null>(null);
   const [saving, setSaving] = useState<"library" | "assign" | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
@@ -458,13 +423,13 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
 
   function openEditor(t: EditingTarget) {
     const s = template.weeks[t.weekIdx]?.[t.day]?.[t.sessionIdx] as SessionTemplate | undefined;
-    setEditSnapshot(s ? { name: s.name, notes: s.notes } : null);
+    setEditSnapshot(s ? { name: s.name, notes: s.notes, target_difficulty: s.target_difficulty } : null);
     setEditingTarget(t);
   }
 
   /* Le tiroir enregistre sa dernière frappe juste avant de se fermer : on compare après le rendu
      suivant, sur le template à jour, pas dans la closure de onClose. */
-  const [pendingCompare, setPendingCompare] = useState<{ t: EditingTarget; snap: { name: string; notes: string | null } } | null>(null);
+  const [pendingCompare, setPendingCompare] = useState<{ t: EditingTarget; snap: SessionState } | null>(null);
   function closeEditor() {
     if (editingTarget && editSnapshot) setPendingCompare({ t: editingTarget, snap: editSnapshot });
     setEditingTarget(null);
@@ -475,17 +440,22 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
     const { t, snap } = pendingCompare;
     setPendingCompare(null);
     const now = template.weeks[t.weekIdx]?.[t.day]?.[t.sessionIdx] as SessionTemplate | undefined;
-    if (!now) return;
-    const diff = diffSessionLines(snap.notes, now.notes);
-    if (isEmptyDiff(diff)) return;
-    const targets = followingTargets(template, t.weekIdx, snap.name, t.day);
-    if (!targets.length) return;
-    const weeksHit = targets.map(x => x.weekIdx);
-    setPropagatePrompt({ weekIdx: t.weekIdx, day: t.day, sessionName: snap.name, diff, count: targets.length, firstWeek: Math.min(...weeksHit), lastWeek: Math.max(...weeksHit) });
+    if (!now?.series_id) return;
+    const after: SessionState = { name: now.name, notes: now.notes, target_difficulty: now.target_difficulty };
+    if (!hasSessionChange(snap, after)) return;
+    const weeks = Array.from(new Set(following(template, now.series_id, t.weekIdx).map(o => o.weekIdx)));
+    if (!weeks.length) return;
+    const summary = editSummary(snap, after);
+    setRecurPrompt({ kind: "edit", weekIdx: t.weekIdx, day: t.day, sIdx: t.sessionIdx, seriesId: now.series_id, sessionName: snap.name, summary, weeks, before: snap, after });
   }, [pendingCompare, template]);
 
   function moveSessionToDay(fromDay: string, sIdx: number, toDay: string) {
     if (fromDay === toDay) return;
+    const moving = (template.weeks[weekIdx]?.[fromDay] as SessionTemplate[] | undefined)?.[sIdx];
+    if (moving?.series_id) {
+      const weeks = Array.from(new Set(following(template, moving.series_id, weekIdx).map(o => o.weekIdx)));
+      if (weeks.length) { setRecurPrompt({ kind: "move", weekIdx, day: fromDay, sIdx, seriesId: moving.series_id, sessionName: moving.name, weeks, toDay }); }
+    }
     setTemplate(prev => ({
       weeks: prev.weeks.map((w, wi) => {
         if (wi !== weekIdx) return w;
@@ -506,6 +476,9 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
   function moveExerciseInTemplate(fromDay: string, fromSIdx: number, fromExIdx: number, toDay: string, toSIdx: number, toExIdx: number | null) {
     const sameSession = fromDay === toDay && fromSIdx === toSIdx;
     if (sameSession && toExIdx === fromExIdx) return;
+    // Réordonner par glisser dans une séance propose aussi « Cette semaine et les suivantes ».
+    const moved = (template.weeks[weekIdx]?.[fromDay] as SessionTemplate[] | undefined)?.[fromSIdx];
+    if (sameSession && moved) setPendingCompare({ t: { weekIdx, day: fromDay, sessionIdx: fromSIdx }, snap: { name: moved.name, notes: moved.notes, target_difficulty: moved.target_difficulty } });
     setTemplate(prev => {
       const w = prev.weeks[weekIdx];
       if (!w) return prev;
@@ -562,33 +535,50 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
 
   function applyReconduire(weeksOut: ReconduireOutputRow[][]) {
     const startIdx = template.weeks.length;
+    // Reconduire = répéter : chaque copie rejoint la série de sa séance d'origine (créée au besoin).
+    const last = template.weeks[template.weeks.length - 1];
+    const ids = new Map<string, string>();
+    weeksOut.flat().forEach(r => {
+      if (!r.sourceId || ids.has(r.sourceId)) return;
+      const [d, i] = r.sourceId.split(":");
+      const src = (last?.[d] as SessionTemplate[] | undefined)?.[Number(i)];
+      if (src) ids.set(r.sourceId, src.series_id ?? newSeriesId());
+    });
     const newWeeks: WeekTemplate[] = weeksOut.map(rows => {
       const w: WeekTemplate = {};
       DAYS.forEach(d => { w[d] = []; });
       rows.forEach(r => {
         (w[DAYS[r.dayIndex]] as SessionTemplate[]).push({
           name: r.name, notes: r.notes || null, target_difficulty: r.target_difficulty, load: 2, type: "volume",
+          ...(r.sourceId && ids.get(r.sourceId) ? { series_id: ids.get(r.sourceId) } : {}),
         });
       });
       return w;
     });
-    setTemplate(prev => ({ weeks: [...prev.weeks, ...newWeeks] }));
+    setTemplate(prev => {
+      const lastIdx = prev.weeks.length - 1;
+      const weeks = prev.weeks.map((w, wi) => wi !== lastIdx ? w : Object.fromEntries(Object.entries(w).map(([d, list]) => [d,
+        ((list ?? []) as SessionTemplate[]).map((x, i) => { const id = ids.get(`${d}:${i}`); return id && !x.series_id ? { ...x, series_id: id } : x; }),
+      ])) as WeekTemplate);
+      return { weeks: [...weeks, ...newWeeks] };
+    });
     setWeekIdx(startIdx);
     setShowReconduire(false);
   }
 
-  function duplicateSession(source: { weekIdx: number; day: string }, sourceIdx: number, targetWeekIdx: number, targetDay: string, pct: number = 0) {
+  function duplicateSession(source: { weekIdx: number; day: string }, sourceIdx: number, targetWeekIdx: number, targetDay: string, adjust: ChargeAdjust = NO_ADJUST) {
     const sourceSession = ((template.weeks[source.weekIdx]?.[source.day] ?? []) as SessionTemplate[])[sourceIdx];
     if (!sourceSession) return;
-    const notes = sourceSession.notes ? sourceSession.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : sourceSession.notes;
-    const target_difficulty = adjustDifficulty(sourceSession.target_difficulty ?? 6, pct);
+    const notes = adjustNotesCharge(sourceSession.notes, adjust);
+    const target_difficulty = adjustDifficultyCharge(sourceSession.target_difficulty ?? 6, adjust);
     setTemplate(prev => {
       const weeks = targetWeekIdx >= prev.weeks.length
         ? [...prev.weeks, DAYS.reduce((w, d) => ({ ...w, [d]: [] }), {} as WeekTemplate)]
         : prev.weeks;
       return {
         weeks: weeks.map((w, wi) => wi !== targetWeekIdx ? w : {
-          ...w, [targetDay]: [...((w[targetDay] ?? []) as SessionTemplate[]), { ...sourceSession, notes, target_difficulty }],
+          // Dupliquer = copie indépendante (comme Google Agenda) : jamais dans la série de l'original.
+          ...w, [targetDay]: [...((w[targetDay] ?? []) as SessionTemplate[]), { ...sourceSession, notes, target_difficulty, series_id: null, series_step: null }],
         }),
       };
     });
@@ -722,40 +712,72 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
         )}
       </div>
 
-      {/* Week tabs */}
-      <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,.08)", padding: "0 18px", display: "flex", alignItems: "flex-end", height: 56, gap: 0, overflowX: "auto", flexShrink: 0 }}>
-        {template.weeks.map((w, i) => {
-          const avg = weekAvgLoads[i];
-          const barH = Math.max(4, Math.round((avg / maxAvgLoad) * 26));
-          const isActive = i === weekIdx;
-          return (
-            <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 3, padding: "0 4px 8px", borderBottom: isActive ? "2.5px solid #d44000" : "2.5px solid transparent", flexShrink: 0, position: "relative" }}>
-              <div style={{ width: 18, height: barH, borderRadius: "2px 2px 0 0", background: loadBarColor(avg), opacity: isActive ? 1 : 0.55, cursor: "pointer" }} onClick={() => setWeekIdx(i)} />
-              <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <span onClick={() => setWeekIdx(i)} style={{ fontSize: 11, fontWeight: isActive ? 800 : 500, color: isActive ? "#171b1f" : "#8a8f94", cursor: "pointer", padding: "0 4px" }}>S{i + 1}</span>
-                {isActive && template.weeks.length > 1 && (
-                  <button
-                    onClick={e => { e.stopPropagation(); deleteWeek(i); }}
-                    title="Supprimer cette semaine"
-                    style={{ width: 14, height: 14, borderRadius: "50%", border: "none", background: "rgba(212,64,0,.15)", color: "#d44000", fontSize: 9, fontWeight: 900, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1, flexShrink: 0 }}
-                  >×</button>
+      {(() => {
+        const pill = (
+          <PeriodPill tone="light"
+            onPrev={() => setWeekIdx(i => Math.max(0, i - 1))} prevDisabled={weekIdx === 0}
+            onNext={() => setWeekIdx(i => Math.min(template.weeks.length - 1, i + 1))} nextDisabled={weekIdx === template.weeks.length - 1}
+          >
+            <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 800, color: "#171b1f", padding: "0 4px", whiteSpace: "nowrap" }}>Semaine {weekIdx + 1} sur {template.weeks.length}</span>
+          </PeriodPill>
+        );
+        const bars = (
+          <div style={{ minWidth: 0, display: "flex", gap: 4, alignItems: "flex-end", height: 26, overflowX: "auto" }}>
+            {template.weeks.map((_, i) => {
+              const avg = weekAvgLoads[i];
+              const on = i === weekIdx;
+              return (
+                <div key={i} onClick={() => setWeekIdx(i)} title={`Semaine ${i + 1}`} style={{ width: 14, flexShrink: 0, height: Math.max(4, Math.round((avg / maxAvgLoad) * 24)), borderRadius: "2px 2px 0 0", background: loadBarColor(avg), opacity: on ? 1 : 0.35, outline: on ? "2px solid #171b1f" : "none", outlineOffset: 1, cursor: "pointer" }} />
+              );
+            })}
+          </div>
+        );
+        const actions = (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end", flexShrink: 0 }}>
+            <button onClick={() => setShowReconduire(true)} style={{ padding: "6px 11px", borderRadius: 12, border: "1px solid rgba(0,0,0,.12)", cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11, whiteSpace: "nowrap" }}>
+              Reconduire →
+            </button>
+            {template.weeks.length > 1 && (
+              <div ref={weekMenuRef} style={{ position: "relative" }}>
+                <button aria-label="Plus d'actions sur la semaine" onClick={() => { setWeekMenu(m => !m); setConfirmDeleteWeek(false); }} style={{ width: 30, height: 30, borderRadius: 10, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#62686e", fontSize: 15, cursor: "pointer" }}>⋯</button>
+                {weekMenu && (
+                  <div style={{ position: "absolute", right: 0, top: 36, zIndex: 20, background: "#fff", borderRadius: 14, boxShadow: "0 12px 32px rgba(0,0,0,.18)", border: "1px solid rgba(0,0,0,.08)", padding: 6, minWidth: 210 }}>
+                    <button
+                      onClick={() => {
+                        if (!confirmDeleteWeek) { setConfirmDeleteWeek(true); return; }
+                        deleteWeek(weekIdx); setWeekMenu(false); setConfirmDeleteWeek(false);
+                      }}
+                      style={{ width: "100%", textAlign: "left", padding: "10px 12px", borderRadius: 10, border: "none", background: confirmDeleteWeek ? "#fee2e2" : "transparent", color: "#c81e1e", fontSize: 13, fontWeight: 800, cursor: "pointer" }}
+                    >
+                      {confirmDeleteWeek ? `Confirmer : supprimer la semaine ${weekIdx + 1}` : `🗑 Supprimer la semaine ${weekIdx + 1}`}
+                    </button>
+                  </div>
                 )}
               </div>
-            </div>
-          );
-        })}
-        <div style={{ flex: 1, minWidth: 12 }} />
-        <button
-          onClick={() => setShowReconduire(true)}
-          style={{
-            margin: "0 0 12px", padding: "6px 13px", borderRadius: 12, border: "1px solid rgba(0,0,0,.12)",
-            cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11,
-            display: "flex", alignItems: "center", flexShrink: 0, whiteSpace: "nowrap",
-          }}
-        >
-          Reconduire la semaine →
-        </button>
-      </div>
+            )}
+          </div>
+        );
+        /* Semaines (2026-11-01) : même pilule « ‹ … › » que le sélecteur de date du Planning, centrée ;
+           barres de charge (cliquables) à gauche, dessous sur mobile. Supprimer une semaine passe par
+           le menu ⋯ avec confirmation (un × à côté du titre était trop facile à toucher). */
+        return (
+          <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,.08)", padding: "10px 14px", flexShrink: 0 }}>
+            {isMd ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 12 }}>
+                {bars}{pill}{actions}
+              </div>
+            ) : (
+              <>
+                <div style={{ display: "flex", justifyContent: "center" }}>{pill}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>{bars}</div>
+                  {actions}
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Warning: programme with active assignments */}
       {assignmentCount > 0 && (
@@ -854,13 +876,6 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
                   >
                     + Ajouter une séance
                   </div>
-                  {daySessions.length > 0 && (
-                    <button
-                      onClick={() => setDuplicateDay({ weekIdx, day })}
-                      title="Dupliquer"
-                      style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid rgba(0,0,0,.09)", background: "#f7f8f9", color: "#8a8f94", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                    >⎘</button>
-                  )}
                 </div>}
               </div>
             </div>
@@ -935,8 +950,9 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
             weeksCount={template.weeks.length}
             defaultWeekIdx={duplicateDay.weekIdx}
             defaultDay={duplicateDay.day}
+            defaultSourceIdx={duplicateDay.sIdx}
             onClose={() => setDuplicateDay(null)}
-            onConfirm={(sourceIdx, targetWeekIdx, targetDay, pct) => duplicateSession(duplicateDay, sourceIdx, targetWeekIdx, targetDay, pct)}
+            onConfirm={(sourceIdx, targetWeekIdx, targetDay, adjust) => duplicateSession(duplicateDay, sourceIdx, targetWeekIdx, targetDay, adjust)}
           />
         );
       })()}
@@ -955,47 +971,79 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
             // onClose s'en charge séparément.
             updateSession(editingTarget.weekIdx, editingTarget.day, editingTarget.sessionIdx, { name: data.name, notes: data.notes || null, target_difficulty: data.target_difficulty, exercise_media: data.exercise_media });
           }}
-          onDelete={async () => { removeSession(editingTarget.weekIdx, editingTarget.day, editingTarget.sessionIdx); setEditingTarget(null); setEditSnapshot(null); }}
+          onDelete={async () => {
+            const t = editingTarget;
+            const sid = (template.weeks[t.weekIdx]?.[t.day] as SessionTemplate[] | undefined)?.[t.sessionIdx]?.series_id;
+            const weeks = sid ? Array.from(new Set(following(template, sid, t.weekIdx).map(o => o.weekIdx))) : [];
+            setEditingTarget(null); setEditSnapshot(null);
+            if (sid && weeks.length) { setRecurPrompt({ kind: "delete", weekIdx: t.weekIdx, day: t.day, sIdx: t.sessionIdx, seriesId: sid, sessionName: editingSession.name, weeks }); return; }
+            removeSession(t.weekIdx, t.day, t.sessionIdx);
+          }}
+          belowTitle={
+            <SeriesRow
+              label={seriesLabel(template, editingSession.series_id, d => DAY_NAMES[d] ?? d)}
+              onRepeat={editingTarget.weekIdx < template.weeks.length - 1 ? () => setRepeatFor(editingTarget) : undefined}
+            />
+          }
+          onDuplicate={() => {
+            // Même pied de tiroir que le Planning : 🗑 · ⎘ Dupliquer · Fermer.
+            setDuplicateDay({ weekIdx: editingTarget.weekIdx, day: editingTarget.day, sIdx: editingTarget.sessionIdx });
+            setEditingTarget(null);
+            setEditSnapshot(null);
+          }}
           onClose={closeEditor}
           topOffset={topOffset}
         />
       )}
 
-      {propagatePrompt && (() => {
-        const p = propagatePrompt;
-        const added = p.diff.added.map(a => exerciseLabel(a.line));
-        const removedNames = p.diff.removedKeys.length;
-        const weeksLabel = p.firstWeek === p.lastWeek ? `la semaine ${p.firstWeek + 1}` : `les semaines ${p.firstWeek + 1} à ${p.lastWeek + 1}`;
-        const list = (xs: string[]) => xs.length <= 3 ? xs.join(", ") : `${xs.slice(0, 3).join(", ")} et ${xs.length - 3} autre${xs.length - 3 > 1 ? "s" : ""}`;
-        const apply = () => {
-          setTemplate(prev => applyDiffToFollowingWeeks(prev, p.weekIdx, p.sessionName, p.diff, p.day));
-          setPropagatePrompt(null);
-        };
+      {recurPrompt && (() => {
+        const p = recurPrompt;
+        const dayLow = (d: string) => (DAY_NAMES[d] ?? d).toLowerCase();
+        const title = p.kind === "edit" ? `Modifier « ${p.sessionName} » du ${dayLow(p.day)}`
+          : p.kind === "move" ? `Déplacer « ${p.sessionName} » au ${dayLow(p.toDay ?? p.day)}`
+          : `Supprimer « ${p.sessionName} »`;
         return (
-          <div
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, zIndex: 2147483200 }}
-            onClick={e => { if (e.target === e.currentTarget) setPropagatePrompt(null); }}
-          >
-            <div style={{ background: "#fff", color: "#171b1f", borderRadius: 30, padding: 28, maxWidth: 380, width: "100%", boxShadow: "0 42px 120px rgba(0,0,0,.34)", animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 10 }}>Appliquer aux semaines suivantes ?</div>
-              <div style={{ fontSize: 14, color: "#62686e", lineHeight: 1.5, marginBottom: 8 }}>
-                Chaque semaine du programme est indépendante. Tes changements sur « {p.sessionName} » ne concernent pour l&apos;instant que la semaine {p.weekIdx + 1}.
-              </div>
-              <div style={{ fontSize: 13, color: "#171b1f", lineHeight: 1.5, marginBottom: 8 }}>
-                {added.length > 0 && <div>+ Ajouté : {list(added)}</div>}
-                {removedNames > 0 && <div>− Retiré : {removedNames} exercice{removedNames > 1 ? "s" : ""}</div>}
-              </div>
-              <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.5, marginBottom: 20 }}>
-                On les reporte sur {p.count} séance{p.count > 1 ? "s" : ""} « {p.sessionName} » dans {weeksLabel}. Les séries et charges de chaque semaine ne bougent pas.
-              </div>
-              <button onClick={apply} style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
-                Appliquer aux semaines suivantes
-              </button>
-              <button onClick={() => setPropagatePrompt(null)} style={{ width: "100%", padding: "12px 0", borderRadius: 12, border: "1px solid rgba(0,0,0,.10)", background: "#faf9f7", color: "#555", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
-                Seulement cette semaine
-              </button>
-            </div>
-          </div>
+          <SeriesChoiceModal
+            title={title}
+            summary={p.summary}
+            untilOptions={p.kind === "edit" ? p.weeks.map(i => ({ value: String(i), label: `S${i + 1}` })) : undefined}
+            defaultAll={p.kind !== "delete"}
+            confirmLabel={p.kind === "delete" ? "Supprimer" : "OK"}
+            onCancel={p.kind === "delete" ? () => setRecurPrompt(null) : undefined}
+            onConfirm={(all, until) => {
+              if (all) {
+                if (p.kind === "edit" && p.before && p.after) {
+                  const step = (template.weeks[p.weekIdx]?.[p.day] as SessionTemplate[] | undefined)?.[p.sIdx]?.series_step;
+                  const untilIdx = until != null ? Number(until) : p.weeks[p.weeks.length - 1];
+                  setTemplate(prev => propagateEdit(prev, p.seriesId, p.weekIdx, untilIdx, p.before!, p.after!, step));
+                }
+                if (p.kind === "move" && p.toDay) setTemplate(prev => moveFollowing(prev, p.seriesId, p.weekIdx, p.toDay!));
+                if (p.kind === "delete") setTemplate(prev => deleteFollowing(prev, p.seriesId, p.weekIdx));
+              } else if (p.kind === "delete") removeSession(p.weekIdx, p.day, p.sIdx);
+              setRecurPrompt(null);
+            }}
+          />
+        );
+      })()}
+
+      {repeatFor && (() => {
+        const t = repeatFor;
+        const src = (template.weeks[t.weekIdx]?.[t.day] as SessionTemplate[] | undefined)?.[t.sessionIdx];
+        if (!src) return null;
+        const options = Array.from({ length: template.weeks.length - t.weekIdx - 1 }, (_, k) => t.weekIdx + 1 + k);
+        return (
+          <RepeatModal
+            sessionName={src.name}
+            dayLabel={(DAY_NAMES[t.day] ?? t.day).toLowerCase()}
+            untilOptions={options.map(i => ({ value: String(i), label: `S${i + 1}` }))}
+            onCancel={() => setRepeatFor(null)}
+            onConfirm={(until, step) => {
+              setTemplate(prev => repeatSession(prev, { weekIdx: t.weekIdx, day: t.day, sIdx: t.sessionIdx }, Number(until), step));
+              // Le tiroir reste ouvert : sa comparaison repart de l'état répété (pas de question en double).
+              setEditSnapshot({ name: src.name, notes: src.notes, target_difficulty: src.target_difficulty });
+              setRepeatFor(null);
+            }}
+          />
         );
       })()}
     </div>

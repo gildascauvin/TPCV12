@@ -903,3 +903,12 @@ POC : https://claude.ai/artifact/PgTQbMYpsUhqCounWHL28M. Commit `c08e21f`. Mobil
 - **En-tête de semaine** : « Cette semaine » / « Sem. du 3 nov. » + titre programme, non sticky (`overflow-x:hidden` sur `html, body` casse `position:sticky`), sans compteur de séances (retiré à la demande).
 - **Non fait** : suivi PostHog de la bascule (pas d'événement, adoption non mesurable pour l'instant).
 - Vérifié : `tsc`. Rendu testé par Gildas en local.
+
+## 2026-11-01 — Séances en série (façon Google Agenda) et réglages Intensité / Volume
+Départ : Maxime Leblois avait ajouté son échauffement et des exercices en S1 de son programme, lancé « Mettre à jour mes séances à venir », et rien n'avait bougé (chaque semaine d'un template est indépendante). Première réponse le matin (651febd, b2acac7) : report des ajouts/retraits sur les séances de même nom et même jour. Gildas a ensuite demandé un modèle « événement récurrent Google Agenda » :
+- Une série n'existe que si elle a été créée comme telle (Répéter, Reconduire, générateur/import, rattrapage unique du 01/11). Jamais devinée à l'édition. Dupliquer = copie indépendante.
+- Question de Gildas : « les séances d'une série ne sont pas identiques à cause de la surcharge/décharge ». Réponse retenue : une série partage la structure (nom, jour, exercices, ordre), pas la dose ; « Celle-ci et les suivantes » reporte des changements (dont des écarts de dose), jamais des valeurs.
+- Dupliquer/Reconduire : un seul % dont le moteur choisissait la cible remplacé par Intensité % et Volume % (Séries/Répétitions écartés : ne marche pas pour l'endurance ; « +1 rép = +5 s » jugé confus). Volume arrondi au plus proche sans cran forcé (un 3×5 ne bouge qu'à ±17 %), validé par Gildas. Intensité au pas de 2,5 % + saisie libre ; %1RM en points (65 % + 5 = 70 %) car le moteur donnait le même résultat pour +2,5 et +5.
+- Bug parseur corrigé au passage : « @ 3'45/km » lu comme une charge de 3 kg (une surcharge écrivait 4'47,5/km), touchait aussi les décisions.
+- Bugs trouvés en relecture : la question pouvait ne pas s'afficher (le tiroir se ferme avant la fin de sa dernière sauvegarde → comparaison différée jusqu'à 5 s) ; `exercise_media` null en base refusé (NOT NULL) ; Dupliquer dans le builder héritait de la série.
+- Semaines du builder : les onglets « S1 » en 11 px n'étaient pas vus (retour utilisateur) → pilule du Planning (`PeriodPill`), suppression de semaine trop facile → menu ⋯ + confirmation.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useLayoutEffect } from "react";
+import PeriodPill from "@/components/calendar/PeriodPill";
 import { createPortal } from "react-dom";
 import {
   format, addDays, startOfWeek, subDays, addMonths, subMonths,
@@ -394,14 +395,7 @@ export default function CalendarHeader({
           {/* Capsule compacte (2026-10-03, POC poc-element-activation-v5.html) : flèches et date dans
               une seule pilule, pour laisser la place au profil à gauche et à la pilule d'activité à
               droite sans décentrer la date. */}
-          <div style={{
-            display: "flex", alignItems: "center", height: 36, borderRadius: 999,
-            background: mode === "title" ? "transparent" : "rgba(255,255,255,.08)",
-            border: mode === "title" ? "none" : "1px solid rgba(255,255,255,.14)",
-          }}>
-          {mode !== "title" && (
-            <button onClick={prevPeriod} aria-label="Précédent" style={{ width: 28, height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.6)", fontSize: 17, cursor: "pointer" }}>‹</button>
-          )}
+          <PeriodPill bare={mode === "title"} onPrev={prevPeriod} onNext={nextPeriod}>
           <button
             ref={triggerBtnRef}
             onClick={toggleCalendar}
@@ -485,10 +479,7 @@ export default function CalendarHeader({
             </div>,
             document.body
           )}
-          {mode !== "title" && (
-            <button onClick={nextPeriod} aria-label="Suivant" style={{ width: 28, height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.6)", fontSize: 17, cursor: "pointer" }}>›</button>
-          )}
-          </div>
+          </PeriodPill>
           {showTodayBtn && (
             <button
               onClick={goToday}

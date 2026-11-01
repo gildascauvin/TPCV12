@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { seriesFromRepeats } from "@/lib/sessionSeries";
 import Anthropic from "@anthropic-ai/sdk";
 import type { SessionType, SessionTemplate, WeekTemplate, ProgramTemplate } from "@/types";
 
@@ -118,7 +119,7 @@ export async function POST(req: Request) {
     const filled = weeks.filter(w => Object.values(w).some(arr => arr.length));
     if (!filled.length) throw new Error("Reconstruction vide — aucune séance valide dans la sortie de l'outil");
 
-    const template: ProgramTemplate = { weeks: filled };
+    const template: ProgramTemplate = seriesFromRepeats({ weeks: filled });
     return NextResponse.json({ ok: true, template });
   } catch (err) {
     // Repli explicite — jamais d'écran cassé sur un échec Claude (timeout, refus d'appeler

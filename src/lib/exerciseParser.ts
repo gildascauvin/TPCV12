@@ -47,7 +47,7 @@ const RULES: [TokKind, string][] = [
   ["time",    `(${TIME})(?:\\s*-\\s*(${TIME}))?((?:${SIDE})?)`],
   ["dist",    `(${NUM})\\s*(km|m|k)(?![a-zà-ÿ])`],
   ["load",    `(\\+)?@?\\s*(${NUM})\\s*kg\\b(\\+?)`],
-  ["atload",  `@\\s*(${NUM})(\\+?)(?![\\d.,]*\\s*(?:kg|%|[x×]))`],
+  ["atload",  `@\\s*(${NUM})(\\+?)(?![\\d.,]*\\s*(?:kg|%|[x×]|'|:\\d))`],
   ["bare",    `(${NUM})(\\+?)(?!\\d|[.,]\\d)`],
 ];
 const RX: [TokKind, RegExp][] = RULES.map(([k, r]) => [k, new RegExp(r, "iyd")]);

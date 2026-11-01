@@ -109,7 +109,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const target_difficulty = weekIdx === 0 && typeof wellnessAdjustment === "number"
         ? Math.max(1, Math.min(10, s.target_difficulty + wellnessAdjustment))
         : s.target_difficulty;
-      const base = { date, name: s.name, notes: s.notes, target_difficulty, done: false, exercise_media: mediaForAssignment(s.exercise_media, keepAthleteComments) };
+      // Série du programme → série du Planning, propre à cette assignation (« Celle-ci et les suivantes »).
+      const base = { date, name: s.name, notes: s.notes, target_difficulty, done: false, exercise_media: mediaForAssignment(s.exercise_media, keepAthleteComments), series_id: s.series_id ? `${s.series_id}:${assignment.id}` : null, series_step: s.series_step ?? null };
       if (user_id) {
         sessionsToInsert.push({ ...base, user_id, program_assignment_id: assignment.id });
       } else if (athlete_id) {

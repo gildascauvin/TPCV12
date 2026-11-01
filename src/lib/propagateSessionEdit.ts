@@ -1,14 +1,9 @@
-import type { ProgramTemplate, SessionTemplate, ExerciseAttachments } from "@/types";
+import type { SessionTemplate, ExerciseAttachments } from "@/types";
 import { parseLine } from "@/lib/exerciseParser";
 
-/* « Appliquer aussi aux semaines suivantes » (2026-11-01) — retour d'un sportif : il avait ajouté
-   son échauffement et des exercices dans la S1 de son programme, puis lancé « Mettre à jour mes
-   séances à venir »… et rien n'avait bougé, parce que chaque semaine du template est indépendante.
-
-   Règle : on ne propage que les exercices AJOUTÉS ou RETIRÉS d'une séance, jamais les
-   prescriptions modifiées (séries, %, charges) — chaque semaine garde sa progression. La séance
-   cible = même nom et même jour dans chaque semaine suivante (repli : même nom un autre jour, si la
-   séance est unique dans sa semaine). Un exercice déjà présent dans la cible n'est pas ajouté une seconde fois. */
+/* Briques de comparaison et d'alignement de séances, utilisées par les séries (sessionSeries.ts) :
+   clé d'exercice (nom sans prescription), différence entre deux versions d'une séance, alignement
+   d'une séance sœur sur une autre (exercices + ordre) sans toucher aux prescriptions. */
 
 type MediaMap = Record<string, ExerciseAttachments>;
 
@@ -31,80 +26,74 @@ export const sessionKey = (name: string) => strip(name).replace(/[^a-z0-9]+/g, "
 
 const linesOf = (notes: string | null | undefined) => (notes ? notes.split("\n").filter(Boolean) : []);
 
-export interface LineDiff {
-  /** Lignes ajoutées, avec la clé des lignes qui les précèdent (pour les placer au même endroit). */
-  added: { line: string; prevKeys: string[] }[];
+/** Clés numérotées par occurrence : un exercice écrit deux fois dans la séance reste deux lignes. */
+export function occKeys(lines: string[]): string[] {
+  const seen = new Map<string, number>();
+  return lines.map(l => { const k = exerciseKey(l); const n = (seen.get(k) ?? 0) + 1; seen.set(k, n); return `${k}#${n}`; });
+}
+
+export interface ExerciseChange {
+  added: string[];
+  removed: string[];
+  reordered: boolean;
+  /** Clés (numérotées) retirées pendant cette édition. */
   removedKeys: string[];
 }
 
-export function diffSessionLines(before: string | null, after: string | null): LineDiff {
+export function exerciseChange(before: string | null, after: string | null): ExerciseChange {
   const b = linesOf(before), a = linesOf(after);
-  const bKeys = new Set(b.map(exerciseKey));
-  const aKeys = a.map(exerciseKey);
-  const aSet = new Set(aKeys);
-  const added = a.flatMap((line, i) => bKeys.has(aKeys[i]) ? [] : [{ line, prevKeys: aKeys.slice(0, i).reverse() }]);
-  const removedKeys = Array.from(new Set(b.map(exerciseKey).filter(k => !aSet.has(k))));
-  return { added, removedKeys };
+  const bk = occKeys(b), ak = occKeys(a);
+  const bSet = new Set(bk), aSet = new Set(ak);
+  const added = a.filter((_, i) => !bSet.has(ak[i]));
+  const removedIdx = b.map((_, i) => i).filter(i => !aSet.has(bk[i]));
+  const commonB = bk.filter(k => aSet.has(k)), commonA = ak.filter(k => bSet.has(k));
+  return {
+    added: added.map(exerciseLabel),
+    removed: removedIdx.map(i => exerciseLabel(b[i])),
+    reordered: commonB.join("|") !== commonA.join("|"),
+    removedKeys: removedIdx.map(i => bk[i]),
+  };
 }
 
-export const isEmptyDiff = (d: LineDiff) => d.added.length === 0 && d.removedKeys.length === 0;
+/** Aligne une séance sœur sur la liste source, en recalant exercise_media (clé = index de ligne). */
+export interface AlignOptions {
+  /** Ligne nouvelle dans la source : comment l'écrire dans cette séance (progression de la série). */
+  newLine?: (line: string) => string;
+  /** Ligne commune : réécriture à partir de la ligne de cette séance (report d'un écart de dose). */
+  commonLine?: (key: string, targetLine: string) => string;
+}
 
-/** Applique le diff à une séance, en recalant exercise_media (clé = index de ligne). */
-export function applyDiffToSession(s: SessionTemplate, diff: LineDiff): SessionTemplate {
-  // Chaque ligne garde son media pendant les insertions/suppressions, réindexé à la fin.
-  let rows = linesOf(s.notes).map((line, i) => ({ line, key: exerciseKey(line), media: s.exercise_media?.[String(i)] as ExerciseAttachments | undefined }));
-  const removed = new Set(diff.removedKeys);
-  rows = rows.filter(r => !removed.has(r.key));
-  for (const { line, prevKeys } of diff.added) {
-    const key = exerciseKey(line);
-    if (rows.some(r => r.key === key)) continue;
-    let at = prevKeys.length === 0 ? 0 : rows.length;
-    for (const pk of prevKeys) {
-      const idx = rows.map(r => r.key).lastIndexOf(pk);
-      if (idx >= 0) { at = idx + 1; break; }
-    }
-    rows.splice(at, 0, { line, key, media: undefined });
+export function alignSession(s: SessionTemplate, sourceNotes: string | null, removedKeys: string[], opt: AlignOptions = {}): SessionTemplate {
+  const src = linesOf(sourceNotes), sk = occKeys(src);
+  const srcIdx = new Map(sk.map((k, i) => [k, i]));
+  const tLines = linesOf(s.notes), tk = occKeys(tLines);
+  const removed = new Set(removedKeys);
+  let rows = tLines
+    .map((line, i) => ({ line, key: tk[i], media: s.exercise_media?.[String(i)] as ExerciseAttachments | undefined }))
+    .filter(r => !removed.has(r.key));
+
+  // Ordre de la source ; chaque exercice propre à cette semaine reste collé à l'exercice qui le
+  // précédait (en tête s'il n'en avait pas). Une ligne commune garde sa prescription à elle.
+  type Row = typeof rows[number];
+  const own = new Map<string | null, Row[]>();
+  let anchor: string | null = null;
+  for (const r of rows) {
+    if (srcIdx.has(r.key)) { anchor = r.key; continue; }
+    own.set(anchor, [...(own.get(anchor) ?? []), r]);
   }
+  const byKey = new Map(rows.map(r => [r.key, r]));
+  const ordered: Row[] = [...(own.get(null) ?? [])];
+  src.forEach((line, i) => {
+    const mine = byKey.get(sk[i]);
+    ordered.push(mine
+      ? (opt.commonLine ? { ...mine, line: opt.commonLine(sk[i], mine.line) } : mine)
+      : { line: opt.newLine ? opt.newLine(line) : line, key: sk[i], media: undefined });
+    ordered.push(...(own.get(sk[i]) ?? []));
+  });
+  rows = ordered;
+
   const media: MediaMap = {};
   rows.forEach((r, i) => { if (r.media) media[String(i)] = r.media; });
   const hadMedia = s.exercise_media != null;
   return { ...s, notes: rows.map(r => r.line).join("\n") || null, ...(hadMedia || Object.keys(media).length ? { exercise_media: media } : {}) };
-}
-
-/** Séances des semaines après `fromWeekIdx` portant le même nom que la séance éditée : celle du
- *  même jour en priorité (une séance qui revient lundi et samedi ne contamine pas l'autre jour),
- *  sinon, si elle est unique dans sa semaine, celle du même nom un autre jour (séance déplacée). */
-export function followingTargets(template: ProgramTemplate, fromWeekIdx: number, sessionName: string, day?: string): { weekIdx: number; day: string; sIdx: number }[] {
-  const key = sessionKey(sessionName);
-  if (!key) return [];
-  // Repli sur un autre jour seulement si la séance est unique dans sa semaine (sinon ambigu).
-  const src = template.weeks[fromWeekIdx] ?? {};
-  const uniqueInSource = Object.values(src).flatMap(l => (l ?? []) as SessionTemplate[]).filter(s => sessionKey(s.name) === key).length <= 1;
-  const out: { weekIdx: number; day: string; sIdx: number }[] = [];
-  template.weeks.forEach((w, wi) => {
-    if (wi <= fromWeekIdx) return;
-    const hits: { weekIdx: number; day: string; sIdx: number }[] = [];
-    for (const [d, list] of Object.entries(w)) {
-      ((list ?? []) as SessionTemplate[]).forEach((s, si) => { if (sessionKey(s.name) === key) hits.push({ weekIdx: wi, day: d, sIdx: si }); });
-    }
-    const sameDay = day ? hits.filter(h => h.day === day) : [];
-    out.push(...(sameDay.length || (day && !uniqueInSource) ? sameDay : hits));
-  });
-  return out;
-}
-
-export function applyDiffToFollowingWeeks(template: ProgramTemplate, fromWeekIdx: number, sessionName: string, diff: LineDiff, day?: string): ProgramTemplate {
-  const targets = followingTargets(template, fromWeekIdx, sessionName, day);
-  const hit = new Set(targets.map(t => `${t.weekIdx}|${t.day}|${t.sIdx}`));
-  return {
-    ...template,
-    weeks: template.weeks.map((w, wi) => {
-      if (wi <= fromWeekIdx) return w;
-      const nw: typeof w = { ...w };
-      for (const [day, list] of Object.entries(w)) {
-        nw[day] = ((list ?? []) as SessionTemplate[]).map((s, si) => hit.has(`${wi}|${day}|${si}`) ? applyDiffToSession(s, diff) : s);
-      }
-      return nw;
-    }),
-  };
 }

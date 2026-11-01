@@ -3,6 +3,7 @@
 import { markPrimingSource } from "@/lib/primingSource";
 import { Skel } from "@/components/ui/Skeleton";
 import { toast } from "@/lib/toast";
+import { useSessionSeries } from "@/hooks/useSessionSeries";
 import { morphOpen, MORPH_SESSION } from "@/lib/morph";
 import { undoableDelete, isPendingDelete } from "@/lib/undoable";
 import { haptic } from "@/lib/native";
@@ -40,7 +41,8 @@ import { programSportEmoji } from "@/lib/sportCategories";
 import { RestDecisionRing, DoneDecisionRing, decisionRingState } from "@/components/sessions/DecisionRing";
 import { computeWellnessBaselineAt, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import AlertBox from "@/components/calendar/AlertBox";
-import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { parseAndApply } from "@/lib/loadAdjust";
+import { NO_ADJUST, adjustNotesCharge, adjustDifficultyCharge, type ChargeAdjust } from "@/lib/chargeAdjust";
 import { applyAutoregDifficulty } from "@/lib/autoregulation";
 import { learnSignals, personalAdjust, proposalPersonal, type PersonalSignal, type PersonalAdjust } from "@/lib/autoregPersonal";
 import { aggregateFor } from "@/lib/metricCards";
@@ -791,11 +793,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const [duplicating, setDuplicating] = useState<Session | null>(null);
   // "↻ Reconduire" du bandeau programme : même modale, date par défaut = même jour la semaine suivante.
   const [duplicateDefaultDate, setDuplicateDefaultDate] = useState<string | undefined>(undefined);
-  const duplicateSession = useCallback(async (newDate: string, pct: number = 0) => {
+  const duplicateSession = useCallback(async (newDate: string, adjust: ChargeAdjust = NO_ADJUST) => {
     notifyOnboardingProgressSoon();
     if (!duplicating) return;
-    const notes = duplicating.notes ? duplicating.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : duplicating.notes;
-    const target_difficulty = adjustDifficulty(duplicating.target_difficulty ?? 6, pct);
+    const notes = adjustNotesCharge(duplicating.notes, adjust);
+    const target_difficulty = adjustDifficultyCharge(duplicating.target_difficulty ?? 6, adjust);
     const { data: saved } = await supabase.from("sessions").insert({
       user_id: userId,
       name: duplicating.name,
@@ -937,6 +939,13 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
               </div>
   );
 
+
+  // Séries (useSessionSeries) : même tiroir que le Planning, même question « et les suivantes ».
+  const series = useSessionSeries<Session>({
+    editing, sessions: allSessions, setSessions: setAllSessions, toRow: r => r as unknown as Session,
+    deleteOne: s => deleteSession(s), gate: fn => gateInput(fn), onChanged: () => { if (!isOffline()) router.refresh(); },
+    offline: isOffline(),
+  });
   return (
     <>
       {/* Bannière du haut retirée hors sandbox (onboarding in-app, 2026-10-01) : l'étape "Débloque…"
@@ -1182,7 +1191,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         <WellnessModal date={selectedDate} askPlan={selectedDate === initialDate && todaySessions.length === 0} onSave={data => gateInput(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); setPendingStartSession(null); }} />
       )}
       {showAddSession && (
-        <AddSessionModal date={selectedDate} initialName={addSessionInitialName} userName={profile.name ?? "Toi"} sport={profile.sport} onSave={(data, id) => gateInput(() => saveSession(data, id))} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); if (!isOffline()) router.refresh(); }} />
+        <AddSessionModal date={selectedDate} initialName={addSessionInitialName} userName={profile.name ?? "Toi"} sport={profile.sport}
+          onSave={async (data, id) => { const r = await gateInput(() => saveSession(data, id)); series.noteCreated(r); return r as { id: string } | void; }}
+          belowTitle={series.createRow()}
+          onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); series.resetCreated(); if (!isOffline()) router.refresh(); }} />
       )}
       {completing && (
         <CompleteModal session={completing} onSave={data => gateInput(() => saveComplete(data))} onClose={() => setCompleting(null)} />
@@ -1195,11 +1207,13 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           morphName={editingMorph ? MORPH_SESSION : undefined}
           userName={profile.name ?? "Toi"}
           onSave={(data, id) => gateInput(() => saveSession(data, id ?? editing.id))}
-          onDelete={() => gateInput(async () => { await deleteSession(editing); setEditing(null); })}
+          onDelete={() => gateInput(async () => { if (series.tryDelete(editing)) { setEditing(null); return; } await deleteSession(editing); setEditing(null); })}
           onDuplicate={draft => { setDuplicating({ ...editing, ...draft }); setEditing(null); }}
-          onClose={() => { setEditing(null); if (!isOffline()) router.refresh(); }}
+          belowTitle={series.editRow(editing)}
+          onClose={() => { series.closeEdit(editing.id); setEditing(null); if (!isOffline()) router.refresh(); }}
         />
       )}
+      {series.modals}
       {duplicating && (
         <DuplicateModal
           session={duplicating}

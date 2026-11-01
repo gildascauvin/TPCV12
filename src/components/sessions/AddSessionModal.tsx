@@ -33,6 +33,8 @@ interface AddSessionModalProps {
   /* Dupliquer (2026-10-02) : déplacé des cartes vers le bas du tiroir, entre Supprimer et Fermer.
      Reçoit l'état courant du tiroir (déjà enregistré) pour que la copie parte de ce qui est affiché. */
   onDuplicate?: (draft: { name: string; notes: string; date: string; target_difficulty: number }) => void;
+  /* Éditeur de programme : ligne de série (« ↻ Chaque lundi · S1 à S4 » / « Répéter chaque semaine »). */
+  belowTitle?: React.ReactNode;
   onClose: () => void;
   /* Wizard onboarding (2026-09-06) : ProgramBuilderModal ouvre cette modale par-dessus sa propre
      bannière fixe (UnsavedBanner, WIZARD_BANNER_H) — sans ce décalage, l'écran plein-page de
@@ -50,7 +52,7 @@ interface AddSessionModalProps {
   morphName?: string;
 }
 
-export default function AddSessionModal({ date, session, initialName, hideDate, userId, userName, onSave, onDelete, onDuplicate, onClose, topOffset, sport, authorRole = "athlete", morphName }: AddSessionModalProps) {
+export default function AddSessionModal({ date, session, initialName, hideDate, userId, userName, onSave, onDelete, onDuplicate, onClose, topOffset, sport, authorRole = "athlete", morphName, belowTitle }: AddSessionModalProps) {
   const { isMd } = useBreakpoint();
   const { close, exitClass } = useExitAnimation(onClose);
 
@@ -255,6 +257,7 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
               style={{ fontSize: 16, color: "#62686e", background: "transparent", border: "none", outline: "none", padding: 0, fontFamily: "inherit", marginTop: 4, cursor: "pointer" }}
             />
           )}
+          {belowTitle && <div style={{ marginTop: 8 }}>{belowTitle}</div>}
           {!isEdit && (
             <div style={{ fontSize: 15, color: "#62686e", lineHeight: 1.5, marginTop: 10, marginBottom: 16 }}>
               Planifie ta séance et ajoute tes exercices.

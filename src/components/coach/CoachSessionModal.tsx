@@ -48,6 +48,8 @@ interface Props {
      Reçoit l'état courant du tiroir (déjà enregistré) pour que la copie parte de ce qui est affiché. */
   onDuplicate?: (draft: { name: string; notes: string; date: string; target_difficulty: number }) => void;
   onClose: () => void;
+  /* Planning coach : ligne de série (« ↻ Chaque lundi jusqu'au … » / « Répéter chaque semaine »). */
+  belowTitle?: React.ReactNode;
   /* Marque la séance vue par le coach (fait disparaître le point de notification côté sportif) —
      passe par le parent car ça écrit sur la ligne `sessions` d'un vrai sportif, RLS bloque
      l'écriture directe cross-user même pour un coach (même contrainte que exercise_media). */
@@ -96,7 +98,7 @@ function buildAttentionPoints(wellness: number | null, maxDiff: number, trend?: 
 // Dégradé séquentiel bleu (wellnessColor) — voir SparkLineClient.tsx pour la doc complète du choix.
 function scoreColor(s: number) { return wellnessColor(s); }
 
-export default function CoachSessionModal({ athleteName, coachName, date, session, athletes = [], initialAthleteId, reviewContext, onSave, onDelete, onDuplicate, onClose, onMarkViewed }: Props) {
+export default function CoachSessionModal({ athleteName, coachName, date, session, athletes = [], initialAthleteId, reviewContext, onSave, onDelete, onDuplicate, onClose, onMarkViewed, belowTitle }: Props) {
   const { isMd } = useBreakpoint();
   const { close, exitClass } = useExitAnimation(onClose);
 
@@ -326,6 +328,7 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
           type="date" value={sessionDate} onChange={e => setSessionDate(e.target.value)}
           style={{ fontSize: 14, color: "#62686e", background: "transparent", border: "none", outline: "none", padding: 0, fontFamily: "inherit", marginTop: 4, cursor: "pointer" }}
         />
+        {belowTitle && <div style={{ marginTop: 8 }}>{belowTitle}</div>}
         <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 6, marginBottom: reviewContext ? 12 : 20, display: "flex", alignItems: "center", gap: 8 }}>
           {reviewContext ? (
             <>

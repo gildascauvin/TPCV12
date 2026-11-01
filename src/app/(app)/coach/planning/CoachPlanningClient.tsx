@@ -13,6 +13,8 @@ import posthog from "posthog-js";
 import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "@/lib/toast";
+import { useSessionSeries } from "@/hooks/useSessionSeries";
+import { newSeriesId } from "@/lib/sessionSeries";
 import { haptic } from "@/lib/native";
 import { undoableDelete } from "@/lib/undoable";
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
@@ -43,7 +45,8 @@ import AutoregButtons from "@/components/sessions/AutoregButtons";
 import LockedBlur from "@/components/paywall/LockedBlur";
 import { pickRelevantAssignment, findProgramForWeek, programWeekTag } from "@/lib/programAssignment";
 import { programSportEmoji } from "@/lib/sportCategories";
-import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { parseAndApply } from "@/lib/loadAdjust";
+import { NO_ADJUST, adjustNotesCharge, adjustDifficultyCharge, type ChargeAdjust } from "@/lib/chargeAdjust";
 import { applyAutoregDifficulty } from "@/lib/autoregulation";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
 import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZByDate, relativeWellnessByDate } from "@/lib/wellnessBaseline";
@@ -486,13 +489,14 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       .filter(r => r.ok && r.session)
       .map(r => r._real ? realToView(r.session as Session, athletes) : demoToView(r.session as CoachSession));
     setSessions(prev => [...prev, ...created]);
-    return created[0] ? { id: created[0].id } : undefined;
+    return created[0] ? { id: created[0].id, created: created.map(c => ({ id: c.id, athleteId: c.athlete_id })) } : undefined;
   }, [athletes]);
 
   // Annulable 5 s (lib/undoable.ts), comme côté sportif : retirée de l'écran tout de suite, effacée ensuite.
-  const deleteSession = useCallback(async () => {
-    if (!editingSession || !athlete) return;
-    const removed = editingSession, athleteId = athlete.id;
+  const deleteSession = useCallback(async (target?: CoachViewSession) => {
+    const removed = target ?? editingSession;
+    if (!removed || !athlete) return;
+    const athleteId = athlete.id;
     setSessions(prev => prev.filter(s => s.id !== removed.id));
     setEditingSession(null);
     undoableDelete({
@@ -569,12 +573,12 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     }
   }, [athlete, sessions]);
 
-  const duplicateSessionToDate = useCallback(async (newDate: string, targetAthleteIds?: string[], pct: number = 0) => {
+  const duplicateSessionToDate = useCallback(async (newDate: string, targetAthleteIds?: string[], adjust: ChargeAdjust = NO_ADJUST) => {
     notifyOnboardingProgressSoon();
     if (!duplicating || !athlete) return;
     const recipientIds = targetAthleteIds && targetAthleteIds.length > 0 ? targetAthleteIds : [athlete.id];
-    const notes = duplicating.notes ? duplicating.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : (duplicating.notes ?? "");
-    const target_difficulty = adjustDifficulty(duplicating.target_difficulty ?? 6, pct);
+    const notes = adjustNotesCharge(duplicating.notes, adjust) ?? "";
+    const target_difficulty = adjustDifficultyCharge(duplicating.target_difficulty ?? 6, adjust);
     const data = { name: duplicating.name, notes, target_difficulty, date: newDate };
     const results = await Promise.all(recipientIds.map(aid => callSessionAPI({ action: "add", athleteId: aid, data })));
     const created: CoachViewSession[] = results
@@ -592,7 +596,13 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     setDuplicating(null);
   }, [duplicating, athlete, athletes]);
 
-  const handleDragEnd = makePlanningDragEndHandler({ sessions, moveSession: moveSessionToDate, moveExercise }) as (event: DragEndEvent) => void;
+  // Séries (useSessionSeries), sur le sportif affiché (inscrit → sessions, sans compte → coach_sessions).
+  const series = useSessionSeries<CoachViewSession>({
+    athleteId: athlete?.id, editing: editingSession, sessions, setSessions,
+    toRow: r => athlete?.user_id ? realToView(r as unknown as Session, athletes) : demoToView(r as unknown as CoachSession),
+    deleteOne: s => deleteSession(s), gate: fn => gateInput(fn),
+  });
+  const handleDragEnd = makePlanningDragEndHandler({ sessions, moveSession: series.wrapMove(moveSessionToDate), moveExercise: series.wrapExerciseMove(moveExercise) }) as (event: DragEndEvent) => void;
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   async function loadMonth(anchor: string, athleteObj: CoachAthlete) {
@@ -1291,16 +1301,30 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           } : null}
           athletes={athletes}
           initialAthleteId={athlete.id}
-          onSave={(data, athleteIds, id) => gateInput(() => saveSession(data, athleteIds, id))}
-          onDelete={editingSession ? (() => gateInput(() => deleteSession())) : undefined}
+          onSave={async (data, athleteIds, id) => {
+            const r = await gateInput(() => saveSession(data, athleteIds, id)) as { id: string; created?: { id: string; athleteId: string }[] } | void;
+            const primaryId = editingSession?.id ?? series.createdId;
+            // « Dupliquer (n) → » vers d'autres sportifs après « Répéter » : leurs copies sont répétées aussi.
+            if (!id && primaryId && r && r.created && !r.created.some(c => c.id === primaryId) && athleteIds.every(a => a !== athlete.id)) {
+              void series.repeatAlso(primaryId, r.created, (row, aid) => athletes.find(a => a.id === aid)?.user_id ? realToView(row as unknown as Session, athletes) : demoToView(row as unknown as CoachSession));
+            } else if (!editingSession) series.noteCreated(r);
+            return r ? { id: r.id } : undefined;
+          }}
+          onDelete={editingSession ? (() => gateInput(async () => {
+            if (series.tryDelete(editingSession)) { setEditingSession(null); return; }
+            await deleteSession();
+          })) : undefined}
+          belowTitle={editingSession ? series.editRow(editingSession) : series.createRow()}
           onDuplicate={editingSession ? (draft => { setDuplicating({ ...editingSession, ...draft }); setEditingSession(null); setAddingDate(null); }) : undefined}
-          onClose={() => { setAddingDate(null); setEditingSession(null); }}
+          onClose={() => { if (editingSession) series.closeEdit(editingSession.id); setAddingDate(null); setEditingSession(null); series.resetCreated(); }}
           onMarkViewed={() => {
             if (!editingSession) return;
             callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: editingSession.id, data: { viewed_by_coach_at: new Date().toISOString() } });
           }}
         />
       )}
+
+      {series.modals}
 
       {duplicating && athlete && (
         <DuplicateModal session={duplicating} onDuplicate={(date, targetAthleteIds, pct) => gateInput(() => duplicateSessionToDate(date, targetAthleteIds, pct))} onClose={() => setDuplicating(null)} athletes={athletes} sourceAthleteId={athlete.id} />
@@ -1313,7 +1337,17 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           onClose={() => setShowReconduire(false)}
           onConfirm={(weeksOut, targetAthleteIds) => gateInput(async () => {
             const recipientIds = targetAthleteIds && targetAthleteIds.length > 0 ? targetAthleteIds : [athlete.id];
+            // Reconduire = répéter : chaque copie rejoint la série de sa séance d'origine (créée au besoin).
+            // Même identifiant chez chaque destinataire : les séries restent séparées par sportif.
+            const seriesOf = new Map<string, string>();
+            weeksOut.flat().forEach(r => { if (r.sourceId && !seriesOf.has(r.sourceId)) seriesOf.set(r.sourceId, sessions.find(x => x.id === r.sourceId)?.series_id ?? newSeriesId()); });
+            const toLink = Array.from(seriesOf).filter(([id]) => !sessions.find(x => x.id === id)?.series_id);
+            if (recipientIds.includes(athlete.id) && toLink.length) {
+              await Promise.all(toLink.map(([id, sid]) => callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: id, data: { series_id: sid } })));
+              setSessions(prev => prev.map(x => seriesOf.has(x.id) && !x.series_id ? { ...x, series_id: seriesOf.get(x.id)! } : x));
+            }
             const allRows = weeksOut.flatMap((rows, w) => rows.map(r => ({
+              series_id: r.sourceId ? seriesOf.get(r.sourceId) ?? null : null,
               name: r.name, notes: r.notes, target_difficulty: r.target_difficulty,
               date: format(addDays(weekDates[r.dayIndex], 7 * (w + 1)), "yyyy-MM-dd"),
             })));
