@@ -155,22 +155,26 @@ const MORE_CAUSE_SHORT = {
   head: "c'est plutôt la tête que le corps",
 };
 const MORE_CAUSE_LONG = {
-  recovery: "Ta nuit est bonne : c'est la fatigue musculaire, et elle ne se voit pas dans la nuit. Échauffe-toi plus longtemps et écoute tes jambes.",
+  recovery: "Ta nuit est bonne : c'est la fatigue musculaire, et elle ne se voit pas dans la nuit.",
   sleep: "Ta nuit mesurée est correcte, mais tu te sens mal reposé : un sommeil peu réparateur ne se voit pas toujours dans les mesures.",
   head: "Ta nuit est bonne : aujourd'hui, c'est plutôt la tête que le corps.",
 };
 const FEEL_WORD: Record<FeelKey, string> = { recovery: "courbatures", sleep: "sommeil", stress: "stress", motivation: "motivation" };
 const FEEL_YOUR: Record<FeelKey, string> = { recovery: "tes courbatures", sleep: "ton sommeil", stress: "ton stress", motivation: "ta motivation" };
 const andList = (w: string[]) => (w.length === 1 ? w[0] : `${w.slice(0, -1).join(", ")} et ${w[w.length - 1]}`);
-function moreCause(c: PhysioCheckin, prior: PhysioCheckin[]): { short: string; long: string } {
+// Jour sans séance (2026-11-02, Gildas) : pas de conseil d'échauffement.
+const LEGS_TIP = "Échauffe-toi plus longtemps et écoute tes jambes.";
+const LEGS_TIP_REST = "Profite du repos : 10 min de mobilité douce, et écoute tes jambes demain.";
+function moreCause(c: PhysioCheckin, prior: PhysioCheckin[], restDay: boolean): { short: string; long: string } {
   const low = lowItems(c, prior);
+  const legs = restDay ? LEGS_TIP_REST : LEGS_TIP;
   // Une seule cause (ou stress + motivation, la tête) : les phrases dédiées.
   const causes = Array.from(new Set((low.length ? low : [lowestItem(c)]).map(causeOf)));
-  if (causes.length === 1) return { short: MORE_CAUSE_SHORT[causes[0]], long: MORE_CAUSE_LONG[causes[0]] };
+  if (causes.length === 1) return { short: MORE_CAUSE_SHORT[causes[0]], long: MORE_CAUSE_LONG[causes[0]] + (causes[0] === "recovery" ? ` ${legs}` : "") };
   return {
     short: `${andList(low.map(k => FEEL_WORD[k]))} sous la norme, ce que la nuit ne montre pas`,
     long: `Ta nuit est bonne. Ce qui te freine ce matin : ${andList(low.map(k => FEEL_YOUR[k]))}, et ça ne se voit pas dans la nuit.`
-      + (low.includes("recovery") ? " Échauffe-toi plus longtemps et écoute tes jambes." : ""),
+      + (low.includes("recovery") ? ` ${legs}` : ""),
   };
 }
 const feelRaw = (c: PhysioCheckin) => ((c.sleep + (10 - c.stress) + c.recovery + c.motivation) / 4) * 10;
@@ -210,7 +214,7 @@ const level = (z: number) => (z <= -0.5 ? "en dessous de" : z >= 0.5 ? "au-dessu
 /* Verdict d'un jour : `answers` = réponses du jour (le point forme qu'on vient d'enregistrer si fourni),
    `checkins` et `health` = l'historique (les jours postérieurs sont ignorés). null tant qu'une des
    deux normes manque (moins de 5 jours avant) ou sans données de nuit. */
-export function physioVerdictAt(date: string, answers: PhysioCheckin, checkins: PhysioCheckinDay[], health: _HealthRow[], perspective: "athlete" | "coach" = "athlete"): PhysioVerdict | null {
+export function physioVerdictAt(date: string, answers: PhysioCheckin, checkins: PhysioCheckinDay[], health: _HealthRow[], perspective: "athlete" | "coach" = "athlete", restDay = false): PhysioVerdict | null {
   const today = _deviceInputsFor(date, health);
   const pToday = physioRaw(today);
   if (pToday == null) return null;
@@ -229,7 +233,7 @@ export function physioVerdictAt(date: string, answers: PhysioCheckin, checkins: 
   if (diff <= -DIFF_THRESHOLD) return { zFeel, zPhysio, diff, kind: "less", status: "Moins optimistes",
     title: `${P} données physiologiques sont moins optimistes que ${coach ? "lui" : "toi"}`,
     text: `${detail} ${compare} : ${coach ? "son" : "ton"} corps récupère peut-être moins bien ${coach ? "qu'il ne le sent" : "que tu ne le sens"}.` };
-  const cause = diff >= DIFF_THRESHOLD ? moreCause(answers, prior) : null;
+  const cause = diff >= DIFF_THRESHOLD ? moreCause(answers, prior, restDay) : null;
   if (cause) return { zFeel, zPhysio, diff, kind: "more", status: "Plus optimistes",
     title: `${coach ? "Son" : "Ton"} corps a mieux récupéré ${coach ? "qu'il ne le sent" : "que tu ne le sens"}`,
     text: `${detail} ${compare} : ${cause.short}.`, reason: cause.long };

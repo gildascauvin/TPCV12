@@ -7,7 +7,6 @@ import { createClient } from "@/lib/supabase/client";
 import { fetchWorkoutsForDay, workoutLabel, workoutTime, type HealthWorkout } from "@/lib/healthWorkouts";
 import { chronoMinutes } from "@/lib/liveSession";
 import { invalidatePhysio, requestPhysioReveal } from "@/lib/physioData";
-import PhysioTeaser from "@/components/physio/PhysioTeaser";
 import ScaleBars, { CR10_LABELS } from "@/components/ui/ScaleBars";
 import RpeInsightLine from "@/components/sessions/RpeInsightLine";
 import { rpeInsight, type RatedSession, type RpeInsight } from "@/lib/rpeInsight";
@@ -107,7 +106,6 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
           {session.name}
         </div>
 
-        {hasHeart && <PhysioTeaser label="♥ Séance mesurée" text="Renseigne ton ressenti pour le comparer à ce qu'a mesuré ta fréquence cardiaque." chips={["142 bpm", "171 max", "Effort"]} />}
 
         {/* Duration */}
         <div style={{ marginBottom: 18 }}>

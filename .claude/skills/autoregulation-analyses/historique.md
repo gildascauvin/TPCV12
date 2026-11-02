@@ -1249,3 +1249,8 @@ POC : https://claude.ai/artifact/5wmJBpxrMaMthAvi1qVeUm (benchmark WHOOP). Rempl
 - **Où** : /today (`TodayClient`) et `CoachCard` (revue `CoachDecisionDeck` + fiche d'un sportif). La vue Groupe du Coach Control (radar, lignes à `DecisionRingMini`) ne change pas.
 - **`HomeSheet` (mobile)** : feuille repliée et contenu de page caché dessous → glisser vers le haut fait d'abord défiler la page, puis ouvre la feuille (repartant de la position du doigt) ; vers le bas, la page remonte puis la feuille se replie. Idem à la molette. Feuille déjà entrouverte : elle s'ouvre directement (sinon page et feuille s'alterneraient, ouvrir la feuille rallonge la page).
 - Vérifié à l'écran sur `/sandbox/athlete` et `/sandbox/coach` en desktop uniquement ; gratuit, repos, séance faite, mobile et geste de la feuille restent à tester par Gildas.
+
+## 2026-11-02 : teaser flouté retiré
+`PhysioTeaser` (encadré « Nuit mesurée » / « Séance mesurée » aux chiffres floutés factices, en tête du point forme et de Terminer la séance) supprimé. Gildas : « ça tease pas vraiment et ça prend de la place ». La comparaison ressenti vs physiologie après validation est inchangée.
+
+Même jour : écran ressenti vs montre (`physioCompare.ts`, cas « plus optimistes » avec courbatures basses) rendu sensible au jour sans séance (`restDay` de `loadCheckinContext`, passé par `PhysioRevealHost`). Ces jours-là, « Échauffe-toi plus longtemps et écoute tes jambes. » devient « Profite du repos : 10 min de mobilité douce, et écoute tes jambes demain. ». Déclencheur : le dimanche 01/11 de Gildas, sans séance, lui conseillait l'échauffement. La question « envie de t'entraîner » est gardée les jours de repos : la norme est calculée sur les 4 réponses chaque jour.

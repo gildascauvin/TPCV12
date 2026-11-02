@@ -12,7 +12,6 @@ import { BEHAVIOR_META } from "@/lib/behaviors";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 import { DARK_CARD_BG } from "@/lib/theme";
-import PhysioTeaser from "@/components/physio/PhysioTeaser";
 import ScaleBars from "@/components/ui/ScaleBars";
 import { SCALE_WORDS, type ScaleKey } from "@/lib/wellnessWords";
 import { recoveryGauge, recoveryAggregate, formAt } from "@/lib/checkinInsight";
@@ -341,8 +340,9 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
   }
 
   /* Ressenti vs physiologie (2026-10-11) : si la montre a déjà la nuit de ce jour (FC au repos ou nuit
-     de 3 h et plus), la 1re question montre un teaser (PhysioTeaser) ; la comparaison s'affiche après la
-     validation (PhysioRevealHost), réponses déjà enregistrées. Jamais dans le wizard. */
+     de 3 h et plus), la comparaison s'affiche après la validation (PhysioRevealHost), réponses déjà
+     enregistrées. Jamais dans le wizard. Teaser flouté en tête retiré le 02/11/2026 (Gildas : ne teasait
+     pas vraiment, prenait de la place). */
   const [physioReady, setPhysioReady] = useState(false);
   useEffect(() => {
     if (wizardHero || subject) return;
@@ -489,7 +489,6 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         {/* Step 0: Sleep + Bedtime — la question avance une fois les deux réponses données. */}
         {q === 0 && (
           <div>
-            {physioReady && <PhysioTeaser label="⌚ Nuit mesurée" text="Renseigne ton ressenti pour le comparer à tes mesures de la nuit." chips={["7h30", "48 bpm", "Zone"]} />}
             {renderScale("sleep", who ? `😴 Comment a dormi ${who} ?` : "😴 Comment as-tu dormi ?", "Qualité et récupération pendant le sommeil", sleep, setSleep, () => {
               if (bedtime != null) { autoAdvance(); return; }
               /* Heure du coucher pas encore donnée (31/10) : elle était sous le pli, la feuille ne bougeait pas.

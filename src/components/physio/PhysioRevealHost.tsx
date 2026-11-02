@@ -79,7 +79,7 @@ async function buildShown(kind: Nav["kind"], key: string, data: PhysioData | nul
   const ctx = await loadCheckinContext(userId, key).catch(() => null);
   const checkins = data?.checkins.filter(c => c.bedtime != null) ?? [];
   const c = checkins.find(x => x.date === key);
-  const verdict = c && data ? physioVerdictAt(key, c, checkins, data.health) : null;
+  const verdict = c && data ? physioVerdictAt(key, c, checkins, data.health, "athlete", ctx?.restDay ?? false) : null;
   const checkin = ctx?.today ? checkinResult(ctx.today, ctx.history, ctx.sessions, ctx.tomorrowDifficulty, ctx.form, ctx.restDay) : null;
   if (!verdict && !checkin) return null;
   return { kind: "wellness", verdict, night: data && verdict ? nightSentence(key, data.health) : null, checkin };
@@ -113,7 +113,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
           loadPhysioData(userId, true).catch(() => null),
           loadCheckinContext(userId, detail.date).catch(() => null),
         ]);
-        const verdict = data ? physioVerdictAt(detail.date, detail, data.checkins, data.health) : null;
+        const verdict = data ? physioVerdictAt(detail.date, detail, data.checkins, data.health, "athlete", ctx?.restDay ?? false) : null;
         const checkin = ctx?.today ? checkinResult(ctx.today, ctx.history, ctx.sessions, ctx.tomorrowDifficulty, ctx.form, ctx.restDay) : null;
         if (!verdict && !checkin) return;
         setNav(null);
