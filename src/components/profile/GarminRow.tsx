@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import posthog from "posthog-js";
 import { Capacitor } from "@capacitor/core";
 import { invalidatePhysio } from "@/lib/physioData";
+import { isAndroidApp } from "@/lib/native";
 
 /* Profil (sportif) : liaison au compte Garmin Connect (2026-10-23). Le nom « Garmin » est cité en texte
    simple (charte Garmin : pas de logo modifié ni inventé). Connecter = navigation vers
@@ -68,7 +69,7 @@ export default function GarminRow() {
       const res = await fetch("/api/garmin/connect?json=1", { cache: "no-store" });
       const data = (await res.json()) as { url?: string };
       if (!res.ok || !data.url) throw new Error();
-      setMessage("Connecte-toi à Garmin dans Safari, puis reviens ici.");
+      setMessage(`Connecte-toi à Garmin dans ${isAndroidApp() ? "le navigateur" : "Safari"}, puis reviens ici.`);
       if (!window.open(data.url, "_blank")) window.location.href = data.url;
     } catch {
       setMessage("La connexion à Garmin a échoué. Réessaie.");

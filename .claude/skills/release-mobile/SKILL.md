@@ -75,7 +75,7 @@ Identifiants non secrets : bundle/package `com.theperfclub.app`, Team Apple `B4A
 4. **Test émulateur** (recommandé) : `./gradlew assembleRelease`, `$ANDROID_HOME/emulator/emulator -avd tpc_pixel`, `adb install -r android/app/build/outputs/apk/release/app-release.apk`. Claude ne valide jamais la connexion Google : **Gildas choisit le compte**.
 5. **Play Console** : envoyer l'AAB sur une piste (test interne d'abord : lien `play.google.com/apps/internaltest/4701402545353611301`), notes de version FR. L'envoi en examen production se fait **avec l'accord explicite de Gildas** ; les déclarations (règlement, Health Connect, sécurité des données, IARC) et tout ce qui touche au paiement/compte marchand sont pour **Gildas**.
 6. **Compte de revue Google** : `cauvingildas+review-coach@gmail.com` (coach payant) dans « Informations de connexion ». `review-sportif` est gratuit, ne pas le donner.
-7. **Jour de la première publication publique** : (1) remplir `PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.theperfclub.app"` dans `src/lib/storeLinks.ts` ; (2) générer `public/app-qr.svg` (QR vers `https://go.theperfclub.com/api/telecharger`) : tant qu'il manque, le code garde `public/app-store-qr.svg` ; (3) mettre à jour la fiche Play (« point forme » au lieu de « check-in »).
+7. **Première publication publique (faite le 02/11/2026)** : (1) remplir `PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.theperfclub.app"` dans `src/lib/storeLinks.ts` ; (2) générer `public/app-qr.svg` (QR vers `https://go.theperfclub.com/api/telecharger`) : tant qu'il manque, le code garde `public/app-store-qr.svg` ; (3) mettre à jour la fiche Play (« point forme » au lieu de « check-in »).
 
 ## 6. Textes de fiche
 
@@ -108,6 +108,9 @@ Identifiants non secrets : bundle/package `com.theperfclub.app`, Team Apple `B4A
 - **Play, prix** : la saisie globale est HT et arrondie en ,99 TTC ; corriger la France à la main (9 / 78 / 39 / 348 €).
 - **Santé** : `healthSync.ts` n'envoie jamais de colonne vide (sinon la VFC Garmin est effacée) ; VFC Garmin = RMSSD, Apple Watch = SDNN, ne jamais mélanger pour un même sportif.
 - **Achat Google Play jamais testé** à ce jour : tester avec un compte gratuit en testeur de licence.
-- **Reste à faire** : révoquer la clé Firebase en doublon (`~/.config/theperfclub/fcm-service-account-doublon.json`) dans GCP (Gildas) ; lot natif prévu après validation Play (offre de sortie stores, rejeu Santé réel, demande de note native), voir `paywall-billing`.
+- **Reste à faire** : révoquer la clé Firebase en doublon (`~/.config/theperfclub/fcm-service-account-doublon.json`) dans GCP (Gildas).
+- **Demande de note** (02/11) : `@capacitor-community/in-app-review`, `src/lib/storeReview.ts`, marqueur UA `TPCReview` (iOS build 13+, Android versionCode 3+), déclenchée une fois par appareil sur « C'est parti » d'`ob_week`.
+- **Health Connect, sommeil** : une nuit = un échantillon de toute la session avec les phases dans `stages` ; `healthSync.ts` additionne les phases hors éveil (avant le 02/11 la nuit entière était comptée).
+- **Ne jamais lancer `next build` dans le repo pendant que le serveur de dev tourne** : pas de `distDir` configuré, le build écrase `.next` et le serveur local renvoie des 500.
 
 Détails et raisons : grep `historique.md` de ce dossier.

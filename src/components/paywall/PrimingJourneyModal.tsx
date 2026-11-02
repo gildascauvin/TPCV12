@@ -8,7 +8,9 @@ import { ElitePlanCard, PrimingExtras, PricingSideLink, PRICING_PRIMING_GUARANTE
 import LossSheet, { lossSheetDue, markLossSheetSeen, type LossStake } from "./LossSheet";
 import { RiskTimeline } from "./RiskTimeline";
 import ExitOffer from "./ExitOffer";
-import { acceptExitOffer, exitOfferEligible, markExitOfferSeen } from "@/lib/exitOffer";
+import { acceptExitOffer, exitOfferEligible, markExitOfferSeen, setNativeExitReady } from "@/lib/exitOffer";
+import { createClient } from "@/lib/supabase/client";
+import { exitStoreOffer, getStoreProducts, type ExitStoreOffer } from "@/lib/nativePurchases";
 import { PAYWALL_CTA_LABEL } from "./PaywallModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
@@ -58,6 +60,21 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
   const anchorCount = athleteCount ?? ((ctx?.athleteNames.length ?? 0) >= 5 ? ctx?.athleteNames.length : undefined);
   const [exitOpen, setExitOpen] = useState(false);
   const [lossOpen, setLossOpen] = useState(false);
+  /* Apps (2026-11-02) : offre de sortie du store préchargée ; tant qu'elle n'est pas là (produits iOS
+     pas encore validés, offre Play absente), la croix garde la feuille de perte. */
+  const [storeExit, setStoreExit] = useState<Record<"monthly" | "annual", ExitStoreOffer> | null>(null);
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    let alive = true;
+    (async () => {
+      const { data: { user } } = await createClient().auth.getUser();
+      if (!user) return;
+      const products = await getStoreProducts(user.id);
+      const annual = exitStoreOffer(products, mode, "annual"), monthly = exitStoreOffer(products, mode, "monthly");
+      if (alive && annual && monthly) { setStoreExit({ annual, monthly }); setNativeExitReady(true); }
+    })().catch(e => console.error("[exit-offer] store", e));
+    return () => { alive = false; setNativeExitReady(false); };
+  }, [mode]);
 
   useEffect(() => {
     clearPrimingSource();
@@ -131,7 +148,8 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
   };
   escCloseRef.current = requestClose;
   const exitOffer = exitOpen && (
-    <ExitOffer mode={mode} billing={billing} setBilling={setBilling}
+    <ExitOffer mode={mode} billing={billing} setBilling={setBilling} storeOffers={storeExit}
+      onPurchased={() => { posthog.capture("exit_offer_accepted", { plan: mode, source, billing }); posthog.capture("trial_started", { plan: mode, billing, method: "app_store", promo: "DEPART30" }); if (onPurchased) onPurchased(); else window.location.reload(); }}
       onAccept={() => { posthog.capture("exit_offer_accepted", { plan: mode, source, billing }); acceptExitOffer(); onContinue(); }}
       onDecline={() => { posthog.capture("exit_offer_declined", { plan: mode, source }); close(); }} />
   );

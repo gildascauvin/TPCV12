@@ -31,6 +31,7 @@ const primary: React.CSSProperties = { display: "flex", alignItems: "center", ju
 const secondary: React.CSSProperties = { ...primary, background: "transparent", border: "1px solid rgba(255,255,255,.18)", fontWeight: 700, fontSize: 14 };
 const foot: React.CSSProperties = { fontSize: 12, color: "rgba(255,255,255,.55)", textAlign: "center" };
 const brands = "Apple Watch, Garmin, Whoop, Oura, Polar, Coros, Suunto";
+const brandsAndroid = "Samsung, Pixel Watch, Garmin, Whoop, Oura, Polar, Coros, Suunto";
 
 type Case = "web_iphone" | "web_android" | "web_desktop" | "ios_no_health" | "garmin_waiting" | null;
 
@@ -79,7 +80,7 @@ export default function WatchPrompt({ userId, physio }: { userId: string; physio
     setBusy(true); setError(null);
     try {
       const n = await syncHealthData(createClient(), userId);
-      if (n == null) setError(isAndroidApp() ? "Health Connect n'a pas pu être lu. Vérifie l'autorisation dans les paramètres de Health Connect." : "Apple Santé n'a pas pu être lu. Vérifie l'autorisation dans Réglages, Santé.");
+      if (n == null) setError(isAndroidApp() ? "Health Connect n'a pas pu être lu. S'il n'est pas sur ton téléphone, installe-le depuis Google Play, sinon vérifie l'autorisation dans ses paramètres." : "Apple Santé n'a pas pu être lu. Vérifie l'autorisation dans Réglages, Santé.");
       invalidatePhysio();
     } catch {
       setError(`${healthAppName()} n'a pas pu être lu. Réessaie.`);
@@ -108,7 +109,7 @@ export default function WatchPrompt({ userId, physio }: { userId: string; physio
         <span style={title}>Ramène tes 30 derniers jours : tes charts se remplissent dès aujourd&apos;hui.</span>
         <span style={text}>L&apos;app iPhone relit Apple Santé : nuits, FC au repos, VFC et entraînements avec leur fréquence cardiaque.</span>
         <a href={APP_STORE_URL} onClick={() => posthog.capture("watch_prompt_clicked", { case: kase, action: "app_store" })} style={{ ...primary, background: "#fff", color: "#070a0d" }}>Télécharger l&apos;app iPhone · gratuit</a>
-        <span style={foot}>{brands}</span>
+        <span style={foot}>{isAndroidApp() ? brandsAndroid : brands}</span>
       </>}
       {kase === "web_android" && PLAY_STORE_URL && <>
         <span style={eyebrow}>Tu as une montre ?</span>
@@ -116,7 +117,7 @@ export default function WatchPrompt({ userId, physio }: { userId: string; physio
         <span style={text}>L&apos;app Android relit Health Connect : nuits, FC au repos, VFC et entraînements avec leur fréquence cardiaque.</span>
         <a href={PLAY_STORE_URL} onClick={() => posthog.capture("watch_prompt_clicked", { case: kase, action: "play_store" })} style={{ ...primary, background: "#fff", color: "#070a0d" }}>Télécharger l&apos;app Android · gratuit</a>
         <button type="button" onClick={connectGarmin} style={secondary}>Connecter Garmin</button>
-        <span style={foot}>{brands}</span>
+        <span style={foot}>{brandsAndroid}</span>
       </>}
       {kase === "web_android" && !PLAY_STORE_URL && <>
         <span style={eyebrow}>Tu as une Garmin ?</span>
@@ -137,7 +138,7 @@ export default function WatchPrompt({ userId, physio }: { userId: string; physio
           <span style={{ ...text, fontSize: 12.5 }}>Scanne avec ton {PLAY_STORE_URL ? "téléphone" : "iPhone"} pour télécharger l&apos;app.</span>
         </div>
         <button type="button" onClick={connectGarmin} style={secondary}>Connecter Garmin</button>
-        <span style={foot}>{brands}</span>
+        <span style={foot}>{isAndroidApp() ? brandsAndroid : brands}</span>
       </>}
       {kase === "ios_no_health" && <>
         <span style={eyebrow}>{healthAppName()}</span>
@@ -145,7 +146,7 @@ export default function WatchPrompt({ userId, physio }: { userId: string; physio
         <span style={text}>Nuits, FC au repos, VFC et entraînements. Lecture seule, jamais revendu ni utilisé pour de la publicité.</span>
         <button type="button" onClick={allowHealth} disabled={busy} style={{ ...primary, opacity: busy ? 0.6 : 1 }}>{busy ? "Lecture en cours…" : `Autoriser ${healthAppName()}`}</button>
         {error && <span style={{ ...text, color: "#fca5a5" }}>{error}</span>}
-        <span style={foot}>{brands}</span>
+        <span style={foot}>{isAndroidApp() ? brandsAndroid : brands}</span>
       </>}
       {noWatchLink}
     </div>

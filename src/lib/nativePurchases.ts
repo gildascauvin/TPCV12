@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import type { PurchasesStoreProduct } from "@revenuecat/purchases-capacitor";
+import type { PurchasesStoreProduct, SubscriptionOption } from "@revenuecat/purchases-capacitor";
 
 /* Abonnement Apple dans l'app iOS (2026-10-01). Apple interdit de vendre un abonnement numérique
    hors de son système de paiement dans l'app (guideline 3.1.1) : dans la coque Capacitor, le
@@ -21,6 +21,18 @@ export const PRODUCT_IDS: Record<Plan, Record<Billing, string>> = {
   athlete: { monthly: "tpc_athlete_monthly", annual: "tpc_athlete_annual" },
   coach:   { monthly: "tpc_coach_monthly",   annual: "tpc_coach_annual" },
 };
+
+/* Offre de sortie dans les apps (2026-11-02, DEPART30 du web) :
+   - iOS : 4 produits « départ » dans un groupe d'abonnements À PART (« ThePerfClub Départ »), prix -30 %
+     sans fin de remise + essai 14 j. Groupe séparé : un abonné plein tarif ne les voit pas dans
+     Réglages → Abonnements (un même groupe y liste tous ses produits). Mêmes entitlements athlete/coach.
+   - Android : offre « depart30 » sur les forfaits des 4 abonnements existants (essai 14 j puis -30 %
+     pendant 12 mois), marquée « rc-ignore-offer » pour que RevenueCat ne la choisisse jamais par défaut. */
+export const EXIT_PRODUCT_IDS_IOS: Record<Plan, Record<Billing, string>> = {
+  athlete: { monthly: "tpc_athlete_monthly_depart", annual: "tpc_athlete_annual_depart" },
+  coach:   { monthly: "tpc_coach_monthly_depart",   annual: "tpc_coach_annual_depart" },
+};
+export const EXIT_OFFER_ID_ANDROID = "depart30";
 
 // Clés publiques RevenueCat (pas des secrets). Android (Google Play) : 2026-10-28, mêmes IDs produits.
 const REVENUECAT_IOS_KEY = process.env.NEXT_PUBLIC_REVENUECAT_IOS_KEY ?? "appl_vhcyRQNdfWsPRCBPsjRpfuBxgcj";
@@ -60,7 +72,8 @@ const productCache = new Map<string, PurchasesStoreProduct>();
    constantes PRICING, qui peuvent différer des paliers de prix Apple. */
 export async function getStoreProducts(userId: string): Promise<Record<string, PurchasesStoreProduct>> {
   const { Purchases } = await ensureConfigured(userId);
-  const ids = Object.values(PRODUCT_IDS).flatMap(p => Object.values(p));
+  const ids = Object.values(PRODUCT_IDS).flatMap(p => Object.values(p))
+    .concat(Capacitor.getPlatform() === "ios" ? Object.values(EXIT_PRODUCT_IDS_IOS).flatMap(p => Object.values(p)) : []);
   if (ids.some(id => !productCache.has(id))) {
     const { products } = await withTimeout(Purchases.getProducts({ productIdentifiers: ids }), 45000, "produits App Store");
     /* Google Play renvoie « abonnement:forfait » (tpc_athlete_monthly:monthly) : on range sous l'ID
@@ -76,14 +89,39 @@ async function syncServer() {
   return { status: (body?.status as string | undefined) ?? null };
 }
 
-/* null = l'utilisateur a fermé la fenêtre Apple (pas une erreur à afficher). */
-export async function purchasePlan(userId: string, plan: Plan, billing: Billing): Promise<{ ok: true } | { ok: false; error: string } | null> {
+/* Offre de sortie du store pour une formule : produit « départ » sur iOS, offre depart30 du forfait sur
+   Android. null = pas (encore) disponible (produits iOS pas encore validés par Apple, offre Play
+   inactive, ou déjà consommée : Google ne renvoie que les offres auxquelles le client a droit). */
+export type ExitStoreOffer = { product: PurchasesStoreProduct; option?: SubscriptionOption; price: string; trial: number | null };
+
+export function exitStoreOffer(products: Record<string, PurchasesStoreProduct>, plan: Plan, billing: Billing): ExitStoreOffer | null {
+  if (Capacitor.getPlatform() === "ios") {
+    const product = products[EXIT_PRODUCT_IDS_IOS[plan][billing]];
+    return product ? { product, price: product.priceString, trial: trialDays(product) } : null;
+  }
+  const product = products[PRODUCT_IDS[plan][billing]];
+  const option = product?.subscriptionOptions?.find(o => o.id.split(":").pop() === EXIT_OFFER_ID_ANDROID);
+  if (!product || !option) return null;
+  const free = option.pricingPhases.find(ph => ph.price.amountMicros === 0);
+  const paid = option.pricingPhases.find(ph => ph.price.amountMicros > 0 && ph.recurrenceMode !== 1)
+    ?? option.pricingPhases.find(ph => ph.price.amountMicros > 0);
+  if (!paid) return null;
+  const trial = free ? free.billingPeriod.value * (free.billingCycleCount || 1) * (free.billingPeriod.unit === "WEEK" ? 7 : free.billingPeriod.unit === "MONTH" ? 30 : 1) : null;
+  return { product, option, price: paid.price.formatted, trial };
+}
+
+/* null = l'utilisateur a fermé la fenêtre Apple (pas une erreur à afficher).
+   `exit` : achète l'offre de sortie (exitStoreOffer) au lieu de la formule normale. */
+export async function purchasePlan(userId: string, plan: Plan, billing: Billing, exit = false): Promise<{ ok: true } | { ok: false; error: string } | null> {
   try {
     const products = await getStoreProducts(userId);
-    const product = products[PRODUCT_IDS[plan][billing]];
+    const offer = exit ? exitStoreOffer(products, plan, billing) : null;
+    if (exit && !offer) return { ok: false, error: "Cette offre n'est plus disponible." };
+    const product = offer?.product ?? products[PRODUCT_IDS[plan][billing]];
     if (!product) return { ok: false, error: "Offre introuvable dans la boutique. Réessaie plus tard." };
     const { Purchases } = await ensureConfigured(userId);
-    await Purchases.purchaseStoreProduct({ product });
+    if (offer?.option) await Purchases.purchaseSubscriptionOption({ subscriptionOption: offer.option });
+    else await Purchases.purchaseStoreProduct({ product });
   } catch (e) {
     const err = e as { userCancelled?: boolean; message?: string };
     if (err?.userCancelled) return null;

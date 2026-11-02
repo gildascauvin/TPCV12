@@ -33,7 +33,15 @@ const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.l
 
 export function aggregateHealthDays(rhr: HealthSample[], hrv: HealthSample[], sleep: HealthSample[]): HealthDay[] {
   // Les phases éveillé / au lit ne comptent pas comme du sommeil.
-  const asleep = sleep.filter((s) => !s.sleepState || !["inBed", "awake"].includes(s.sleepState));
+  const AWAKE = ["inBed", "awake"];
+  /* Health Connect (Android, 2026-11-02) : une nuit = un seul échantillon de toute la session, réveils
+     compris, avec les phases dans `stages` (sleepState vide). On compte alors les seules phases de
+     sommeil ; sans phases, la session entière (comme avant). */
+  const asleep = sleep
+    .map((s) => (s.stages?.length
+      ? { ...s, value: s.stages.filter((g) => !AWAKE.includes(g.stage)).reduce((a, g) => a + (new Date(g.endDate).getTime() - new Date(g.startDate).getTime()) / 60000, 0) }
+      : s))
+    .filter((s) => !s.sleepState || !AWAKE.includes(s.sleepState));
   const rhrD = groupByDay(rhr), hrvD = groupByDay(hrv), sleepD = groupByDay(asleep);
   const days = Array.from(new Set(Array.from(rhrD.keys()).concat(Array.from(hrvD.keys()), Array.from(sleepD.keys())))).sort();
   return days.map((date) => {

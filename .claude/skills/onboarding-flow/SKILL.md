@@ -138,6 +138,6 @@ value_intro → decision_2b → account → ob_sport → ob_count → questions 
 - Prénom dans l'AHA : toujours écarté. La séance réelle du programme claimé, elle, est faite depuis le 31/10 (voir plus haut).
 
 ## Pas encore branché
-`ReplayStepBody` (rejeu Apple Santé réel), `ReviewPromptMock` (note native), Health Connect dans l'onboarding Android : lot natif après validation Play.
+Rejeu réel (02/11) : après la connexion Santé dans `ob_health`, `fetchReplay` (`src/lib/healthReplay.ts`) rejoue 30 jours de montre ; avec au moins 7 jours mesurés l'écran devient le rejeu (`ReplayStepBody`, « Ta montre savait. Ta séance, non. ») puis le point forme, sinon le point forme s'ouvre direct. Le titre du paywall reprend le nombre de jours à alléger. Test : `&dbghealth=1&dbgreplay=1`. Event `onboarding_replay_viewed {scored, down, up}`. Demande de note native sur « C'est parti » d'`ob_week` (event `store_review_requested`).
 
 Détails et raisons : grep `historique.md` de ce dossier (sections datées, la plus récente prime).

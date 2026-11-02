@@ -1,7 +1,7 @@
 "use client";
 
 /* Argumentaire avant paywall (2026-10-27, POC https://claude.ai/artifact/Ma3E6NB8dAAhd7HwjjuVF7).
-   ob_replay : les 30 jours d'Apple Santé rejoués (iOS). ob_insight : juste après le check-in, un carrousel
+   Rejeu : les 30 jours d'Apple Santé / Health Connect rejoués dans ob_health (apps). ob_insight : juste après le check-in, un carrousel
    d'écrans du bilan en données réelles d'un sportif ThePerfClub, le premier choisi par sa réponse la
    plus basse (« Nos données indiquent qu'un sportif stressé… »).
    Les cartes sont les vrais écrans du bilan (SlideBody de BilanCarousel), dans un cadre réduit. */
@@ -11,6 +11,8 @@ import { SlideBody, GLOW, KICKER, KICKER_COACH } from "@/components/bilan/BilanC
 import { SCALE_WORDS, type ScaleKey } from "@/lib/wellnessWords";
 import type { Bilan, BilanSlide } from "@/lib/bilan";
 import { catalogEntry, findCatalogEntry } from "@/lib/sportCatalog";
+import { workoutLabel } from "@/lib/healthWorkouts";
+import { replayDownCount, replayUpCount, type Replay } from "@/lib/healthReplay";
 
 const MONO: React.CSSProperties = { fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase" };
 const BOX: React.CSSProperties = { background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16 };
@@ -47,9 +49,11 @@ export function insightTitle(a: Answers, name?: string): string {
   return name ? `${name} : ${QPHRASE[k]} ${answerWord(k, a[k])}.` : `Ce matin, ${QPHRASE[k]} ${answerWord(k, a[k])}.`;
 }
 /* sessionName : la séance de sa jauge, pour que le titre reprenne celle qu'il vient de voir. */
-export function payHeadline(a: Answers, replay: boolean, sport = "", sessionName?: string): string {
+export function payHeadline(a: Answers, replayDown: number, sport = "", sessionName?: string): string {
   const ses = sessionName ? `séance « ${sessionName} »` : FAM[sportFamily(sport)].ses;
-  if (replay) return "Ce mois-ci, 3 matins à alléger sont passés inaperçus. Le prochain, ThePerfClub le voit avant ta séance.";
+  // Rejeu de la montre (2026-11-02) : le vrai nombre de séances faites un jour à alléger.
+  if (replayDown >= 2) return `Ce mois-ci, ${replayDown} jours à alléger sont passés inaperçus. Le prochain, ThePerfClub le voit avant ta séance.`;
+  if (replayDown === 1) return "Ce mois-ci, un jour à alléger est passé inaperçu. Le prochain, ThePerfClub le voit avant ta séance.";
   const k = lowestAnswer(a);
   return {
     sleep: "Ta prochaine nuit courte ne te coûtera plus ta séance.",
@@ -231,53 +235,30 @@ export function InsightStepBody({ answers, name, sport = "" }: { answers: Answer
   );
 }
 
-/* ── Demande de note (POC) : en prod, la fenêtre système iOS (SKStoreReviewController via un plugin
-   Capacitor) ou Android (In-App Review), déclenchée juste après sa 1re décision. Imitation ici. ── */
-export function ReviewPromptMock({ onClose }: { onClose: () => void }) {
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 2147483600, background: "rgba(0,0,0,.45)", display: "grid", placeItems: "center", padding: 20 }}>
-      <div style={{ width: 270, borderRadius: 14, background: "rgba(242,242,247,.96)", color: "#000", textAlign: "center", overflow: "hidden", fontFamily: "-apple-system, system-ui, sans-serif" }}>
-        <div style={{ padding: "18px 16px 14px" }}>
-          <img src="/icon-192.png" alt="" width={56} height={56} style={{ borderRadius: 13, display: "block", margin: "0 auto 10px" }} onError={e => { e.currentTarget.style.display = "none"; }} />
-          <div style={{ fontSize: 17, fontWeight: 600 }}>Vous aimez ThePerfClub ?</div>
-          <div style={{ fontSize: 13, marginTop: 4, lineHeight: 1.35 }}>Touchez une étoile pour l&apos;évaluer sur l&apos;App Store.</div>
-          <div style={{ fontSize: 28, color: "#0a84ff", letterSpacing: 6, marginTop: 10 }}>☆☆☆☆☆</div>
-        </div>
-        <button onClick={onClose} style={{ width: "100%", height: 44, border: 0, borderTop: "1px solid rgba(60,60,67,.29)", background: "transparent", color: "#0a84ff", fontSize: 17, cursor: "pointer" }}>Plus tard</button>
-      </div>
-    </div>
-  );
-}
+/* ── Rejeu des 30 derniers jours de la montre (2026-11-02) : vraies données d'Apple Santé / Health
+   Connect, lues juste après la connexion (src/lib/healthReplay.ts). ── */
+const FR_DAY = (date: string) => {
+  const s = new Date(`${date}T12:00:00`).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
 
-/* ── ob_replay : ses 30 derniers jours (en prod : health_days + health_workouts, rejoués par le moteur). ── */
-type ReplayDay = { v: number; ses: boolean; flag?: "down" | "up" };
-const REPLAY: ReplayDay[] = (() => {
-  const out: ReplayDay[] = []; let s = 7;
-  const ses = new Set([0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 25, 26, 28]);
-  for (let d = 0; d < 30; d++) { s = (s * 9301 + 49297) % 233280; out.push({ v: Math.round(58 + (s / 233280) * 26), ses: ses.has(d) }); }
-  ([[5, 31], [16, 34], [21, 38]] as const).forEach(([d, v]) => { out[d] = { v, ses: true, flag: "down" }; });
-  ([[9, 92], [25, 90]] as const).forEach(([d, v]) => { out[d] = { v, ses: true, flag: "up" }; });
-  return out;
-})();
-const DAYS = [
-  { d: "Mar. 6 oct.", rows: [["🌙", "Nuit de 5 h 41, 1 h 12 sous ta norme"], ["♥", "Fréquence cardiaque au repos : 7 bpm au-dessus de ta norme"]], ses: "Musculation, 1 h 08", note: "faite comme prévu" },
-  { d: "Sam. 17 oct.", rows: [["〰", "VFC à 41 ms, ta norme est à 58 ms"], ["♥", "Fréquence cardiaque au repos : 5 bpm au-dessus"]], ses: "Course, 52 min", note: "cœur 9 bpm plus haut que sur tes courses habituelles" },
-  { d: "Jeu. 22 oct.", rows: [["〰", "VFC sous ta norme, 3e matin de suite"], ["🌙", "Nuit de 6 h 02"]], ses: "CrossFit, 58 min", note: "faite comme prévu" },
-];
-
-function Strip() {
-  const W = 320, H = 96, bw = W / 30, ny = H - ((70 - 20) / 80) * H;
+function Strip({ replay }: { replay: Replay }) {
+  const W = 320, H = 96, n = replay.days.length, bw = W / n;
+  const y = (v: number) => H - (Math.max(5, Math.min(100, v)) / 100) * H;
+  const ny = y(75);
   return (
     <div style={{ ...BOX, borderRadius: 18, padding: "14px 12px 10px", marginBottom: 14 }}>
-      <svg viewBox={`0 0 ${W} ${H + 22}`} width="100%" role="img" aria-label="Forme physiologique de tes 30 derniers jours">
+      <svg viewBox={`0 0 ${W} ${H + 22}`} width="100%" role="img" aria-label="Forme mesurée par ta montre sur tes 30 derniers jours">
         <line x1={0} x2={W} y1={ny} y2={ny} stroke="rgba(255,255,255,.25)" strokeDasharray="3 3" />
         <text x={W} y={ny - 4} textAnchor="end" fontSize={8.5} fill="rgba(255,255,255,.45)" fontFamily="var(--font-mono), monospace">ta norme</text>
-        {REPLAY.map((p, i) => {
-          const h = ((p.v - 20) / 80) * H, x = i * bw + 1.5, cx = x + (bw - 3) / 2;
+        {replay.days.map((p, i) => {
+          const x = i * bw + 1.5, cx = x + (bw - 3) / 2;
           const c = p.flag === "down" ? DOWN : p.flag === "up" ? UP : "rgba(255,255,255,.22)";
           return (
-            <g key={i}>
-              <rect x={x} y={H - h} width={bw - 3} height={h} rx={2} fill={c} />
+            <g key={p.date}>
+              {p.v != null
+                ? <rect x={x} y={y(p.v)} width={bw - 3} height={H - y(p.v)} rx={2} fill={c} />
+                : <rect x={x} y={H - 2} width={bw - 3} height={2} rx={1} fill="rgba(255,255,255,.12)" />}
               {p.ses && <circle cx={cx} cy={H + 7} r={2} fill="rgba(255,255,255,.55)" />}
               {p.flag && <text x={cx} y={H + 19} textAnchor="middle" fontSize={9} fill={c}>{p.flag === "down" ? "▼" : "▲"}</text>}
             </g>
@@ -285,38 +266,50 @@ function Strip() {
         })}
       </svg>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", fontSize: 11.5, color: "rgba(255,255,255,.58)", padding: "8px 4px 0" }}>
-        <span>▼ alléger</span><span>▲ pousser</span><span>• séance enregistrée</span>
+        <span>▼ à alléger</span><span>▲ à pousser</span><span>• entraînement enregistré</span>
       </div>
     </div>
   );
 }
 const pill = (down: boolean): React.CSSProperties => ({ ...MONO, fontSize: 10, letterSpacing: ".06em", padding: "5px 9px", borderRadius: 999, whiteSpace: "nowrap", background: down ? "rgba(109,167,236,.18)" : "rgba(255,138,92,.16)", color: down ? DOWN : UP });
+const ROW_ICON = (t: string) => (t.startsWith("Nuit") ? "🌙" : t.startsWith("VFC") ? "〰" : "♥");
 
-export function ReplayStepBody() {
+export function replayConclusion(r: Replay): string {
+  const down = replayDownCount(r), up = replayUpCount(r);
+  if (down >= 2) return `Ta montre a vu ${down} séances faites un jour où ton corps demandait d'alléger. Dès demain, ThePerfClub le voit avant ta séance.`;
+  if (down === 1) return "Une séance faite un jour où ton corps demandait d'alléger. Dès demain, ThePerfClub le voit avant ta séance.";
+  if (up >= 1) return `Aucune séance à alléger ce mois-ci, mais ${up > 1 ? `${up} jours` : "un jour"} où tu pouvais pousser. Dès demain, ThePerfClub te le dit avant ta séance.`;
+  return "Ton corps est resté dans ta norme les jours de séance. Dès demain, ThePerfClub le vérifie avant chaque séance.";
+}
+
+export function ReplayStepBody({ replay }: { replay: Replay }) {
+  const up = replay.up;
   return (
     <div>
       <style>{`@keyframes obIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@media (prefers-reduced-motion:reduce){.ob-in{animation:none!important}}`}</style>
-      <Strip />
-      {DAYS.map((d, i) => (
-        <div key={d.d} className="ob-in" style={{ ...BOX, padding: "13px 14px", marginBottom: 8, animation: `obIn .45s ease ${0.25 + i * 0.35}s both` }}>
+      <Strip replay={replay} />
+      {replay.down.map((d, i) => (
+        <div key={d.date} className="ob-in" style={{ ...BOX, padding: "13px 14px", marginBottom: 8, animation: `obIn .45s ease ${0.25 + i * 0.35}s both` }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <span style={{ ...MONO, fontSize: 11.5, letterSpacing: ".06em", color: "rgba(255,255,255,.58)" }}>{d.d}</span>
+            <span style={{ ...MONO, fontSize: 11.5, letterSpacing: ".06em", color: "rgba(255,255,255,.58)" }}>{FR_DAY(d.date)}</span>
             <span style={pill(true)}>▼ Aurait allégé</span>
           </div>
-          {d.rows.map(([ic, t]) => (
-            <div key={t} style={{ display: "flex", gap: 8, fontSize: 13.5, lineHeight: 1.45, color: "rgba(255,255,255,.82)", padding: "2px 0" }}><span style={{ width: 16, textAlign: "center", color: "rgba(255,255,255,.58)" }}>{ic}</span><span>{t}</span></div>
+          {d.rows.map(t => (
+            <div key={t} style={{ display: "flex", gap: 8, fontSize: 13.5, lineHeight: 1.45, color: "rgba(255,255,255,.82)", padding: "2px 0" }}><span style={{ width: 16, textAlign: "center", color: "rgba(255,255,255,.58)" }}>{ROW_ICON(t)}</span><span>{t}</span></div>
           ))}
-          <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,.10)", fontSize: 13.5, color: "#fff" }}>{d.ses} <span style={{ color: "rgba(255,255,255,.58)" }}>· {d.note}</span></div>
+          {d.workout && <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,.10)", fontSize: 13.5, color: "#fff" }}>{workoutLabel(d.workout.workout_type)}, {d.workout.duration_min} min <span style={{ color: "rgba(255,255,255,.58)" }}>· faite quand même</span></div>}
         </div>
       ))}
-      <div className="ob-in" style={{ ...BOX, padding: "13px 14px", marginBottom: 14, animation: "obIn .45s ease 1.4s both" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 6 }}>
-          <span style={{ ...MONO, fontSize: 11.5, letterSpacing: ".06em", color: "rgba(255,255,255,.58)" }}>Sam. 10 et lun. 26 oct.</span>
-          <span style={pill(false)}>▲ Aurait poussé</span>
+      {up.length > 0 && (
+        <div className="ob-in" style={{ ...BOX, padding: "13px 14px", marginBottom: 14, animation: `obIn .45s ease ${0.25 + replay.down.length * 0.35}s both` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <span style={{ ...MONO, fontSize: 11.5, letterSpacing: ".06em", color: "rgba(255,255,255,.58)" }}>{up.map(d => FR_DAY(d.date)).join(" et ")}</span>
+            <span style={pill(false)}>▲ Aurait poussé</span>
+          </div>
+          <div style={{ fontSize: 13.5, lineHeight: 1.45, color: "rgba(255,255,255,.82)" }}>{up.length > 1 ? "Au-dessus de ta norme ces deux jours" : "Au-dessus de ta norme ce jour-là"}, séance faite sans rien ajouter.</div>
         </div>
-        <div style={{ fontSize: 13.5, lineHeight: 1.45, color: "rgba(255,255,255,.82)" }}>Au-dessus de ta norme deux matins, séance faite sans rien ajouter.</div>
-      </div>
-      <p className="ob-in" style={{ fontSize: 15, lineHeight: 1.5, color: "rgba(255,255,255,.75)", margin: 0, paddingLeft: 12, borderLeft: "3px solid #d44000", animation: "obIn .45s ease 1.8s both" }}>Ton ressenti a laissé passer 3 matins. Dès demain, ThePerfClub les voit avant ta séance.</p>
+      )}
+      <p className="ob-in" style={{ fontSize: 15, lineHeight: 1.5, color: "rgba(255,255,255,.75)", margin: "14px 0 0", paddingLeft: 12, borderLeft: "3px solid #d44000", animation: `obIn .45s ease ${0.4 + (replay.down.length + (up.length ? 1 : 0)) * 0.35}s both` }}>{replayConclusion(replay)}</p>
     </div>
   );
 }

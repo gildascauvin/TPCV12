@@ -26,7 +26,9 @@ import Actions from "@/components/onboarding/Actions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, PROGRAM_QUESTION_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
 import { COUNT_OPTIONS, HealthStepBody, WeekStepBody, PlannedWeekBody, NotifStepBody, AppPushStepBody, StreakTitle, type ObCount, type WeekSession } from "@/components/onboarding/EliteSteps";
-import { InsightStepBody, insightTitle, payHeadline, payHeadlineCoach, decideOptions, decideLead, decideOptionsCoach, decideLeadCoach, contrastTitle, contrastTitleCoach, weekCostLine, pickWords, pickWordsCoach, lowestAnswer, lowWords, sportFamily, answerRows, testFor, type Answers, type Pick, type PickCoach } from "@/components/onboarding/InsightSteps";
+import { requestStoreReview } from "@/lib/storeReview";
+import { fetchReplay, demoReplay, replayUsable, replayDownCount, replayUpCount, type Replay } from "@/lib/healthReplay";
+import { InsightStepBody, ReplayStepBody, insightTitle, payHeadline, payHeadlineCoach, decideOptions, decideLead, decideOptionsCoach, decideLeadCoach, contrastTitle, contrastTitleCoach, weekCostLine, pickWords, pickWordsCoach, lowestAnswer, lowWords, sportFamily, answerRows, testFor, type Answers, type Pick, type PickCoach } from "@/components/onboarding/InsightSteps";
 import { SessionTemplateCard } from "@/components/programs/SessionTemplateCard";
 import AnalysisReveal, { ReadingReveal, type AnalysisStep } from "@/components/onboarding/AnalysisReveal";
 import { computeAutoregSuggestion } from "@/lib/autoregulation";
@@ -475,6 +477,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [obInsightRevealed, setObInsightRevealed] = useState(false);
   const [obCount, setObCount] = useState<ObCount | null>(null);
   const [obHealthBusy, setObHealthBusy] = useState(false);
+  /* Rejeu des 30 jours de la montre (2026-11-02), rempli après la connexion Santé. null = pas (encore)
+     de rejeu affichable : le point forme s'ouvre directement, comme avant. */
+  const [obReplay, setObReplay] = useState<Replay | null>(null);
   const [obHealthError, setObHealthError] = useState<string | null>(null);
   const [obCheckinBusy, setObCheckinBusy] = useState(false);
   const [obCheckinOpen, setObCheckinOpen] = useState(false);
@@ -2234,20 +2239,44 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     if (currentStep === "ob_health") {
       const connect = async () => {
         if (obHealthBusy) return;
-        if (!eliteUid) { setObCheckinOpen(true); return; } // ?dbgstep sans compte
+        if (!eliteUid) { // ?dbgstep sans compte ; &dbgreplay=1 montre le rejeu sur une montre inventée
+          if (new URLSearchParams(window.location.search).get("dbgreplay") === "1") setObReplay(demoReplay());
+          else setObCheckinOpen(true);
+          return;
+        }
         setObHealthBusy(true);
+        let replay: Replay | null = null;
         try {
-          // Import à la demande : le plugin Santé n'existe que dans l'app iOS.
+          // Import à la demande : le plugin Santé n'existe que dans les apps.
           const { syncHealthData } = await import("@/lib/healthSync");
           const days = await syncHealthData(supabase, eliteUid);
           posthog.capture("onboarding_health_connected", { days });
+          // 0 jour lu = accès refusé (iOS ne le signale pas) ou montre muette : parcours sans données.
+          if (days) replay = await fetchReplay(supabase, eliteUid);
         } catch (e) {
-          // Ne bloque jamais le parcours : Apple Santé reste connectable depuis l'app.
+          // Ne bloque jamais le parcours : la Santé reste connectable depuis l'app.
           console.error("[ob_health] sync error:", e);
           posthog.capture("onboarding_health_failed");
         } finally { setObHealthBusy(false); }
-        setObCheckinOpen(true);
+        if (replayUsable(replay)) {
+          setObReplay(replay);
+          posthog.capture("onboarding_replay_viewed", { role, scored: replay.scored, down: replayDownCount(replay), up: replayUpCount(replay) });
+        } else setObCheckinOpen(true);
       };
+      if (obReplay) {
+        return (
+          <>
+            <QuestionShell {...common} dark eyebrow="Tes 30 derniers jours"
+              title="Ta montre savait. Ta séance, non."
+              sub="Chaque jour rejoué avec tes vraies mesures, comme ThePerfClub l'aurait lu le matin."
+              onSkip={() => setObCheckinOpen(true)}
+              cta={{ label: "Faire mon point forme", onClick: () => setObCheckinOpen(true), busy: obCheckinBusy }}>
+              <ReplayStepBody replay={obReplay} />
+            </QuestionShell>
+            {checkinModal}
+          </>
+        );
+      }
       return (
         <>
           <QuestionShell {...common}
@@ -2345,7 +2374,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           title={coach ? capS(contrastTitleCoach(obPick as PickCoach | null, sug, coachFirst)) : contrastTitle(obPick as Pick | null, sug)}
           sub={weekSub(sug?.dir ?? null) || undefined}
           onSkip={() => obAdvance()}
-          cta={{ label: coach ? "Continuer" : "C'est parti", onClick: () => obAdvance() }}>
+          cta={{ label: coach ? "Continuer" : "C'est parti", onClick: () => {
+            /* Demande de note native juste après sa 1re décision (2026-11-02) : apps seulement, sur le
+               bouton positif, jamais sur « Passer ». La fenêtre du store s'ouvre par-dessus l'écran suivant. */
+            requestStoreReview().then(asked => { if (asked) posthog.capture("store_review_requested", { role, surface: "onboarding" }); });
+            obAdvance();
+          } }}>
           <WeekStepBody key={`${ses.name}-${obCheckinScore}`} sessions={[{ id: "ob-ring", date: today, name: ses.name, notes: ses.notes ?? null, target_difficulty: ses.target_difficulty }]}
             program={null} checkinScore={obCheckinScore} acclimatation={false} today={today} decide subject={coach ? coachFirst : undefined} />
         </QuestionShell>
@@ -2407,7 +2441,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       const done = () => { if (eliteUid) finishOnboarding(eliteUid); };
       /* Titre par cas (sa réponse la plus basse du matin), sous-titre = sa décision. */
       const ringName = ringSession().name;
-      const headline = coach ? capS(payHeadlineCoach(answers, coachFirst, sportForCopy, ringName)) : payHeadline(answers, false, sportForCopy, ringName);
+      const headline = coach ? capS(payHeadlineCoach(answers, coachFirst, sportForCopy, ringName)) : payHeadline(answers, obReplay ? replayDownCount(obReplay) : 0, sportForCopy, ringName);
       const pickLine = obPick ? (coach ? pickWordsCoach[obPick as PickCoach] : pickWords[obPick as Pick]) ?? "" : "";
       /* 2e phrase = le coût de ne rien faire, au moment d'hésiter (2026-10-31, chantier douleur). */
       const paySub = coach

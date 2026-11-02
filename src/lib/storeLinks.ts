@@ -3,9 +3,9 @@
 
 export const APP_STORE_URL = "https://apps.apple.com/fr/app/theperfclub/id6817809833";
 
-/** Lien Google Play, vide tant que l'app Android n'est pas publique : Android garde alors l'installation web
-    et les écrans ne parlent que de l'iPhone. À remplir le jour de la publication. */
-export const PLAY_STORE_URL = "";
+/** Lien Google Play (app publiée le 2026-11-02). Vide = Android garde l'installation web
+    et les écrans ne parlent que de l'iPhone. */
+export const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.theperfclub.app";
 
 /** Cible des QR codes : redirige vers le bon store selon le téléphone qui scanne. */
 export const APP_DOWNLOAD_URL = "https://go.theperfclub.com/api/telecharger";

@@ -5,11 +5,19 @@
 
 const MONO: React.CSSProperties = { fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase" };
 
+/* Date réelle du 1er prélèvement (2026-11-02, Gildas) au lieu de « Jour 14 » : aujourd'hui + 14 jours, comme
+   trial_period_days côté Stripe et l'essai des stores. « lundi 16 novembre ». */
+function chargeDate(days = 14) {
+  const d = new Date(); d.setDate(d.getDate() + days);
+  const s = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 export function RiskTimeline({ coach }: { coach?: boolean }) {
   const steps = [
     { ic: "✓", t: "Aujourd'hui", s: coach ? "0 €. Tes sportifs sont gratuits, toujours." : "0 €", now: true },
     { ic: "✓", t: "Pendant l'essai", s: "Annulable en 1 clic" },
-    { ic: "€", t: "Jour 14", s: "1er paiement" },
+    { ic: "€", t: chargeDate(), s: "1er paiement" },
   ];
   return (
     <div>

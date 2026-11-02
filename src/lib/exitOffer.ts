@@ -3,7 +3,8 @@
    2026-10-30 : 9 € → 6,30 €/mois, coach 39 € → 27,30 €), essai de 14 jours inchangé.
    Code promo Stripe DEPART30 (coupon pzCyxdmB : -30 %, 12 mois, produits sportif et coach, 1er abonnement
    seulement ; « 12 mois » et pas « une fois » : une remise « une fois » partirait sur la facture à 0 € de l'essai).
-   Web seulement : dans les apps iOS / Android, l'achat passe par Apple / Google (codes d'offre des stores, lot 3).
+   Apps (2026-11-02) : même écran, achat par le store (produits « départ » iOS, offre Play depart30, voir
+   src/lib/nativePurchases.ts). Proposée seulement une fois l'offre du store chargée (setNativeExitReady).
    Une seule fois par appareil (localStorage). Une fois acceptée, l'offre reste appliquée au formulaire de
    paiement jusqu'au rechargement de la page (état de module, comme primingSource). */
 
@@ -14,8 +15,11 @@ export const EXIT_PROMO = "DEPART30";
 const DISCOUNT = 0.3;
 const SEEN_KEY = "tpc_exit_offer_seen";
 
+let nativeExitReady = false;
+export function setNativeExitReady(v: boolean) { nativeExitReady = v; }
+
 export function exitOfferEligible(): boolean {
-  if (isNativeApp()) return false;
+  if (isNativeApp() && !nativeExitReady) return false;
   try {
     // Mode test (?dbgstep) : l'offre revient à chaque fermeture, pour pouvoir la revoir.
     if (new URLSearchParams(window.location.search).has("dbgstep")) return true;

@@ -7,6 +7,7 @@ import type { ChartSpec } from "@/lib/metricCards";
 import { HEART_CALIBRATION, HEART_FAMILY_LABEL, PHYSIO_MIN_DAYS, heartFamily, matchWorkout, physioVerdictAt, type HeartFamily, type HeartResult, type PhysioVerdict } from "@/lib/physioCompare";
 import { requestPhysioReplay, type PhysioData } from "@/lib/physioData";
 import { canReadHeart } from "@/lib/heartAccess";
+import { isAndroidApp } from "@/lib/native";
 
 /* Cartes d'indice "Ressenti vs cœur" (onglet Charge) et "Ressenti vs physiologie" (onglet
    Récupération), 2026-10-11. Même gabarit que les autres cartes (IndexCards, extraCards) et même
@@ -42,7 +43,7 @@ export function heartIndexCard(physio: PhysioData | null | undefined, referenceD
     return {
       key: "heart", label: "Ressenti vs physiologie", status: "En attente de fréquence cardiaque", statusColor: MID, accent: null,
       trend: "0 séance mesurée",
-      impact: "Tes séances arrivent dans Santé, mais pas encore leur fréquence cardiaque. Ouvre l'app iPhone et autorise la lecture de la fréquence cardiaque dans Santé.",
+      impact: isAndroidApp() ? "Tes séances arrivent dans Health Connect, mais pas encore leur fréquence cardiaque. Autorise la lecture de la fréquence cardiaque dans les paramètres de Health Connect." : "Tes séances arrivent dans Santé, mais pas encore leur fréquence cardiaque. Ouvre l'app iPhone et autorise la lecture de la fréquence cardiaque dans Santé.",
       preview: <GapBars values={[]} />,
       body: <div style={{ fontSize: 13, color: "rgba(255,255,255,.7)", lineHeight: 1.5 }}>Dès que la fréquence cardiaque de tes séances arrive, chaque séance compare ton ressenti à tes données physiologiques (après {HEART_CALIBRATION} séances du même type).</div>,
     };

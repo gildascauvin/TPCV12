@@ -100,7 +100,10 @@ description: Paywall, priming Elite, abonnements Stripe et achats intégrés iOS
 - Essai retiré puis remis : l'essai de 14 jours avec CB est en vigueur. « 14 jours offerts » dans les textes ; le CTA dit « Commencer mon essai gratuit » depuis le 30/10. Jamais de promesse de rappel avant facturation.
 - Ligne « Moins cher qu'une séance de coach particulier » de 2026-08 : retirée (l'ancrage actuel est celui validé le 30/10).
 
-## Reste à faire (lot natif, après validation Play)
-Offre de sortie dans les apps (Android : offre Play réservée au développeur ; iOS : piste d'un 2e produit remisé dans le même groupe d'abonnement). En attendant, les apps affichent la feuille de perte.
+## Offre de sortie dans les apps (02/11/2026)
+- Même écran `ExitOffer`, achat direct par le store (`purchasePlan(..., exit=true)`, `exitStoreOffer()` dans `src/lib/nativePurchases.ts`). `PrimingJourneyModal` précharge l'offre du store ; tant qu'elle n'est pas chargée (`setNativeExitReady`), la croix garde la feuille de perte.
+- Android : offre Play `depart30` sur les forfaits des 4 abonnements (Acquisition, « jamais eu d'abonnement dans l'appli », tag `rc-ignore-offer` pour que RevenueCat ne la prenne jamais par défaut) : 14 j gratuits puis -30 % (annuel = paiement unique 1 an, mensuel = 12 périodes).
+- iOS : groupe d'abonnements SÉPARÉ `theperfclub-depart` (sinon les abonnés plein tarif verraient les produits remisés dans Réglages → Abonnements), produits `tpc_{athlete,coach}_{monthly,annual}_depart`, -30 % SANS fin de remise + essai 14 j (Apple ne combine pas essai + remise limitée). Paliers Apple : 6,29 / 54,00 / 27,00 / 239,00 €. Validés par Apple avec la version 1.2. Rattachés aux entitlements dans RevenueCat (créés à la main, l'import ASC plante).
+- Frise `RiskTimeline` : la 3e étape affiche la vraie date du 1er prélèvement (aujourd'hui + 14 j), plus « Jour 14 ».
 
 Détails et raisons : grep `historique.md` de ce dossier (sections datées, la plus récente prime).

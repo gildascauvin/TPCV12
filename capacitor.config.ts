@@ -24,7 +24,8 @@ const config: CapacitorConfig = {
     contentInset: "always",
     /* FC des séances (2026-10-14) : marque les builds dont le texte d'autorisation Santé mentionne la
        FC pendant les entraînements ; le site ne la demande qu'à eux (src/lib/heartAccess.ts). */
-    appendUserAgent: "TPCHeart",
+    /* TPCReview (build 13, 2026-11-02) : plugin de demande de note embarqué (src/lib/storeReview.ts). */
+    appendUserAgent: "TPCHeart TPCReview",
     // Pas d'aperçu de lien à l'appui long (réflexe "page web", 2026-10-03).
     allowsLinkPreview: false,
     /* Mode hors ligne (2026-10-02) : nécessaire pour que le service worker fonctionne dans l'app
@@ -36,7 +37,8 @@ const config: CapacitorConfig = {
   android: {
     /* TPCFcm (build 2, 2026-10-28) : Firebase est embarqué, le site peut activer les notifications
        (un build sans Firebase planterait à l'enregistrement). */
-    appendUserAgent: "TPCHeart TPCFcm",
+    /* TPCReview (versionCode 3, 2026-11-02) : plugin de demande de note embarqué (src/lib/storeReview.ts). */
+    appendUserAgent: "TPCHeart TPCFcm TPCReview",
   },
   plugins: {
     // Google natif (connexion) ; Apple gardé pour Sign in with Apple, exigé par l'App Store.

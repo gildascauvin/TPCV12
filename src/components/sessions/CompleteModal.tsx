@@ -5,6 +5,7 @@ import { useExitAnimation } from "@/hooks/useExitAnimation";
 import type { Session } from "@/types";
 import { createClient } from "@/lib/supabase/client";
 import { fetchWorkoutsForDay, workoutLabel, workoutTime, type HealthWorkout } from "@/lib/healthWorkouts";
+import { isAndroidApp } from "@/lib/native";
 import { chronoMinutes } from "@/lib/liveSession";
 import { invalidatePhysio, requestPhysioReveal } from "@/lib/physioData";
 import ScaleBars, { CR10_LABELS } from "@/components/ui/ScaleBars";
@@ -139,7 +140,7 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
           {workouts.length > 0 && (
             <div style={{ marginTop: 10 }}>
               <div style={{ fontSize: 11, color: "#8a8f94", marginBottom: 6 }}>
-                {workouts.length > 1 ? "Enregistrés dans Santé ce jour-là :" : "Enregistré dans Santé :"}
+                {workouts.length > 1 ? `Enregistrés dans ${isAndroidApp() ? "Health Connect" : "Santé"} ce jour-là :` : `Enregistré dans ${isAndroidApp() ? "Health Connect" : "Santé"} :`}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {workouts.map(w => {
