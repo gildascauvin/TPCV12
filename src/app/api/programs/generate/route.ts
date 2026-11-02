@@ -1,5 +1,6 @@
 import type { ProgramTemplate, WeekTemplate, SessionTemplate, ProgramLevel, ProgramFocus, SessionLoad, SessionType } from "@/types";
 import { seriesFromRepeats } from "@/lib/sessionSeries";
+import { familiesIn, movementFamily } from "@/lib/movementFamily";
 
 // Périodisation par blocs de 4 semaines (MEV → Surcharge → MRV → Deload, terminologie RP) —
 // remplace l'ancienne LOAD_PATTERNS (courbe plate indexée par durée totale, aucune notion de
@@ -3256,8 +3257,8 @@ const WEAKNESS_META: Record<string, WeaknessMeta> = {
   pectoraux:         { extraLine: "Développé couché — 3×12\nÉcarté couché — 3×12", typeHints: ["volume", "intensite", "technique"] },
   epaules:           { extraLine: "Développé militaire — 3×12\nÉlévations latérales — 3×12", typeHints: ["volume", "intensite", "technique"] },
   bras:              { extraLine: "Curl haltères — 3×12\nExtension triceps poulie — 3×12", typeHints: ["volume", "intensite", "technique"] },
-  arrache:           { extraLine: "Snatch balance — 5×3\nTirage arraché — 5×3", typeHints: ["technique", "volume", "recuperation"] },
-  epaule_jete:       { extraLine: "Épaulé suspendu — 5×3\nJerk balance — 5×3", typeHints: ["technique", "volume", "recuperation"] },
+  arrache:           { extraLine: "Snatch balance — 4×3@60%\nTirage arraché — 4×3@90%", typeHints: ["technique", "volume", "recuperation"] },
+  epaule_jete:       { extraLine: "Épaulé suspendu — 4×3@65%\nJerk balance — 4×3@60%", typeHints: ["technique", "volume", "recuperation"] },
   mobilite:          { extraLine: "Squat cosaque — 2×8 par côté\nBascule adducteurs à genou — 2×10", typeHints: ["technique", "recuperation", "volume"] },
   vitesse:           { extraLine: "Sprints courts : 4×20m départ arrêté (récup complète)", typeHints: ["intensite", "volume"] },
   endurance_vitesse: { extraLine: "Répétitions longues : 4×150m allure soutenue", typeHints: ["volume", "intensite"] },
@@ -3271,6 +3272,17 @@ const WEAKNESS_META: Record<string, WeaknessMeta> = {
   puissance:         { extraLine: "Box jump — 4×5\nPush press — 4×5@70%", typeHints: ["intensite", "volume"] },
   gainage:           { extraLine: "Planche — 3×40s\nPallof press tenu — 3×30s par côté", typeHints: ["technique", "volume", "recuperation"] },
   frappe:            { extraLine: "Sac lourd : 5×10 frappes puissance maximale", typeHints: ["intensite", "volume"] },
+};
+
+// Lignes propres à un sport quand la ligne générique ne convient pas (2026-11-02) : en powerlifting,
+// « Jambes » ajoutait « Squat — 3×12 + Fentes marchées » à une séance qui a déjà ses squats lourds.
+// Le travail des jambes en plus passe par des mouvements que les séances n'ont pas.
+const PL_WEAKNESS_META: Record<string, WeaknessMeta> = {
+  jambes: { extraLine: "Fente bulgare — 3×8@65% par jambe\nHip thrust — 3×10@65%", typeHints: ["volume", "intensite", "technique"] },
+};
+const WEAKNESS_META_BY_CATEGORY: Partial<Record<SportCategory, Record<string, WeaknessMeta>>> = {
+  powerlifting: PL_WEAKNESS_META, powerlifting_squat: PL_WEAKNESS_META,
+  powerlifting_bench: PL_WEAKNESS_META, powerlifting_deadlift: PL_WEAKNESS_META,
 };
 
 const WEAKNESS_ARCHETYPE_L1: Partial<Record<SportCategory, Record<string, Archetype>>> = {
@@ -3574,51 +3586,55 @@ export async function POST(req: Request) {
       ? { type: dayPlans[dayPlans.length - 1].type, calIdx: dayPlans[dayPlans.length - 1].calIdx }
       : null;
 
-    // Faiblesses, niveau 2 — une ligne d'exercice ajoutée à la séance de la semaine dont le type
-    // correspond le mieux à chaque faiblesse choisie, en essayant chaque type de typeHints dans
-    // l'ordre. Garantie d'effet visible : si aucun des types préférés n'est présent cette
-    // semaine-là, repli sur le 1er jour non forcé plutôt qu'aucun ajout — un effet imparfaitement
-    // placé reste préférable à un effet invisible pour l'utilisateur qui vient de faire un choix.
-    // Dispatch sur des jours différents (max 2 faiblesses) : sans ça, 2 faiblesses aux typeHints
-    // proches (ex. toutes deux "volume" en 1re préférence) atterrissent sur LE MÊME jour — repéré
-    // par Gildas ("il faudrait dispatch les exos en plus dans les jours") après avoir testé 2
-    // faiblesses ensemble. Priorité à un jour pas encore utilisé par une faiblesse précédente ;
-    // empiler sur un jour déjà utilisé reste le dernier recours plutôt que de ne rien ajouter.
-    const weaknessDayIdx = new Map<string, number>();
+    // Phase C — notes de chaque séance à partir du type (éventuellement corrigé par la phase B).
+    // fixedOrder : le bloc principal varie déjà chaque semaine, pas de rotation qui ferait passer le renfo devant la course
+    const baseNotes = dayPlans.map(({ type, exercises, fixedOrder }) => exercises
+      ? buildNotesFromBank(exercises, type, fixedOrder ? 0 : rotationAnchor, shape, prescriptionPhase)
+      : customExercises
+      ? buildNotesFromBank(customExercises[type], type, rotationAnchor, shape, prescriptionPhase)
+      : category === "triathlon" && triathlonPhase(w, duration) !== "brick"
+      ? (() => {
+          const bank = EXERCISES.triathlon[type].filter(l => !TRI_COMBINED_RE.test(l));
+          const picked = pickOneOf(bank, ONE_OF.triathlon?.[type], w);
+          return buildNotesFromBank(picked ?? bank, type, picked ? 0 : rotationAnchor, shape, prescriptionPhase);
+        })()
+      : buildNotes(category, type, rotationAnchor, shape, prescriptionPhase, w));
+
+    // Faiblesses, niveau 2 — les lignes du point faible s'ajoutent à UNE séance de la semaine.
+    // Choix de la séance, dans l'ordre : un type accepté par `typeHints` ; une séance qui ne contient
+    // encore aucun de ces mouvements (2026-11-02 : « Squat — 3×12 » atterrissait après le back squat
+    // et le squat pause du Focus Squat) ; un jour pas encore pris par l'autre point faible (2 points
+    // faibles aux typeHints proches tombaient le même jour) ; puis l'ordre des typeHints.
+    // Une ligne dont le mouvement est déjà dans la séance retenue n'est jamais ajoutée. Repli hors
+    // typeHints seulement si aucun jour de la semaine n'en a le type (effet garanti, même mal placé).
+    // Les lignes ajoutées passent par la même prescription que la banque (charge ou réserve qui
+    // suivent le bloc) : avant, elles restaient brutes (« Squat — 3×12 » sans charge, 16 semaines).
+    const extras: string[][] = dayPlans.map(() => []);
     const usedDayIdx = new Set<number>();
     for (const key of selectedWeaknesses) {
-      // customWeaknessMeta d'abord (sport libre généré par Claude, /api/sports/custom) — repli
-      // sur le dictionnaire fixe pour les 9 sports du sélecteur.
-      const meta = customWeaknessMeta?.[key] ?? WEAKNESS_META[key];
+      // customWeaknessMeta d'abord (sport libre généré par Claude, /api/sports/custom), puis les
+      // lignes propres au sport, puis le dictionnaire commun.
+      const meta = customWeaknessMeta?.[key] ?? WEAKNESS_META_BY_CATEGORY[category]?.[key] ?? WEAKNESS_META[key];
       if (!meta) continue;
-      const candidates = dayPlans.filter(d => !d.forced);
-      const unused = (d: (typeof candidates)[number]) => !usedDayIdx.has(d.dayIdx);
-      const match =
-        meta.typeHints.map(t => candidates.find(d => d.type === t && unused(d))).find(Boolean) ??
-        meta.typeHints.map(t => candidates.find(d => d.type === t)).find(Boolean) ??
-        candidates.find(unused) ??
-        candidates[0];
-      if (match) { weaknessDayIdx.set(key, match.dayIdx); usedDayIdx.add(match.dayIdx); }
+      const lines = meta.extraLine.split("\n").map(l => l.trim()).filter(Boolean);
+      const ranked = dayPlans.filter(d => !d.forced).map(d => {
+        const present = familiesIn([baseNotes[d.dayIdx], ...extras[d.dayIdx]].join("\n"));
+        const kept = lines.filter(l => !present.has(movementFamily(l)));
+        const hint = meta.typeHints.indexOf(d.type);
+        return { d, kept, rank: [hint < 0 ? 1 : 0, lines.length - kept.length, usedDayIdx.has(d.dayIdx) ? 1 : 0, hint < 0 ? 99 : hint, d.dayIdx] };
+      }).sort((a, b) => { for (let i = 0; i < a.rank.length; i++) if (a.rank[i] !== b.rank[i]) return a.rank[i] - b.rank[i]; return 0; });
+      const best = ranked[0];
+      if (!best || !best.kept.length) continue; // la séance la mieux placée fait déjà tous ces mouvements
+      const formatted = best.d.type === "volume" || best.d.type === "intensite"
+        ? best.kept.map(l => formatBankLine(l, shape, prescriptionPhase))
+        : best.kept;
+      extras[best.d.dayIdx].push(...formatted);
+      usedDayIdx.add(best.d.dayIdx);
     }
 
-    // Phase C — construire les séances à partir du type (éventuellement corrigé par la phase B)
-    dayPlans.forEach(({ day, dayIdx, type, archetypeName, exercises, fixedOrder }) => {
+    dayPlans.forEach(({ day, dayIdx, type, archetypeName }) => {
       const target_difficulty = sessionDifficulty(type, weekDiff, moderateOnly);
-      // fixedOrder : le bloc principal varie déjà chaque semaine, pas de rotation qui ferait passer le renfo devant la course
-      let notes = exercises
-        ? buildNotesFromBank(exercises, type, fixedOrder ? 0 : rotationAnchor, shape, prescriptionPhase)
-        : customExercises
-        ? buildNotesFromBank(customExercises[type], type, rotationAnchor, shape, prescriptionPhase)
-        : category === "triathlon" && triathlonPhase(w, duration) !== "brick"
-        ? (() => {
-            const bank = EXERCISES.triathlon[type].filter(l => !TRI_COMBINED_RE.test(l));
-            const picked = pickOneOf(bank, ONE_OF.triathlon?.[type], w);
-            return buildNotesFromBank(picked ?? bank, type, picked ? 0 : rotationAnchor, shape, prescriptionPhase);
-          })()
-        : buildNotes(category, type, rotationAnchor, shape, prescriptionPhase, w);
-      Array.from(weaknessDayIdx.entries()).forEach(([key, idx]) => {
-        if (idx === dayIdx) notes += "\n" + (customWeaknessMeta?.[key]?.extraLine ?? WEAKNESS_META[key].extraLine);
-      });
+      const notes = [baseNotes[dayIdx], ...extras[dayIdx]].join("\n");
       const session: SessionTemplate = {
         name: archetypeName ?? customSessionLabels?.[type] ?? sessionName(type, w, dayIdx),
         notes,
