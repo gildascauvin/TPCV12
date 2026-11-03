@@ -177,7 +177,7 @@ function Hero({ big, unit, cap, color }: { big: string | number; unit?: string; 
     <h2 style={{ margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
       {example && <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.75)", textShadow: "0 1px 6px rgba(0,0,0,.6)" }}>Chez un sportif ThePerfClub</span>}
       <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 80, lineHeight: 0.92, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", color, textShadow: "0 2px 18px rgba(0,0,0,.45)" }}>{big}{unit && <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: 0, opacity: 0.85 }}> {unit}</span>}</span>
-      <span style={{ fontSize: 19, fontWeight: 700, lineHeight: 1.3, color: "#fff", textWrap: "balance" } as React.CSSProperties}>{cap}</span>
+      <span style={{ fontSize: 19, fontWeight: 700, lineHeight: 1.3, color: "#fff", textWrap: "balance" } as React.CSSProperties}>{cap.replace(/ ([:;!?])/g, "\u00a0$1")}</span>
     </h2>
   );
 }
@@ -586,8 +586,10 @@ function GroupSlideBody({ s, open }: { s: GroupSlide; open: OpenAthlete }) {
     }
     case "g_appris":
       return (<>
-        <h2 style={h2}>Ce que leurs données <span style={{ color: "#c9a2ff" }}>ont appris.</span></h2>
-        <p style={body}>{s.rows.length > 1 ? "Pour chaque sportif, l'enseignement le plus net de son historique." : "L'enseignement le plus net de son historique."}</p>
+        {s.rows.length > 1
+          ? <Hero big={s.rows.length} unit="signaux" cap={`différents pour ${s.rows.length} sportifs : chacun a les siens.`} color="#d8b4ff" />
+          : <h2 style={h2}>Ce que ses données <span style={{ color: "#c9a2ff" }}>ont appris.</span></h2>}
+        <p style={body}>{s.rows.length > 1 ? "Appris sur l'historique de chacun, pas sur une moyenne." : "L'enseignement le plus net de son historique."}</p>
         {s.rows.map((r, i) => (
           <div key={i} style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
