@@ -45,7 +45,7 @@ Identifiants non secrets : bundle/package `com.theperfclub.app`, Team Apple `B4A
 
 ## 4. Sortir une version iOS
 
-État au 30/10 : 1.1 (build 12) publiée. Les deux occurrences (Debug/Release) sont dans `ios/App/App.xcodeproj/project.pbxproj`.
+État au 03/11 : 1.2 (build 13) publiée (rejeu Santé, demande de note, abonnements « départ »). Les deux occurrences (Debug/Release) sont dans `ios/App/App.xcodeproj/project.pbxproj`.
 
 1. **Version** : `MARKETING_VERSION` (ex. 1.1 → 1.2) si nouvelle version store ; **toujours** incrémenter `CURRENT_PROJECT_VERSION` (12 → 13). Vérifier : `grep -n "CURRENT_PROJECT_VERSION\|MARKETING_VERSION" ios/App/App.xcodeproj/project.pbxproj`.
 2. **Sync** (obligatoire, même sans nouveau plugin : `ios/App/App/capacitor.config.json` est gitignoré) :
@@ -61,11 +61,11 @@ Identifiants non secrets : bundle/package `com.theperfclub.app`, Team Apple `B4A
 4. **TestFlight** : le build apparaît après traitement Apple (quelques minutes). **Gildas** l'installe et teste sur son iPhone (Claude ne clique pas sur son compte).
 5. **App Store Connect** : créer la version, attacher le build, notes de version FR, ajouter un paragraphe « WHAT'S NEW IN x.y » (EN) aux Remarques pour le relecteur, publication manuelle. Fiche confidentialité à revoir si nouvelle donnée.
 6. **Comptes de revue** : si la revue attend depuis plus d'environ une semaine (ou la veille de la soumission), re-seed : `~/.nvm/versions/node/v22.23.3/bin/node ~/Desktop/Captures App Store/.seed_review.mjs` (Node 20 casse supabase-js). Écriture en prod : **Gildas le lance**. Ensuite vérifier en base le point forme et la séance du jour des comptes `cauvingildas+review-sportif` (Alex, gratuit) et `+review-coach` (Sam, coach payant). `+review-lea` n'est jamais donné à Apple. Mot de passe : mémoire `project_apple_review_account_202610`, ne jamais le recopier.
-7. **Soumission** : le clic « Ajouter pour vérification » est bloqué pour Claude, **Gildas soumet**, puis publie à la validation. Nouvel abonnement : l'ajouter via le bouton du **groupe** d'abonnements.
+7. **Soumission** : **Gildas envoie** la soumission, puis publie à la validation. Nouveaux abonnements ou nouveau groupe : un groupe ne se soumet pas seul (« doit être soumis avec un abonnement ») → « Ajouter pour vérification ▾ » sur **chaque abonnement** (au brouillon existant), puis sur la version ; le brouillon contient alors version + groupe + abonnements, et Gildas clique « Envoyer pour vérification ». Avant de soumettre, vérifier le bandeau « contrat de licence mis à jour » (à accepter par Gildas, sinon soumission impossible). Notes relecteur : 4000 caractères max.
 
 ## 5. Sortir une version Android
 
-État au 30/10 : 1.1 (versionCode 2) en examen production France, première publication.
+État au 03/11 : 1.2 (versionCode 3) publiée en production France (1re publication publique le 02/11 en 1.1). Publication gérée activée : après validation Google, Gildas clique « Publier » dans Vue d'ensemble de la publication.
 
 1. **Version** : dans `android/app/build.gradle`, **monter `versionCode`** (2 → 3) à chaque envoi, et `versionName` si nouvelle version.
 2. **Sync** : `PATH=~/.nvm/versions/node/v22.23.3/bin:$PATH npx cap sync android`. Vérifier que `android/app/google-services.json` est présent.
@@ -107,7 +107,10 @@ Identifiants non secrets : bundle/package `com.theperfclub.app`, Team Apple `B4A
 - **Revue Apple 3.1.2(c)** : sur iOS, le prix annuel s'affiche en gros (« 78€/an »), le mensuel équivalent en secondaire. **3.1.1** : jamais de paiement Stripe dans l'app iOS.
 - **Play, prix** : la saisie globale est HT et arrondie en ,99 TTC ; corriger la France à la main (9 / 78 / 39 / 348 €).
 - **Santé** : `healthSync.ts` n'envoie jamais de colonne vide (sinon la VFC Garmin est effacée) ; VFC Garmin = RMSSD, Apple Watch = SDNN, ne jamais mélanger pour un même sportif.
-- **Achat Google Play jamais testé** à ce jour : tester avec un compte gratuit en testeur de licence.
+- **Achat Google Play jamais testé** à ce jour (ni l'offre de sortie `depart30`) : tester avec un compte gratuit en testeur de licence, sur un vrai téléphone Android.
+- **Émulateur Android lent au démarrage à froid** : réseau simulé HSPA (~40 s pour charger le site), l'écran de lancement reste affiché, ce n'est pas un bug. Débogage de la WebView : `webContentsDebuggingEnabled` dans `android/app/src/main/assets/capacitor.config.json` (build local seulement, jamais dans l'AAB envoyé), puis `adb forward tcp:9333 localabstract:webview_devtools_remote_<pid>` et CDP.
+- **Fenêtre de note** : jamais affichée en TestFlight ni pour une app Android installée hors Play Store ; tester sur la version du store.
+- **Prix Apple** : paliers imposés (pas de 54,60 ou 243,60 €) ; lister les paliers dans la fenêtre « Tarification d'abonnement » (« Afficher d'autres prix »).
 - **Reste à faire** : révoquer la clé Firebase en doublon (`~/.config/theperfclub/fcm-service-account-doublon.json`) dans GCP (Gildas).
 - **Demande de note** (02/11) : `@capacitor-community/in-app-review`, `src/lib/storeReview.ts`, marqueur UA `TPCReview` (iOS build 13+, Android versionCode 3+), déclenchée une fois par appareil sur « C'est parti » d'`ob_week`.
 - **Health Connect, sommeil** : une nuit = un échantillon de toute la session avec les phases dans `stages` ; `healthSync.ts` additionne les phases hors éveil (avant le 02/11 la nuit entière était comptée).
