@@ -16,6 +16,7 @@ import type { RangeMode } from "@/components/calendar/RangeToggle";
 import { sigDimInfo } from "@/lib/fatigueSignature";
 import { METRICS, prettyStatus, statusDisplayColor, TREND_ARROW, trendFor, AGG_BANDS, aggregateFor, type MetricKey, type MetricGroup } from "@/lib/metricCards";
 import AggregateGauge from "@/components/conseils/AggregateGauge";
+import { ImpactBar, behaviorStatus } from "@/components/conseils/ImpactBar";
 import { wellnessColor } from "@/lib/wellness";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { markPrimingSource } from "@/lib/primingSource";
@@ -109,14 +110,6 @@ function BehaviorPreview({ correlations }: { correlations: BehaviorCorrelation[]
 }
 
 /* ── Comportements (2026-09) — badge de statut sur la ligne du nom, jauge centrée sur zéro. */
-function behaviorStatus(impact: number) {
-  const isPositive = impact > 0;
-  const isNeutral  = Math.abs(impact) < 0.3;
-  const color      = isNeutral ? "rgba(255,255,255,.35)" : isPositive ? "#2f9e44" : "#d10000";
-  const impactStr  = isNeutral ? "0 pt" : `${impact > 0 ? "+" : ""}${impact.toFixed(1)} pts`;
-  const statusLabel = isNeutral ? "Neutre" : isPositive ? "Aide" : "Pénalise";
-  return { isPositive, isNeutral, color, impactStr, statusLabel };
-}
 
 const DIMENSION_PHRASE: Record<DimensionKey, string> = {
   sleep: "le sommeil",
@@ -126,16 +119,9 @@ const DIMENSION_PHRASE: Record<DimensionKey, string> = {
 };
 
 function BehaviorGauge({ c, maxAbs }: { c: BehaviorCorrelation; maxAbs: number }) {
-  const { isPositive, isNeutral, color } = behaviorStatus(c.impact);
-  const width = Math.min(50, Math.abs(c.impact) / maxAbs * 50);
   return (
     <div style={{ marginTop: 6 }}>
-      <div style={{ position: "relative" as const, height: 12, background: "rgba(255,255,255,.10)", borderRadius: 8 }}>
-        <div style={{ position: "absolute" as const, left: "50%", top: -3, bottom: -3, width: 2, background: "rgba(255,255,255,.4)", transform: "translateX(-1px)" }} />
-        {!isNeutral && (
-          <div style={{ position: "absolute" as const, top: 0, height: "100%", borderRadius: 8, background: color, ...(isPositive ? { left: "50%", width: `${width}%` } : { right: "50%", width: `${width}%` }) }} />
-        )}
-      </div>
+      <ImpactBar impact={c.impact} maxAbs={maxAbs} />
       <div style={{ marginTop: 6, textAlign: "center" as const, fontSize: 10.5, color: "rgba(255,255,255,.45)" }}>
         loggué <b style={{ color: "#fff", fontWeight: 700 }}>{c.occurrences}×</b> sur la période
       </div>

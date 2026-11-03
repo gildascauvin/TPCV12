@@ -4,7 +4,7 @@
    story. Les chiffres viennent de computeBilan() (src/lib/bilan.ts), qui saute tout écran sous son
    seuil de données. Plein écran, au-dessus de la bottom nav (zIndex modale). */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import posthog from "posthog-js";
@@ -14,10 +14,13 @@ import type { PersonalDim } from "@/lib/autoregPersonal";
 import { loadBilanRaw, type BilanRaw } from "@/lib/bilanData";
 import { outcomeRight } from "@/lib/adviceJudge";
 import { requestPhysioReplay } from "@/lib/physioData";
-import { VerdictStrip, StripLegend } from "@/components/bilan/VerdictStrip";
+import { Dots, Legend, DayCurve, DayFrise } from "@/components/bilan/BilanViz";
+import { ImpactBar, impactPill } from "@/components/conseils/ImpactBar";
+import { BEHAVIOR_META } from "@/lib/behaviors";
 import LockedBlur from "@/components/paywall/LockedBlur";
 import { previewSlides } from "@/components/onboarding/InsightSteps";
 import { fr1 } from "@/components/physio/PhysioRevealHost";
+import { sportCover } from "@/lib/programCovers";
 import { computeGroupBilan, type GroupAthlete, type GroupBilan, type GroupSlide, type DayMark } from "@/lib/groupBilan";
 
 type Props = {
@@ -63,18 +66,121 @@ const small: React.CSSProperties = { fontSize: 13, color: "rgba(255,255,255,0.65
 /* Sous-titre (2026-11-03) : le conseil se lit sous le titre, plus en bas d'écran. */
 const sub: React.CSSProperties = { margin: "-8px 0 0", fontSize: 15, lineHeight: 1.45, color: "rgba(255,255,255,0.78)" };
 const PREDIT_WORDS: Record<PersonalDim, { subject: string; low: string; high: string }> = {
-  stress: { subject: "Le stress", low: "Les matins stressés", high: "Les matins calmes" },
+  stress: { subject: "Le stress", low: "Les jours stressés", high: "Les jours calmes" },
   sleep: { subject: "Une nuit moyenne", low: "Après une nuit correcte ou moins", high: "Après une bonne nuit" },
-  recovery: { subject: "Un corps fatigué", low: "Les matins où le corps tire", high: "Les matins corps frais" },
-  motivation: { subject: "Le manque d'envie", low: "Les matins sans grande envie", high: "Les matins motivés" },
+  recovery: { subject: "Un corps fatigué", low: "Les jours où le corps tire", high: "Les jours corps frais" },
+  motivation: { subject: "Le manque d'envie", low: "Les jours sans grande envie", high: "Les jours motivés" },
 };
 /* Retrouve la dimension d'un bloc depuis son titre (« Force maximale · ton stress mental »). */
 const DIM_HINT: Record<PersonalDim, string> = { stress: "stress", sleep: "sommeil", recovery: "état physique", motivation: "motivation" };
 const LEVER_WHEN: Record<string, string> = {
   stretching: "Les soirs de stretching", screen_late: "Les soirs d'écran tard", walk: "Les jours de marche", hydration: "Les jours bien hydratés",
-  reading: "Les soirs de lecture", meditation: "Les jours de méditation", cold_shower: "Les jours de douche froide", caffeine_late: "Les jours de caféine tard", heavy_meal: "Les soirs de repas lourd",
+  reading: "Les soirs de lecture", meditation: "Les jours de méditation", cold_shower: "Les jours de douche froide", caffeine_late: "Les jours de caféine tard", heavy_meal: "Les soirs de repas lourd", tobacco: "Les jours de tabac", travel: "Les lendemains de voyage", late_sleep: "Les lendemains de coucher tardif",
 };
 const round = (x: number) => Math.round(x);
+
+/* Piste A + photo (2026-11-03, POC GSXeRzonoyn2UdnD46L9ML v3) : une photo par thème en haut d'écran,
+   en bichromie à la couleur du thème et fondue dans le noir, et un grand chiffre à la place du titre.
+   Photos dans public/bilan/<thème>.webp. */
+const DIM_PHOTO: Record<PersonalDim, string> = { stress: "stress", sleep: "sommeil", recovery: "recup", motivation: "envie" };
+const LEVER_PHOTO: Record<string, string> = { screen_late: "ecran", caffeine_late: "cafeine", heavy_meal: "repas", tobacco: "tabac", travel: "voyage", late_sleep: "sommeil", stretching: "stretch", walk: "marche", reading: "lecture", meditation: "meditation", cold_shower: "douche", hydration: "hydratation" };
+const BLUE = "#9fd0ff", GREEN = "#9ff0ad";
+export const PHOTO_ACCENT: Record<string, string> = {
+  raison: "#f3e2bb", stress: "#ffb08a", sommeil: "#b3c6ff", soiree: "#d8b4ff", envie: "#ffd27a", recup: "#9be8f0",
+  regularite: "#ffb08a", charge: "#a0ebcd", ressenti: BLUE, biais: "#ffd27a", tendance: BLUE, tests: "#ffb08a", suivre: "#d8b4ff", prochaine: "#a0ebcd",
+  groupe_decroche: "#ffb08a", groupe_seances: "#ffd27a", groupe_conseils: "#f3e2bb",
+  ecran: BLUE, cafeine: BLUE, repas: BLUE, tabac: "#d2d2d7", voyage: "#d2d2d7", stretch: GREEN, marche: GREEN, lecture: GREEN, meditation: GREEN, douche: GREEN, hydratation: GREEN,
+};
+/* Une photo pour chaque écran (2026-11-03, Gildas : « une image pour absolument toutes les slides »). */
+export function photoFor(s: AnySlide): string {
+  switch (s.kind) {
+    case "conseils": return "raison";
+    case "predit": return s.lead ? DIM_PHOTO[s.lead.dim] : "stress";
+    case "fatigue": return "soiree";
+    case "leviers": { const k = s.rows[0]?.key; return (k && LEVER_PHOTO[k]) || (s.rows[0]?.positive ? "stretch" : "ecran"); }
+    case "envie": return "envie";
+    case "recup": return "recup";
+    case "rythmes": return "sommeil";
+    case "apercu": return photoFor(s.inner);
+    case "g_decroche": return "groupe_decroche";
+    case "g_seances": return "groupe_seances";
+    case "g_appris": return "groupe_appris";
+    case "g_conseils": return "groupe_conseils";
+    case "g_charge": return "groupe_charge";
+    default: return s.kind;
+  }
+}
+/* Régularité et Charge (2026-11-03, Gildas) : la photo du sport du sportif (même image que son
+   onboarding), passée en bichromie en CSS : gris × couleur claire (multiply), puis éclairci vers la
+   couleur sombre (lighten). */
+const SPORT_TINT: Partial<Record<AnySlide["kind"], [string, string]>> = { regularite: ["#280c02", "#ffa578"], charge: ["#041c16", "#a0ebcd"], tests: ["#280c02", "#ffa578"] };
+/* Tests : la photo suit le test affiché (2026-11-03, Gildas : « Épaulé-jeté +13 % avec un sprinter derrière »). */
+const TEST_ILLU: [RegExp, string][] = [
+  [/2 000 m|aviron/, "aviron"], [/vitesse|sprint|\d+\s?m\b/, "sprint"], [/d[ée]tente|saut|cmj|m[ée]decine|lancer/, "pliometrie"], [/vma|l[ée]ger|cooper/, "course"],
+  [/ftp/, "velo"], [/\bnage\b/, "natation"], [/suspension|poutre/, "escalade"],
+  [/gainage|chaise|rotation|pointes/, "mobilite"], [/pompes|tractions/, "gym"], [/squat|arrach|[ée]paul|d[ée]velopp|soulev/, "crossfit"],
+];
+/* Photo du sport prise dans la bibliothèque d'illustrations de l'app (2026-11-03, Gildas : « je fais du
+   sprint et j'ai un mec qui fait un footing »), sinon la couverture de programme de son sport. */
+const SPORT_ILLU: [RegExp, string][] = [
+  [/vitesse|sprint/, "sprint"], [/saut|pliom|puissance|explosiv/, "pliometrie"], [/halt|power|muscu|crossfit|fitness/, "crossfit"],
+  [/calisth|gymnast/, "gym"], [/hyrox|perte de poids|police|gendarm|pompier|gign|arm[ée]e/, "circuit"], [/trail/, "trail"],
+  [/v[ée]lo|cyclis|bmx/, "velo"], [/natation/, "natation"], [/aviron/, "aviron"], [/ski/, "ski"], [/hockey/, "hockey"],
+  [/martia|combat/, "mma"], [/escalade/, "escalade"], [/golf/, "golf"], [/voile/, "voile"], [/[ée]quitation/, "equitation"],
+  [/collectif|baseball|rugby|foot|basket|hand|volley/, "collectif"], [/pr[ée]vention|r[ée][ée]ducation/, "mobilite"], [/endurance|triathlon|course/, "course"],
+];
+/* Cadrage vertical des illustrations en portrait (2026-11-03) : le bandeau est large, il faut viser le
+   sportif, pas le haut de l'image (le filet au-dessus de l'athlète de crossfit). */
+const ILLU_Y: Record<string, string> = { crossfit: "62%", sprint: "48%", pliometrie: "58%", course: "42%", velo: "68%", circuit: "60%", collectif: "45%", mobilite: "45%", escalade: "40%", equitation: "30%" };
+export const illuPos = (src: string) => { const k = src.match(/illustrations\/([a-z]+)\.jpg/)?.[1]; return `center ${(k && ILLU_Y[k]) || "35%"}`; };
+export function sportIllustration(sport: string | null | undefined): string | null {
+  const v = (sport ?? "").toLowerCase();
+  const hit = v ? SPORT_ILLU.find(([re]) => re.test(v)) : undefined;
+  return hit ? `/illustrations/${hit[1]}.jpg` : null;
+}
+export function sportPhotoFor(s: AnySlide, sport: string | null | undefined): { src: string; tint: [string, string] } | null {
+  if (s.kind === "tests") {
+    const hit = TEST_ILLU.find(([re]) => re.test(s.main.name.toLowerCase()));
+    return hit ? { src: `/illustrations/${hit[1]}.jpg`, tint: SPORT_TINT.tests! } : null;
+  }
+  const tint = SPORT_TINT[s.kind], src = sportIllustration(sport) ?? sportCover(sport);
+  return tint && src ? { src, tint } : null;
+}
+/* Deux photos par thème (2026-11-03, Gildas) : le bilan du mois prend l'autre photo, pour que les bilans
+   ne se ressemblent pas d'une période à l'autre (public/bilan/<thème>-2.webp). */
+export function PhotoBanner({ photo, height, sportPhoto, period }: { photo: string; height: string | number; sportPhoto?: { src: string; tint: [string, string] } | null; period?: BilanPeriodKind }) {
+  return (
+    <div aria-hidden="true" style={{ position: "absolute", top: 0, left: 0, right: 0, height, pointerEvents: "none", overflow: "hidden", isolation: "isolate" }}>
+      {sportPhoto
+        ? <div style={{ position: "absolute", inset: 0, background: sportPhoto.tint[1] }}>
+            <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${sportPhoto.src})`, backgroundSize: "cover", backgroundPosition: illuPos(sportPhoto.src), filter: "grayscale(1) contrast(1.3) brightness(1.2)", mixBlendMode: "multiply" }} />
+            <div style={{ position: "absolute", inset: 0, background: sportPhoto.tint[0], mixBlendMode: "lighten" }} />
+          </div>
+        : <div style={{ position: "absolute", inset: 0, backgroundImage: `url(/bilan/${photo}${period === "month" ? "-2" : ""}.webp)`, backgroundSize: "cover", backgroundPosition: "center" }} />}
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(7,10,13,.5) 0%, rgba(7,10,13,.05) 30%, rgba(7,10,13,.55) 64%, #070a0d 100%)" }} />
+    </div>
+  );
+}
+/* Écrans d'exemple (onboarding, premier bilan) : les chiffres sont ceux d'un autre sportif, voire
+   illustratifs. Le grand chiffre le dit au-dessus (« Chez un sportif ThePerfClub ») et l'écran se
+   termine sur la promesse (2026-11-03, Gildas : jamais présenté comme ses données). */
+export const ExampleCtx = createContext(false);
+/* Les écrans d'exemple parlent de « ce sportif » (3e personne) : « sa séance », jamais « ta séance ». */
+export const EXAMPLE_N = "ce sportif";
+export function ExamplePromise({ n }: { n?: string }) {
+  return <div style={{ fontSize: 13.5, fontWeight: 700, color: "rgba(255,255,255,0.8)" }}>{n ? `Le bilan de ${n} mesurera le sien.` : "Ton bilan mesurera le tien."}</div>;
+}
+/* Le grand chiffre et sa phrase forment le titre de l'écran (h2). */
+function Hero({ big, unit, cap, color }: { big: string | number; unit?: string; cap: string; color: string }) {
+  const example = useContext(ExampleCtx);
+  return (
+    <h2 style={{ margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+      {example && <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.75)", textShadow: "0 1px 6px rgba(0,0,0,.6)" }}>Chez un sportif ThePerfClub</span>}
+      <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 80, lineHeight: 0.92, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", color, textShadow: "0 2px 18px rgba(0,0,0,.45)" }}>{big}{unit && <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: 0, opacity: 0.85 }}> {unit}</span>}</span>
+      <span style={{ fontSize: 19, fontWeight: 700, lineHeight: 1.3, color: "#fff", textWrap: "balance" } as React.CSSProperties}>{cap}</span>
+    </h2>
+  );
+}
 
 function Bars({ bars, height = 140, color = "#ff6a2b", dim = "rgba(255,255,255,0.28)", showValues = false }: { bars: { label: string; value: number; display: string; highlight?: boolean }[]; height?: number; color?: string; dim?: string; showValues?: boolean }) {
   const max = Math.max(1, ...bars.map(b => b.value));
@@ -126,10 +232,10 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n, onPlanning }: {
       return (<>
         {/* 2026-11-03 : le titre porte sur la frise (dernières séances jugées), les constats sur tout
             l'historique. Les deux portées sont écrites, sinon « 14 sur 14 » puis « 9 sur 30 » se contredisent. */}
-        <h2 style={h2}>Sur {T("tes", "ses")} {s.strip.length} dernières séances, le conseil du matin <span style={{ color: "#7ee08f" }}>a vu juste {right} fois.</span></h2>
+        <Hero big={right} unit={`sur ${s.strip.length}`} cap={`dernières séances où le conseil du matin a vu juste.`} color={PHOTO_ACCENT.raison} />
         <div style={card}>
-          <VerdictStrip cells={s.strip} onOpen={n ? undefined : id => requestPhysioReplay({ kind: "session", sessionId: id })} />
-          <StripLegend />
+          <Dots color={PHOTO_ACCENT.raison} items={s.strip.map(c => ({ on: !!outcomeRight(c.outcome), label: `${c.date} : ${outcomeRight(c.outcome) ? "vu juste" : "à côté"}`, onClick: n || !c.id ? undefined : () => requestPhysioReplay({ kind: "session", sessionId: c.id! }) }))} />
+          <Legend>✓ vu juste · pointillé : à côté · de la plus ancienne à la plus récente</Legend>
         </div>
         {(s.none.total >= 3 || s.low.judged >= 3 || s.high.judged >= 3) && (
           <div style={{ ...card, gap: 12 }}>
@@ -177,7 +283,9 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n, onPlanning }: {
       const bars = [{ label: `${T("Tu as allégé", "Allégé")} (${s.followed.n} fois)`, value: s.followed.felt, display: String(round(s.followed.felt)), highlight: true }, { label: `${T("Tu as gardé ta séance", "Séance gardée")} (${s.ignored.n} fois)`, value: s.ignored.felt, display: String(round(s.ignored.felt)) }];
       const subtitle = Math.abs(diff) < 5 ? (s.shifted ? T("C'est pour ça que tes alertes sont devenues plus rares.", "C'est pour ça que ses alertes sont devenues plus rares.") : null) : diff > 0 ? T("Les jours d'alerte, alléger vaut le coup.", `Les jours d'alerte, alléger vaut le coup pour ${n}.`) : T("Tu encaisses ces séances : les alertes peuvent être plus rares.", `${n} encaisse ces séances : les alertes peuvent être plus rares.`);
       return (<>
-        <h2 style={h2}>{Math.abs(diff) < 5 ? <>Alléger ou pas, <span style={{ color: "#c79bf7" }}>{T("ton", "son")} lendemain est le même.</span></> : diff > 0 ? <>{T("Quand tu allèges,", `Quand ${n} allège,`)} <span style={{ color: "#c79bf7" }}>{T("ton", "son")} lendemain est meilleur.</span></> : <>{T("Garder ta séance", "Garder sa séance")} <span style={{ color: "#c79bf7" }}>{T("ne t'a rien coûté.", `n'a rien coûté à ${n}.`)}</span></>}</h2>
+        {Math.abs(diff) >= 5 && diff > 0
+          ? <Hero big={`+${round(diff)}`} cap={`de forme le lendemain quand ${T("tu allèges", `${n} allège`)}, plutôt que de garder la séance.`} color={PHOTO_ACCENT.suivre} />
+          : <h2 style={h2}>{Math.abs(diff) < 5 ? <>Alléger ou pas, <span style={{ color: "#c79bf7" }}>{T("ton", "son")} lendemain est le même.</span></> : <>{T("Garder ta séance", "Garder sa séance")} <span style={{ color: "#c79bf7" }}>{T("ne t'a rien coûté.", `n'a rien coûté à ${n}.`)}</span></>}</h2>}
         {subtitle && <p style={sub}>{subtitle}</p>}
         <div style={card}><div style={small}>{T("Les jours d'alerte · ta forme ressentie le lendemain", "Les jours d'alerte · sa forme ressentie le lendemain")}</div><Bars bars={bars} height={100} color="#a855f7" dim="rgba(199,155,247,0.4)" showValues /></div>
       </>);
@@ -185,9 +293,8 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n, onPlanning }: {
     case "regularite": {
       const scope = bilan.period.kind === "week" ? "cette semaine" : bilan.period.kind === "month" ? "ce mois-ci" : "depuis le début";
       return (<>
-        <h2 style={h2}>{s.sessions} séance{s.sessions > 1 ? "s" : ""}. {s.checkins} point{s.checkins > 1 ? "s" : ""} forme.{s.noGap && <><br /><span style={{ color: "#ff8a5c" }}>Zéro semaine sautée.</span></>}</h2>
+        <Hero big={s.sessions} unit={`séance${s.sessions > 1 ? "s" : ""}`} cap={`et ${s.checkins} point${s.checkins > 1 ? "s" : ""} forme sur ${s.days} jours ${scope}.${s.noGap ? " Zéro semaine sautée." : ""}`} color={PHOTO_ACCENT.regularite} />
         <div style={card}><div style={small}>Charge d'entraînement {bilan.period.kind === "week" ? "par jour" : "par semaine"}</div><Bars bars={s.bars} height={120} /></div>
-        <p style={body}>{T("Ton", "Son")} point forme rempli {s.checkins} matin{s.checkins > 1 ? "s" : ""} sur {s.days}, {scope}.</p>
       </>);
     }
     case "charge": {
@@ -200,10 +307,10 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n, onPlanning }: {
         <div style={{ height: 10, borderRadius: 5, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}><div style={{ width: `${Math.max(2, (days / total) * 100)}%`, height: "100%", borderRadius: 5, background: color }} /></div>
       </>);
       return (<>
-        <h2 style={h2}>{tooFast
-          ? <>{T("Ta", "Sa")} charge est montée trop vite <span style={{ color: "#ffb347" }}>{above} jour{above > 1 ? "s" : ""}.</span></>
-          : margin ? <>Pas de risque de blessure. <span style={{ color: "#8cc4f5" }}>{T("Tu as", `${n} a`)} de la marge.</span></>
-          : T(<>Tu t&apos;entraînes dur, <span style={{ color: "#7ee08f" }}>sans t&apos;enterrer.</span></>, <>{n} s&apos;entraîne dur, <span style={{ color: "#7ee08f" }}>sans s&apos;enterrer.</span></>)}</h2>
+        {tooFast
+          ? <Hero big={above} unit={`jour${above > 1 ? "s" : ""}`} cap={`où ${T("ta", "sa")} charge est montée trop vite.`} color="#ffb08a" />
+          : margin ? <Hero big={low} unit={`sur ${total}`} cap={`jours sous ${T("ta", "sa")} zone : pas de risque de blessure, ${T("tu as", `${n} a`)} de la marge.`} color={PHOTO_ACCENT.charge} />
+          : <Hero big={inZone} unit={`sur ${total}`} cap={`jours dans ${T("ta", "sa")} zone de charge : ${T("tu t'entraînes", `${n} s'entraîne`)} dur, sans ${T("t'enterrer", "s'enterrer")}.`} color={PHOTO_ACCENT.charge} />}
         {(tooFast || margin) && <p style={sub}>{tooFast ? T("Avant d'ajouter du volume, laisse ta charge se stabiliser une semaine.", "Avant d'ajouter du volume, laisse sa charge se stabiliser une semaine.") : T("Tu peux ajouter une séance légère par semaine.", `${n} peut ajouter une séance légère par semaine.`)}</p>}
         <div style={card}>
           <div style={small}>{T("Ta", "Sa")} dernière semaine, comparée à {T("ton", "son")} mois · {total} jours</div>
@@ -215,15 +322,18 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n, onPlanning }: {
     }
     case "ressenti":
       return (<>
-        <h2 style={h2}>{T("Ton", "Son")} ressenti <span style={{ color: "#8cc4f5" }}>vaut une montre.</span></h2>
+        {s.crashes >= 3
+          ? <Hero big={s.crashesSeen} unit={`sur ${s.crashes}`} cap={`chutes de VFC que ${T("ton", "son")} point forme avait vues aussi : ${T("ton", "son")} ressenti vaut une montre.`} color={PHOTO_ACCENT.ressenti} />
+          : <h2 style={h2}>{T("Ton", "Son")} ressenti <span style={{ color: "#8cc4f5" }}>vaut une montre.</span></h2>}
         <div style={card}><div style={small}>Sommeil mesuré, selon {T("ta", "sa")} réponse au réveil</div><Bars bars={s.sleepBars} height={100} color="#6da7ec" dim="rgba(109,167,236,0.4)" showValues /></div>
-        {s.crashes >= 3 && <div style={card}><div style={{ fontSize: 14, lineHeight: 1.45, color: "rgba(255,255,255,0.85)" }}>{s.crashesSeen === s.crashes ? `Les ${s.crashes} matins où ${T("ta", "sa")} VFC était nettement sous ${T("ta", "sa")} norme, ${T("ton", "son")} point forme l'avait vu aussi.` : `Sur les ${s.crashes} matins où ${T("ta", "sa")} VFC était nettement sous ${T("ta", "sa")} norme, ${T("ton", "son")} point forme l'avait vu ${s.crashesSeen} fois.`}</div></div>}
       </>);
     case "predit": {
       /* 2026-11-03 : le titre nomme la cause et le type de séance ; les lignes disent ce qui est compté. */
       const L = s.lead ? PREDIT_WORDS[s.lead.dim] : null;
       return (<>
-        <h2 style={h2}>{L && s.lead ? <>{L.subject} <span style={{ color: "#ff8a5c" }}>durcit {T("tes", "ses")} séances de {s.lead.noun}.</span></> : <>Ce qui rend {T("tes", "ses")} séances <span style={{ color: "#ff8a5c" }}>plus dures que prévu.</span></>}</h2>
+        {L && s.lead && s.blocks[0]?.rows[0]
+          ? <Hero big={s.blocks[0].rows[0].part} unit={`sur ${s.blocks[0].rows[0].total}`} cap={`${L.low.replace(/^Les /, "").replace(/^./, x => x.toLowerCase())} où ${T("ta", "sa")} séance de ${s.lead.noun} a été plus dure que prévu.`} color={PHOTO_ACCENT[DIM_PHOTO[s.lead.dim]]} />
+          : <h2 style={h2}>Ce qui rend {T("tes", "ses")} séances <span style={{ color: "#ff8a5c" }}>plus dures que prévu.</span></h2>}
         {L && s.lead && <p style={sub}>{L.low}, {T(`ton conseil du matin allège déjà ta séance de ${s.lead.noun}.`, `son conseil du matin allège déjà sa séance de ${s.lead.noun}.`)}</p>}
         {s.blocks.map((b, i) => {
           const dim = (Object.keys(PREDIT_WORDS) as PersonalDim[]).find(d => b.title.includes(DIM_HINT[d])) ?? null;
@@ -235,9 +345,7 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n, onPlanning }: {
     }
     case "biais":
       return (<>
-        <h2 style={h2}>{plural(s.planned) && plural(s.feltWord)
-          ? <>{T("Tes", "Ses")} séances prévues {plural(s.planned)}, <span style={{ color: "#ffb347" }}>{T("tu les ressens", `${n} les ressent`)} {plural(s.feltWord)}.</span></>
-          : <>{T("Tes", "Ses")} séances <span style={{ color: "#ffb347" }}>sont plus dures que prévu.</span></>}</h2>
+        <Hero big={s.harder} unit={`sur ${s.total}`} cap={plural(s.planned) && plural(s.feltWord) ? `séances prévues ${plural(s.planned)}, ${T("ressenties", "ressenties")} ${plural(s.feltWord)}.` : "séances ressenties plus dures que prévu."} color={PHOTO_ACCENT.biais} />
         <p style={sub}>{T("Prévois-les un cran plus haut.", "Prévois-les un cran plus haut pour lui.")}</p>
         <div style={card}>
           <div style={small}>Prévu (trait) et ressenti (barre)</div>
@@ -253,26 +361,20 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n, onPlanning }: {
             ))}
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: s.accurate ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)", gap: 10 }}>
-          <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 22, color: "#ffb347" }}>{s.harder} fois sur {s.total}</b><span style={small}>prévues {s.planned}s, ressenties plus dures</span></div>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 10 }}>
           {s.accurate && <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 22, color: "#fff" }}>{s.accurate.ok} fois sur {s.accurate.total}</b><span style={small}>{plural(s.accurate.planned) ? `prévues ${plural(s.accurate.planned)}, ressenties comme prévu` : "ressenties comme prévu"}</span></div>}
         </div>
       </>);
     case "fatigue": {
       /* 2026-11-03 : chaque barre part de « le matin… » (la barre « Soirée » montrait en fait le lendemain). */
-      const bars = [
-        ...(s.hard ? [{ label: "après une séance très dure", value: s.hard.hard, display: String(round(s.hard.hard)) }] : []),
-        { label: "après une soirée", value: s.nextScore, display: String(round(s.nextScore)), highlight: true },
-        ...(s.afterScore !== null ? [{ label: "le surlendemain", value: s.afterScore, display: String(round(s.afterScore)) }] : []),
-      ];
       const hardFree = s.hard && Math.abs(s.hard.hard - s.hard.easy) < 5;
       return (<>
-        <h2 style={h2}>Une soirée (alcool ou sortie) <span style={{ color: "#c79bf7" }}>se paie le lendemain.</span>{hardFree ? " Une grosse séance, non." : ""}</h2>
+        <Hero big={`−${round(s.normScore - s.nextScore)}`} cap={`de forme le lendemain d'une soirée (alcool ou sortie).${s.hard ? ` Une grosse séance : ${hardFree ? "presque rien" : `−${round(Math.max(0, s.hard.easy - s.hard.hard))}`}.` : ""}`} color={PHOTO_ACCENT.soiree} />
         <p style={sub}>{T("Séance clé le lendemain ? Décale la soirée, pas l'entraînement.", `Séance clé le lendemain ? Mieux vaut que ${n} décale la soirée, pas l'entraînement.`)}</p>
         <div style={card}>
-          <div style={small}>{T("Ta", "Sa")} forme ressentie le matin…</div>
-          <Bars bars={bars} height={110} color="#a855f7" dim="rgba(199,155,247,0.35)" showValues />
-          <div style={small}>{T("Ta", "Sa")} forme habituelle : {round(s.normScore)}.{s.hrv ? ` La montre voit la même chose : VFC ${round(s.hrv.norm)} → ${round(s.hrv.next)} ms.` : ""}</div>
+          <div style={small}>{T("Ta", "Sa")} forme ressentie</div>
+          <DayCurve norm={s.normScore} next={s.nextScore} after={s.afterScore} color="#a855f7" normLabel={T("ta forme habituelle", "sa forme habituelle")} />
+          {s.hrv && <div style={small}>{T("Ta", "Sa")} montre voit pareil : VFC {round(s.hrv.norm)} → {round(s.hrv.next)} ms le lendemain.</div>}
         </div>
       </>);
     }
@@ -281,29 +383,36 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n, onPlanning }: {
       const top = s.rows[0];
       const when = (top.key && LEVER_WHEN[top.key]) || `Avec ${top.label.toLowerCase()}`;
       const amount = top.delta.replace(/^[+−]/, "");
-      const what = s.unit === "sleep" ? `${T("tu dors", "il dort")} ${amount} de ${top.positive ? "plus" : "moins"}.` : `${T("ta", "sa")} forme du matin ${top.positive ? "gagne" : "perd"} ${amount}.`;
       return (<>
-        <h2 style={h2}>{when}, <span style={{ color: top.positive ? "#7ee08f" : "#ffb347" }}>{what}</span></h2>
-        <p style={sub}>{top.positive ? T("Teste 2 semaines d'affilée. Le bilan dira si ça tient.", "À tester 2 semaines d'affilée. Le bilan dira si ça tient.") : T("Essaie 2 semaines sans. Le bilan dira si ça tient.", "À tester 2 semaines sans. Le bilan dira si ça tient.")}</p>
-        <div style={card}>
-          <div style={small}>{s.unit === "sleep" ? `Sommeil mesuré par ${T("ta", "sa")} montre` : "Forme du matin"}, hors soirées (alcool ou sortie)</div>
-          {s.rows.map((r, i) => (
-            <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: "rgba(255,255,255,0.85)" }}><span>{r.label}</span><b style={{ color: r.positive ? "#7ee08f" : "#fff" }}>{r.delta}</b></div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)" }}>Avec : {r.with} · Sans : {r.without}</div>
-            </div>
-          ))}
-        </div>
-        <div style={small}>Observé sur {T("tes", "ses")} nuits, pas encore prouvé.</div>
+        {(() => { const [num, ...u] = amount.split(" "); return <Hero big={`${top.positive ? "+" : "−"}${num}`} unit={u.join(" ") || undefined} cap={`${s.unit === "sleep" ? "de sommeil" : "de forme"} ${when.charAt(0).toLowerCase()}${when.slice(1)}.`} color={PHOTO_ACCENT[photoFor(s) ?? "stretch"]} />; })()}
+        <p style={sub}>{top.key === "travel" ? T("Après un voyage, garde ta séance clé pour le surlendemain.", "Après un voyage, mieux vaut garder sa séance clé pour le surlendemain.") : top.positive ? T("Teste 2 semaines d'affilée. Le bilan dira si ça tient.", "À tester 2 semaines d'affilée. Le bilan dira si ça tient.") : T("Essaie 2 semaines sans. Le bilan dira si ça tient.", "À tester 2 semaines sans. Le bilan dira si ça tient.")}</p>
+        {/* Mêmes jauges que l'onglet Récupération > Comportements (aide à droite, pénalise à gauche). */}
+        {(() => { const num = (d: string) => Number(d.replace("−", "-").replace(/[^\d.+-]/g, "")) || 0; const maxAbs = Math.max(...s.rows.map(r => Math.abs(num(r.delta))), s.unit === "sleep" ? 20 : 5); return (
+          <div style={{ ...card, gap: 0 }}>
+            <div style={{ ...small, marginBottom: 4 }}>{s.unit === "sleep" ? `Sommeil mesuré par ${T("ta", "sa")} montre` : `${T("Ta", "Sa")} forme`}, hors soirées (alcool ou sortie)</div>
+            {s.rows.map((r, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "11px 0", borderTop: i ? "1px solid rgba(255,255,255,.06)" : 0 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{(r.key && BEHAVIOR_META[r.key]?.emoji) || "•"}</div>
+                <div style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 800, color: "#fff", minWidth: 0 }}>{r.label}</span>
+                    {impactPill(num(r.delta), r.delta)}
+                  </div>
+                  <ImpactBar impact={num(r.delta)} maxAbs={maxAbs} />
+                  <span style={{ fontSize: 11.5, color: "rgba(255,255,255,0.5)" }}>Avec : {r.with} · Sans : {r.without}</span>
+                </div>
+              </div>
+            ))}
+          </div>); })()}
+        <div style={small}>Observé sur {s.unit === "sleep" ? T("tes", "ses") : T("ta", "sa")} {s.unit === "sleep" ? "nuits" : "forme"}, pas encore prouvé.</div>
       </>);
     }
     case "tendance": {
       const last = s.months[s.months.length - 1];
       return (<>
-        <h2 style={h2}>{s.direction === "down" ? <>{T("Ta", "Sa")} forme baisse. {s.lateNights && <span style={{ color: "#8cc4f5" }}>{T("Tes", "Ses")} couchers reculent.</span>}</> : s.direction === "up" ? <>{T("Ta", "Sa")} forme <span style={{ color: "#7ee08f" }}>remonte.</span></> : <>{T("Ta", "Sa")} forme est <span style={{ color: "#8cc4f5" }}>stable.</span></>}</h2>
+        <Hero big={last.display} cap={`de forme moyenne en ${last.label.replace(".", "")} : ${s.direction === "down" ? `${T("ta", "sa")} forme baisse.${s.lateNights ? ` ${T("Tes", "Ses")} couchers reculent.` : ""}` : s.direction === "up" ? `${T("ta", "sa")} forme remonte.` : `${T("ta", "sa")} forme est stable.`}`} color={PHOTO_ACCENT.tendance} />
         <div style={card}><div style={small}>Forme moyenne par mois</div><Bars bars={s.months} height={90} color="#6da7ec" dim="rgba(109,167,236,0.45)" showValues /></div>
         {s.lateNights && <div style={card}><div style={small}>Couchers après minuit</div><Bars bars={s.lateNights} height={50} color="#f28a00" dim="rgba(109,167,236,0.45)" showValues /></div>}
-        <p style={{ ...body, fontSize: 14 }}>{(() => { const peak = s.months.reduce((a, b) => (b.value > a.value ? b : a)); if (s.direction === "stable") { const vs = s.months.map(m => m.value); return `Entre ${Math.min(...vs)} et ${Math.max(...vs)} chaque mois : ${T("tu tiens ton", `${n} tient son`)} niveau.`; } return (peak !== last ? `Au plus haut en ${peak.label.replace(".", "")} (${peak.display}), ${last.display} en ${last.label.replace(".", "")}.` : `${last.display} en ${last.label.replace(".", "")}, ${T("ton", "son")} meilleur mois.`) + T(" Ça ne se sent pas d'un jour à l'autre, ça se voit sur un mois.", " Ça ne se sent pas d'un jour à l'autre, ça se voit sur un mois."); })()}</p>
       </>);
     }
     case "tests": {
@@ -312,7 +421,7 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n, onPlanning }: {
       const xy = pts.map((p, i) => [16 + (i / Math.max(1, pts.length - 1)) * (W - 32), 20 + (1 - (p.value - mn) / (mx - mn || 1)) * (H - 40)]);
       const fmt = (v: number) => String(Math.round(v * 10) / 10).replace(".", ",");
       return (<>
-        <h2 style={h2}>{s.main.name} <span style={{ color: "#ff8a5c" }}>+{s.main.pct} %.</span></h2>
+        <Hero big={`+${s.main.pct}`} unit="%" cap={`${s.main.name}, depuis ${T("ton", "son")} premier test.`} color={PHOTO_ACCENT.tests} />
         <div style={card}>
           <svg width="100%" height={H + 24} viewBox={`0 0 ${W} ${H + 24}`} role="img" aria-label={`${s.main.name} : ${pts.map(p => fmt(p.value)).join(", ")}`}>
             <polyline points={xy.map(p => p.join(",")).join(" ")} fill="none" stroke="#ff6a2b" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
@@ -325,13 +434,15 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n, onPlanning }: {
     case "envie": {
       const okRate = s.ok.part / s.ok.total;
       return (<>
-        <h2 style={h2}>{okRate >= 0.6
-          ? <>Pas envie ? {T("Ta", "Sa")} séance passe quand même <span style={{ color: "#ffb347" }}>{s.ok.part} fois sur {s.ok.total}.</span></>
-          : <>Sans envie, {T("ta", "sa")} séance <span style={{ color: "#ffb347" }}>coince souvent.</span></>}</h2>
-        <p style={sub}>{okRate >= 0.6 ? T("Lance au moins l'échauffement, la suite vient.", "Qu'il lance au moins l'échauffement, la suite vient.") : T("Ces matins-là, alléger n'a rien d'un manque de volonté.", "Ces matins-là, alléger n'a rien d'un manque de volonté.")}</p>
+        {okRate >= 0.6
+          ? <Hero big={s.ok.part} unit={`sur ${s.ok.total}`} cap={`jours sans envie où ${T("ta", "sa")} séance est passée comme prévu.`} color={PHOTO_ACCENT.envie} />
+          : <Hero big={s.ok.total - s.ok.part} unit={`sur ${s.ok.total}`} cap={`jours sans envie où ${T("ta", "sa")} séance a coincé.`} color={PHOTO_ACCENT.envie} />}
+        <p style={sub}>{okRate >= 0.6 ? T("Lance au moins l'échauffement, la suite vient.", "Qu'il lance au moins l'échauffement, la suite vient.") : T("Ces jours-là, alléger n'a rien d'un manque de volonté.", "Ces jours-là, alléger n'a rien d'un manque de volonté.")}</p>
         <div style={{ ...card, gap: 12 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><span style={small}>Pas envie, mais le corps en état</span><Rows rows={[{ label: "Séance comme prévu", part: s.ok.part, total: s.ok.total, highlight: true, unit: "fois sur" }]} color="#f28a00" /></div>
-          {s.tired && <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><span style={small}>Pas envie, et le corps fatigué</span><Rows rows={[{ label: "Séance plus dure que prévu", part: s.tired.part, total: s.tired.total, unit: "fois sur" }]} color="#f28a00" /></div>}
+          <span style={small}>Pas envie, mais le corps en état</span>
+          <Dots color={PHOTO_ACCENT.envie} items={Array.from({ length: s.ok.total }, (_, i) => ({ on: i < s.ok.part, label: i < s.ok.part ? "séance comme prévu" : "séance plus dure" }))} />
+          <Legend>✓ séance comme prévu · pointillé : plus dure</Legend>
+          {s.tired && <div style={{ fontSize: 14, color: "rgba(255,255,255,0.85)" }}>Pas envie, et le corps fatigué : séance plus dure {s.tired.part} fois sur {s.tired.total}.</div>}
         </div>
       </>);
     }
@@ -339,38 +450,39 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n, onPlanning }: {
       const [a, b] = s.families;
       const inDays = (d: number) => d === 1 ? "dès le lendemain" : d > 3 ? "en plus de 3 jours" : `en ${d} jours`;
       return (<>
-        <h2 style={h2}>Après une grosse séance de {a.noun}, <span style={{ color: "#8cc4f5" }}>{a.days === 1 ? T("tu récupères en une nuit.", "il récupère en une nuit.") : a.days > 3 ? T("il te faut plus de 3 jours.", "il lui faut plus de 3 jours.") : T(`il te faut ${a.days} jours.`, `il lui faut ${a.days} jours.`)}</span></h2>
+        {a.days <= 3
+          ? <Hero big={a.days} unit={a.days === 1 ? "nuit" : "jours"} cap={`pour récupérer d'une grosse séance de ${a.noun}.`} color={PHOTO_ACCENT.recup} />
+          : <Hero big="3+" unit="jours" cap={`pour récupérer d'une grosse séance de ${a.noun}.`} color={PHOTO_ACCENT.recup} />}
         {b && b.days !== a.days && <p style={sub}>{T("Ta", "Sa")} séance de {b.noun}, elle, est récupérée {inDays(b.days)}.</p>}
         {s.families.map((f, i) => (
           <div key={i} style={card}>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{f.noun.replace(/^./, x => x.toUpperCase())}, séance très dure</div>
-            {f.steps.map((st, j) => (
-              <div key={j} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "rgba(255,255,255,0.8)" }}><span>{st.label}</span><b style={{ color: "#fff" }}>{st.back ? `dans ${T("ta", "sa")} norme ✓` : `${round(s.norm - st.felt)} points sous ${T("ta", "sa")} norme`}</b></div>
-                <div style={{ position: "relative", height: 10, borderRadius: 5, background: "rgba(255,255,255,0.1)" }}>
-                  <div style={{ width: `${st.felt}%`, height: "100%", borderRadius: 5, background: st.back ? "#6da7ec" : "rgba(255,255,255,0.45)" }} />
-                  <div aria-hidden="true" style={{ position: "absolute", top: -3, bottom: -3, left: `${s.norm}%`, width: 2, borderRadius: 1, background: "#fff" }} />
-                </div>
-              </div>
-            ))}
+            <DayFrise steps={f.steps} color={PHOTO_ACCENT.recup} />
           </div>
         ))}
-        <div style={small}>Forme ressentie. Le trait blanc : {T("ta", "sa")} forme habituelle ({round(s.norm)}).</div>
+        <div style={small}>Forme ressentie, comparée à {T("ta", "sa")} forme habituelle ({round(s.norm)}).</div>
       </>);
     }
     case "rythmes":
       return (<>
-        <h2 style={h2}>{s.worst ? <>{T("Tes", "Ses")} {s.worst} sont <span style={{ color: "#ff8a5c" }}>{T("tes", "ses")} pires matins.</span></> : <>Une mauvaise nuit passe. <span style={{ color: "#ff8a5c" }}>Deux d&apos;affilée, non.</span></>}</h2>
+        {s.nights && (!s.worst || s.today)
+          ? <Hero big={s.nights.two.part} unit={`sur ${s.nights.two.total}`} cap="séances plus dures que prévu après deux mauvaises nuits d'affilée." color={PHOTO_ACCENT.sommeil} />
+          : s.worst && s.days
+          ? (() => { const avg = s.days.reduce((a, b) => a + b.value, 0) / s.days.length, w = s.days.find(d => d.highlight); return <Hero big={`−${round(avg - (w?.value ?? avg))}`} cap={`de forme ${T("tes", "ses")} ${s.worst} : ${T("tes", "ses")} pires jours.`} color={PHOTO_ACCENT.sommeil} />; })()
+          : <h2 style={h2}>Une mauvaise nuit passe. <span style={{ color: "#ff8a5c" }}>Deux d&apos;affilée, non.</span></h2>}
         {s.worst && (s.soireeShare >= 0.4 || s.next) && <p style={sub}>{s.soireeShare >= 0.4 ? "Souvent le lendemain d'une soirée (alcool ou sortie)." : `Une séance dure ce jour-là passerait mieux le ${s.next}.`}</p>}
         {s.days && <div style={card}><div style={small}>Forme ressentie moyenne, par jour</div><Bars bars={s.days} height={90} color="#ff6a2b" dim="rgba(255,255,255,0.3)" showValues /></div>}
         {s.nights && <div style={{ ...card, gap: 12 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><span style={small}>Après une mauvaise nuit</span><Rows rows={[{ label: "Séance plus dure que prévu", part: s.nights.one.part, total: s.nights.one.total, unit: "fois sur" }]} color="#ff6a2b" /></div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><span style={small}>Après deux mauvaises nuits d&apos;affilée</span><Rows rows={[{ label: "Séance plus dure que prévu", part: s.nights.two.part, total: s.nights.two.total, highlight: true, unit: "fois sur" }]} color="#ff6a2b" /></div>
+          {([["Après une mauvaise nuit", s.nights.one], ["Après deux mauvaises nuits d'affilée", s.nights.two]] as const).map(([l, v]) => (
+            <div key={l} style={{ display: "flex", flexDirection: "column", gap: 6 }}><span style={small}>{l} · {v.part} sur {v.total}</span>
+              <Dots color={PHOTO_ACCENT.sommeil} mark="!" items={Array.from({ length: v.total }, (_, i) => ({ on: i < v.part, label: i < v.part ? "séance plus dure que prévu" : "séance comme prévu" }))} /></div>
+          ))}
+          <Legend>! séance plus dure que prévu · pointillé : comme prévu</Legend>
         </div>}
       </>);
     case "prochaine":
       return (<>
-        <h2 style={h2}>{T("Ta", "Sa")} semaine qui vient, <span style={{ color: "#7ee08f" }}>relue avec ce que {T("tes", "ses")} données ont appris.</span></h2>
+        {(() => { const k = s.rows.filter(r => r.flag).length; return <Hero big={k} unit={`séance${k > 1 ? "s" : ""}`} cap={`de ${T("ta", "sa")} semaine qui vient à revoir, d'après ce que ${T("tes", "ses")} données ont appris.`} color={PHOTO_ACCENT.prochaine} />; })()}
         <div style={{ ...card, gap: 12 }}>
           {s.rows.map((r, i) => (
             <div key={i} style={{ display: "grid", gridTemplateColumns: "76px minmax(0, 1fr)", gap: 10, fontSize: 14 }}>
@@ -387,15 +499,10 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n, onPlanning }: {
       /* Aperçu (2026-11-03) : tant que ses propres écrans n'ont pas assez de données, un écran d'exemple
          choisi par sa réponse du matin (mêmes cartes que l'étape bilan de l'onboarding). Jamais flouté. */
       return (<>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", color: "#fff", background: "rgba(255,255,255,0.14)", borderRadius: 999, padding: "4px 10px" }}>APERÇU</span>
-          {s.chip && <span style={{ fontSize: 12, fontWeight: 700, color: "#ffd9c7", background: "rgba(212,64,0,0.3)", borderRadius: 999, padding: "4px 10px" }}>Toi ce matin : {s.chip}</span>}
-        </div>
-        <p style={{ margin: 0, fontSize: 16, fontWeight: 700, lineHeight: 1.35, color: "#fff" }}>{s.says}</p>
-        <div style={{ borderRadius: 18, border: "1px solid rgba(255,255,255,0.12)", padding: 14, display: "flex", flexDirection: "column", gap: 14, zoom: 0.9 }}>
-          <SlideBody s={s.inner} bilan={bilan} onShare={onShare} shared={shared} recal={recal} n={n} />
-        </div>
-        <div style={small}>Exemple tiré du bilan ThePerfClub. Le tien se remplit avec tes points forme.</div>
+        <ExampleCtx.Provider value={true}>
+          <SlideBody s={s.inner} bilan={bilan} onShare={onShare} shared={shared} recal={recal} n={EXAMPLE_N} />
+        </ExampleCtx.Provider>
+        <ExamplePromise n={n} />
       </>);
     case "partage":
       return (<>
@@ -434,7 +541,9 @@ function GroupSlideBody({ s, open }: { s: GroupSlide; open: OpenAthlete }) {
     case "g_decroche": {
       const flagged = s.rows.filter(r => r.flag);
       return (<>
-        <h2 style={h2}>{flagged.length ? <>{names(flagged.map(r => r.name))} <span style={{ color: "#ff8a5c" }}>{flagged.length > 1 ? "sont" : "est"} à surveiller.</span></> : <>Tout le groupe <span style={{ color: "#7ee08f" }}>suit.</span></>}</h2>
+        {flagged.length
+          ? <Hero big={flagged.length} unit={`sportif${flagged.length > 1 ? "s" : ""}`} cap={`à surveiller : ${names(flagged.map(r => r.name))}.`} color={PHOTO_ACCENT.groupe_decroche} />
+          : <Hero big={s.rows.length} unit={`sur ${s.rows.length}`} cap="sportifs suivent : tout le groupe est là." color={PHOTO_ACCENT.groupe_decroche} />}
         <p style={body}>Les jours de séance : point forme fait, fait mais fatigué, ou manqué.</p>
         {s.rows.map((r, i) => (
           <div key={i} style={card}>
@@ -460,7 +569,9 @@ function GroupSlideBody({ s, open }: { s: GroupSlide; open: OpenAthlete }) {
       const hard = top.harder / top.total >= 0.6;
       const up = (w: string) => ["légère", "modérée", "dure", "très dure"][Math.min(3, ["légère", "modérée", "dure", "très dure"].indexOf(w) + 1)];
       return (<>
-        <h2 style={h2}>{hard ? <>Tes séances {plural(top.planned)} <span style={{ color: "#ffb35c" }}>sont ressenties {plural(up(top.planned))}.</span></> : <>Tes séances <span style={{ color: "#7ee08f" }}>tombent juste.</span></>}</h2>
+        {hard
+          ? <Hero big={top.harder} unit={`sur ${top.total}`} cap={`séances prévues ${plural(top.planned)}, ressenties ${plural(up(top.planned))}.`} color={PHOTO_ACCENT.groupe_seances} />
+          : <h2 style={h2}>Tes séances <span style={{ color: "#7ee08f" }}>tombent juste.</span></h2>}
         <p style={body}>Ce que tu prévois, comparé à ce que tes sportifs ressentent, par niveau de difficulté prévue.</p>
         <div style={card}>
           {s.words.map((w, i) => (
@@ -490,7 +601,7 @@ function GroupSlideBody({ s, open }: { s: GroupSlide; open: OpenAthlete }) {
       </>);
     case "g_conseils":
       return (<>
-        <h2 style={h2}>Chaque conseil, <span style={{ color: "#7ee08f" }}>vérifié.</span></h2>
+        <Hero big={s.right} unit={`sur ${s.judged}`} cap="conseils du matin qui ont vu juste, dans tout le groupe." color={PHOTO_ACCENT.groupe_conseils} />
         <div style={card}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{s.right} confirmés sur {s.judged}</div>
           <Rows rows={s.rows.map((r, i) => ({ label: r.name, part: r.right, total: r.judged, highlight: i === 0 }))} color="#7ee08f" />
@@ -537,6 +648,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
   const [bilan, setBilan] = useState<Bilan | GroupBilan | null>(null);
   const [drill, setDrill] = useState<{ athleteId: string; name: string } | null>(null);
   const [failed, setFailed] = useState(false);
+  const [sport, setSport] = useState<string | null>(null);
   const [idx, setIdx] = useState(0);
   const [shared, setShared] = useState(false);
   const [recalState, setRecalState] = useState<Recal["state"]>("idle");
@@ -585,6 +697,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
       catch (e) { if (alive) { console.error("[bilan] lecture", e instanceof Error ? e.message : e); setFailed(true); } return; }
       if (!alive) return;
       const p = { data: raw.profile }, s = { data: raw.sessions }, w = { data: raw.checkins }, t = { data: raw.tests };
+      setSport(p.data?.sport ?? null);
       const signupAt = (p.data?.created_at as string | undefined) ?? new Date().toISOString();
       const checkins = (w.data ?? []) as BilanCheckin[];
       const sessions = (s.data ?? []) as BilanSession[];
@@ -640,6 +753,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
   }
 
   const last = idx >= slides.length - 1;
+  const photo = slide ? photoFor(slide) : null;
   const unlock = () => { close(); onUnlock?.(); };
   const slideNode = !bilan || !slide ? null : slide.kind.startsWith("g_")
     ? <GroupSlideBody s={slide as GroupSlide} open={(id, name) => { posthog.capture("coach_bilan_opened", { from: "group_bilan", period: kind, slide: slide.kind }); setDrill({ athleteId: id, name }); }} />
@@ -657,11 +771,12 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
       }}
       style={{
         position: "fixed", inset: 0, zIndex: 2147483100, background: "#070a0d",
-        backgroundImage: slide ? `radial-gradient(ellipse 110% 50% at 50% -8%, ${GLOW[slide.kind]} 0%, transparent 65%)` : undefined,
+        backgroundImage: slide && !photo ? `radial-gradient(ellipse 110% 50% at 50% -8%, ${GLOW[slide.kind]} 0%, transparent 65%)` : undefined,
         color: "#fff", fontFamily: "var(--font-dm-sans), 'Helvetica Neue', sans-serif", display: "flex", justifyContent: "center",
       }}
     >
-      <div style={{ width: "100%", maxWidth: 440, boxSizing: "border-box", padding: "calc(env(safe-area-inset-top, 0px) + 14px) 20px calc(env(safe-area-inset-bottom, 0px) + 20px)", display: "flex", flexDirection: "column", gap: 18, height: "100%" }}>
+      {photo && <div style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 560, height: "min(48vh, 420px)" }}><PhotoBanner photo={photo} height="100%" period={kind} sportPhoto={slide ? sportPhotoFor(slide, sport) : null} /></div>}
+      <div style={{ position: "relative", width: "100%", maxWidth: 440, boxSizing: "border-box", padding: "calc(env(safe-area-inset-top, 0px) + 14px) 20px calc(env(safe-area-inset-bottom, 0px) + 20px)", display: "flex", flexDirection: "column", gap: 18, height: "100%" }}>
         <div style={{ display: "flex", gap: 4 }}>
           {slides.map((_, i) => <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= idx ? "#fff" : "rgba(255,255,255,0.22)" }} />)}
         </div>
@@ -675,6 +790,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
           {!bilan && !failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "On rassemble les données du groupe…" : n ? "On rassemble ses données…" : "On rassemble tes données…"}</div>}
           {failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "Impossible de charger le bilan du groupe." : n ? `Impossible de charger le bilan de ${n}.` : "Impossible de charger ton bilan."} Réessaie dans un instant.</div>}
           {bilan && !slides.length && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "Pas encore assez de données pour ce bilan. Il se construit tout seul quand tes sportifs remplissent leur point forme et notent leurs séances." : n ? `Pas encore assez de données pour ce bilan. Il se construit tout seul quand ${n} remplit son point forme et note ses séances.` : "Pas encore assez de données pour ce bilan. Remplis ton point forme et note tes séances quelques jours : il se construit tout seul."}</div>}
+          {photo && slide && <div aria-hidden="true" style={{ flex: "0 0 auto", height: "min(14vh, 112px)" }} />}
           {slide && slideNode && (locked && !OPEN_SLIDES.has(slide.kind) ? lockSlide(slideNode, `bilan_${slide.kind}`, !!n || group, unlock) : slideNode)}
         </div>
 

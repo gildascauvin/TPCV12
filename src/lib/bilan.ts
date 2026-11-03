@@ -40,14 +40,18 @@ export type BilanUpcoming = { date: string; name: string | null; notes?: string 
 export type Bar = { label: string; value: number; display: string; highlight?: boolean };
 export type Compare = { label: string; part: number; total: number; highlight?: boolean };
 
-export type BilanSlide =
+export type BilanSlide = BaseSlide & { today?: TodayTag };
+/* Point forme de ce matin (2026-11-03, POC GSXeRzonoyn2UdnD46L9ML v3) : l'écran qu'une réponse ou un
+   comportement de ce matin fait remonter en tête du carrousel, avec la pastille « Toi ce matin : … ». */
+export type TodayTag = { chip: string; key?: string };
+type BaseSlide =
   | { kind: "regularite"; sessions: number; checkins: number; days: number; noGap: boolean; bars: Bar[] }
   | { kind: "charge"; pctInZone: number; daysHigh: number; daysCounted: number; daysLow?: number; daysAbove?: number }
   | { kind: "ressenti"; sleepBars: Bar[]; crashes: number; crashesSeen: number }
   | { kind: "predit"; blocks: { title: string; rows: Compare[] }[]; lead?: { dim: PersonalDim; noun: string } }
   | { kind: "biais"; planned: DifficultyWord; feltWord: DifficultyWord; harder: number; total: number; points: { label: string; planned: number; felt: number }[]; accurate: { planned: DifficultyWord; ok: number; total: number } | null }
   | { kind: "fatigue"; soirees: number; normScore: number; nextScore: number; afterScore: number | null; hrv: { norm: number; next: number } | null; hard: { easy: number; hard: number } | null }
-  | { kind: "leviers"; rows: { label: string; with: string; without: string; delta: string; positive: boolean; key?: string }[]; unit: "sleep" | "score" }
+  | { kind: "leviers"; rows: LeverRow[]; unit: "sleep" | "score" }
   | { kind: "envie"; ok: { part: number; total: number }; tired: { part: number; total: number } | null }
   | { kind: "recup"; norm: number; families: { noun: string; days: number; steps: { label: string; felt: number; back: boolean }[]; n: number }[] }
   | { kind: "rythmes"; days: Bar[] | null; worst: string | null; next: string | null; soireeShare: number; nights: { one: { part: number; total: number }; two: { part: number; total: number } } | null }
@@ -60,6 +64,7 @@ export type BilanSlide =
   | { kind: "partage"; kpis: { value: string; label: string }[]; line: string | null };
 
 /* Une case de la frise des verdicts (« Mes conseils », écran post-séance) : le juge de adviceJudge.ts. */
+export type LeverRow = { label: string; with: string; without: string; delta: string; positive: boolean; key?: string };
 export type StripCell = { id?: string; date: string; outcome: Outcome };
 /* Recalage proposé dans un sens : seuil cible, et ce que ça aurait changé sur l'historique rejoué. */
 export type Recal = { dir: AutoregDir; shift: number; alertsNow: number; alertsThen: number; justifiedNow: number; justifiedThen: number; liftNow: number; liftThen: number };
@@ -426,13 +431,16 @@ function fatigue(checkins: BilanCheckin[], sessions: BilanSession[]): BilanSlide
   return { kind: "fatigue", soirees: soirees.length, normScore, nextScore, afterScore, hrv, hard };
 }
 
+/* 2026-11-03 (Gildas : « on est censé utiliser tout ce qu'on peut ») : tabac, voyage et coucher tardif
+   mesurés aussi. Seules les soirées (alcool, sortie) sont retirées du calcul : elles ont leur écran. */
 function leviers(checkins: BilanCheckin[]): BilanSlide | null {
-  const days = checkins.filter(c => !(c.behaviors ?? []).some(b => SOIREE_WIDE.has(b)));
-  const keys = ["stretching", "screen_late", "walk", "hydration", "reading", "meditation", "cold_shower", "caffeine_late", "heavy_meal"];
+  const days = checkins.filter(c => !(c.behaviors ?? []).some(b => SOIREE.has(b)));
+  const keys = ["stretching", "screen_late", "walk", "hydration", "reading", "meditation", "cold_shower", "caffeine_late", "heavy_meal", "tobacco", "travel", "late_sleep"];
   const LABEL: Record<string, [string, boolean]> = {
     stretching: ["Stretching le soir", true], screen_late: ["Écran tard", false], walk: ["Marche détente", true],
     hydration: ["Bonne hydratation", true], reading: ["Lecture", true], meditation: ["Méditation", true],
     cold_shower: ["Douche froide", true], caffeine_late: ["Caféine tard", false], heavy_meal: ["Repas lourd", false],
+    tobacco: ["Tabac", false], travel: ["Voyage", false], late_sleep: ["Coucher tardif", false],
   };
   const withSleep = days.filter(c => c.device_sleep_minutes && c.device_sleep_minutes > 120);
   const useSleep = withSleep.length >= 20;
@@ -574,7 +582,7 @@ function prochaine(upcoming: BilanUpcoming[], sessions: BilanSession[], checkins
       const prev = need && need > 1 ? ups.find(p => p !== u && p.date < u.date && hard(p) && famOf(p) === f && daysBetween(p.date, u.date) < need) : undefined;
       if (prev) flag = `Trop près de ta séance de ${familyNoun(f!)} de ${WEEKDAYS[dow(prev.date)]} : il te faut ${need} jours`;
       else if (soireeDay[d]) flag = "Souvent le lendemain d'une soirée (alcool ou sortie)";
-      else if (wp?.worst === d) flag = wp.means[(d + 1) % 7] >= wp.all ? `Tes ${WEEKDAYS_PL[d]} sont bas : la passer au ${WEEKDAYS[(d + 1) % 7]} ?` : `Tes ${WEEKDAYS_PL[d]} sont tes pires matins`;
+      else if (wp?.worst === d) flag = wp.means[(d + 1) % 7] >= wp.all ? `Tes ${WEEKDAYS_PL[d]} sont bas : la passer au ${WEEKDAYS[(d + 1) % 7]} ?` : `Tes ${WEEKDAYS_PL[d]} sont tes pires jours`;
     }
     return { date: u.date, label: WEEKDAYS[d].replace(/^./, x => x.toUpperCase()), name: `${u.name ?? "Séance"} · ${qualitativeDifficulty(u.target_difficulty!)}`, flag };
   });
@@ -625,6 +633,65 @@ function tests(period: BilanPeriod, rows: BilanTest[]): BilanSlide | null {
   };
 }
 
+/* Ce matin (2026-11-03) : chaque réponse du point forme nettement hors de sa norme (≥ 1 écart type et
+   ≥ 2 points, sur ses 60 derniers matins, ≥ 10) et chaque comportement coché font remonter leur écran.
+   Ordre : réponses (la plus éloignée d'abord), puis comportements négatifs, puis positifs. Un
+   comportement coché plus d'un matin sur trois est une habitude : il ne remonte pas. */
+const DIM_SLIDE: Record<"sleep" | "stress" | "recovery" | "motivation", { kind: BaseSlide["kind"]; chip: string }> = {
+  sleep: { kind: "rythmes", chip: "mal dormi" }, stress: { kind: "predit", chip: "tendu" },
+  recovery: { kind: "recup", chip: "corps lourd" }, motivation: { kind: "envie", chip: "pas envie" },
+};
+const NEG_LEVER: Record<string, string> = { tobacco: "tabac", late_sleep: "couché tard", travel: "voyage", screen_late: "écran tard", caffeine_late: "caféine tard", heavy_meal: "repas lourd" };
+const POS_LEVER: Record<string, string> = { stretching: "stretching", walk: "marche", reading: "lecture", meditation: "méditation", cold_shower: "douche froide", hydration: "bien hydraté" };
+export type MorningSignal = { kind: BaseSlide["kind"]; chip: string; key?: string; dev?: number };
+export function morningSignals(checkins: BilanCheckin[], today: string): MorningSignal[] {
+  const c = checkins.find(x => x.date === today);
+  if (!c) return [];
+  const out: MorningSignal[] = [];
+  const past = checkins.filter(x => x.date < today).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60);
+  if (past.length >= 10) {
+    const dims: { d: keyof typeof DIM_SLIDE; bad: (v: number) => number }[] = [
+      { d: "sleep", bad: v => -v }, { d: "stress", bad: v => v }, { d: "recovery", bad: v => -v }, { d: "motivation", bad: v => -v },
+    ];
+    for (const { d, bad } of dims) {
+      const vs = past.map(x => x[d]), m = mean(vs), sd = Math.sqrt(mean(vs.map(v => (v - m) ** 2)));
+      const gap = bad(c[d]) - bad(m);
+      if (gap >= 2 && gap >= sd) out.push({ kind: DIM_SLIDE[d].kind, chip: DIM_SLIDE[d].chip, dev: gap / (sd || 1) });
+    }
+    out.sort((a, b) => (b.dev ?? 0) - (a.dev ?? 0));
+  }
+  /* Une habitude n'est pas une nouvelle : un comportement coché plus d'un matin sur trois (sur ses 60
+     derniers) ne remonte pas. Rejeu 03/11 sur Gildas : « écran tard » coché 66 matins sur 120, il
+     serait passé en tête 52 fois. */
+  const habit = (b: string) => past.length >= 10 && past.filter(x => (x.behaviors ?? []).includes(b)).length / past.length > 1 / 3;
+  const bs = (c.behaviors ?? []).filter(b => !habit(b));
+  if (bs.some(b => SOIREE.has(b))) out.push({ kind: "fatigue", chip: "soirée" });
+  for (const b of bs) if (NEG_LEVER[b]) out.push({ kind: "leviers", chip: NEG_LEVER[b], key: b });
+  if (bs.includes("late_sleep")) out.push({ kind: "rythmes", chip: "couché tard" });
+  for (const b of bs) if (POS_LEVER[b]) out.push({ kind: "leviers", chip: POS_LEVER[b], key: b });
+  return out;
+}
+/* Fait remonter les écrans de ce matin en tête, chacun une seule fois ; pour les leviers, la ligne du
+   comportement coché passe en premier (elle porte le grand chiffre). Un signal sans écran est ignoré. */
+function bringForward(learned: BilanSlide[], signals: MorningSignal[]): BilanSlide[] {
+  const front: BilanSlide[] = [];
+  for (const sig of signals) {
+    const i = learned.findIndex(x => x.kind === sig.kind);
+    if (i < 0 || front.includes(learned[i])) continue;
+    let sl = learned[i];
+    if (sl.kind === "leviers") {
+      const r = sl.rows.findIndex(x => x.key === sig.key);
+      if (r < 0) continue;
+      sl = { ...sl, rows: [sl.rows[r], ...sl.rows.filter((_, j) => j !== r)] };
+    }
+    if (sl.kind === "rythmes" && !sl.nights) continue;
+    if (sl.kind === "predit" && sl.lead?.dim !== "stress") continue;
+    front.push({ ...sl, today: { chip: sig.chip, key: sig.key } });
+    learned.splice(i, 1, front[front.length - 1]);
+  }
+  return [...front, ...learned.filter(x => !front.includes(x))];
+}
+
 export function computeBilan(input: {
   period: BilanPeriod; today: string; signupAt: string;
   sessions: BilanSession[]; checkins: BilanCheckin[]; tests: BilanTest[];
@@ -642,8 +709,9 @@ export function computeBilan(input: {
   const learned = [conseils(rows, shift, shiftHigh, input.recalEvents ?? []), ressenti(checkins), predit(sessions, checkins), biais(joined), fatigue(checkins, sessions), envie(joined), recup(sessions, checkins), rythmes(joined, checkins), suivre(rows, checkins, shift), leviers(checkins)].filter((x): x is BilanSlide => !!x);
   // « La semaine qui vient » : toujours relative à aujourd'hui, quel que soit le bilan ouvert (le bilan de
   // la semaine passée se termine naturellement sur la suivante).
+  const learnedSorted = period.end >= today && period.start <= today ? bringForward(learned, morningSignals(checkins, today)) : learned;
   const late = [tendance(period, checkins), tests(period, input.tests), prochaine(input.upcoming ?? [], sessions, checkins, today)];
-  const slides = [...periodSlides, ...(period.kind === "week" ? learned.slice(0, 2) : learned), ...late].filter((x): x is BilanSlide => !!x);
+  const slides = [...periodSlides, ...(period.kind === "week" ? learnedSorted.slice(0, 2) : learnedSorted), ...late].filter((x): x is BilanSlide => !!x);
 
   const kpis: { value: string; label: string }[] = [];
   for (const s of slides) {

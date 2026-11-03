@@ -28,7 +28,7 @@ export function QuestionShell({ index, total, segments, cover, title, sub, onSki
   /* Frise par thème (31/10, Gildas : 10 barres après l'inscription, c'était décourageant) : une barre par thème
      (programme, point forme, sportifs et notifications), remplie selon l'avancée dans le thème (0 à 1). */
   segments?: number[];
-  title: React.ReactNode; sub?: React.ReactNode;
+  title?: React.ReactNode; sub?: React.ReactNode;
   onSkip?: () => void; skipLabel?: string; onBack?: () => void;
   /* « Plus tard » sous le bouton principal (écrans de permission : Apple Santé, notifications). */
   skipBottom?: boolean;
@@ -78,7 +78,8 @@ export function QuestionShell({ index, total, segments, cover, title, sub, onSki
   );
   return (
     <div style={{ position: "fixed", inset: 0, background: dark ? DARK_CARD_BG : PAGE, overflowY: "auto", zIndex: 1 }}>
-      {dark ? <div style={{ height: isMd ? 56 : 28 }} /> : (
+      {/* Écrans sombres (2026-11-03, Gildas : trop d'espace au-dessus de « ← Passer ») : juste l'encoche + 4 à 16 px. */}
+      {dark ? <div style={{ height: `calc(${isMd ? 16 : 4}px + env(safe-area-inset-top, 0px))` }} /> : (
         <div style={{ position: "absolute", left: 0, right: 0, top: 0, height: isMd ? 260 : 200 }}>
           <Image src={cover} alt="" fill priority sizes="100vw" style={{ objectFit: "cover", objectPosition: "center 35%" }} />
           {/* Fondu fini avant le titre : la question se lit toujours sur le fond uni de la page. */}
@@ -91,7 +92,7 @@ export function QuestionShell({ index, total, segments, cover, title, sub, onSki
       <div style={{ position: "relative", maxWidth: col, margin: "0 auto", padding: dark ? `16px 20px ${skipBottom ? 180 : 140}px` : `${isMd ? 196 : 136}px 20px ${skipBottom ? 180 : 140}px`, color: ink }}>
         {dark && <div style={{ marginBottom: 28 }}>{header}</div>}
         {eyebrow && <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: dark ? "#ff8a55" : ORANGE, marginBottom: 8 }}>{eyebrow}</div>}
-        <h1 style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, letterSpacing: "-.02em", lineHeight: 1.2, margin: "0 0 8px", textWrap: "balance" as React.CSSProperties["textWrap"] }}>{title}</h1>
+        {title && <h1 style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, letterSpacing: "-.02em", lineHeight: 1.2, margin: "0 0 8px", textWrap: "balance" as React.CSSProperties["textWrap"] }}>{title}</h1>}
         {sub && <p style={{ fontSize: 15, color: muted, lineHeight: 1.5, margin: "0 0 22px" }}>{sub}</p>}
         {children}
       </div>

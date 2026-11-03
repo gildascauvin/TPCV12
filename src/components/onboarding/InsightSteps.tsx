@@ -7,7 +7,7 @@
    Les cartes sont les vrais écrans du bilan (SlideBody de BilanCarousel), dans un cadre réduit. */
 
 import { useEffect, useRef, useState } from "react";
-import { SlideBody, GLOW, KICKER, KICKER_COACH } from "@/components/bilan/BilanCarousel";
+import { SlideBody, KICKER, KICKER_COACH, PhotoBanner, photoFor, sportPhotoFor, ExampleCtx, ExamplePromise, EXAMPLE_N } from "@/components/bilan/BilanCarousel";
 import { SCALE_WORDS, type ScaleKey } from "@/lib/wellnessWords";
 import type { Bilan, BilanSlide } from "@/lib/bilan";
 import { catalogEntry, findCatalogEntry } from "@/lib/sportCatalog";
@@ -19,7 +19,7 @@ const BOX: React.CSSProperties = { background: "rgba(255,255,255,.055)", border:
 const DOWN = "#6da7ec", UP = "#ff8a5c";
 
 /* ── Réponses du check-in ── */
-export type Answers = { sleep: number; stress: number; recovery: number; motivation: number };
+export type Answers = { sleep: number; stress: number; recovery: number; motivation: number; behaviors?: string[] | null };
 const ORDER: ScaleKey[] = ["sleep", "stress", "recovery", "motivation"];
 const QLABEL: Record<ScaleKey, string> = { sleep: "Sommeil", stress: "Stress", recovery: "Récupération", motivation: "Motivation" };
 /* Les mots de l'échelle sont au masculin (« douloureux », « lourd ») : « corps » pour la récupération. */
@@ -43,11 +43,6 @@ export function lowWords(a: Answers): string {
 }
 
 /* ── Titres (écran insight et paywall), par réponse la plus basse ── */
-export function insightTitle(a: Answers, name?: string): string {
-  const k = lowestAnswer(a);
-  if (!k) return name ? `${name} est en forme ce matin.` : "Tout est bon ce matin.";
-  return name ? `${name} : ${QPHRASE[k]} ${answerWord(k, a[k])}.` : `Ce matin, ${QPHRASE[k]} ${answerWord(k, a[k])}.`;
-}
 /* sessionName : la séance de sa jauge, pour que le titre reprenne celle qu'il vient de voir. */
 export function payHeadline(a: Answers, replayDown: number, sport = "", sessionName?: string): string {
   const ses = sessionName ? `séance « ${sessionName} »` : FAM[sportFamily(sport)].ses;
@@ -60,7 +55,7 @@ export function payHeadline(a: Answers, replayDown: number, sport = "", sessionN
     stress: `Ta prochaine journée de stress ne te coûtera plus ta ${ses}.`,
     recovery: "Tes jambes lourdes auront une explication. Et ta séance, le bon dosage.",
     motivation: "Quand l'envie baisse, ta charge se recale avant que tu décroches.",
-  }[k as ScaleKey] ?? "Les bons matins, tu pousses. Les autres, ta séance s'allège avant de se rater.";
+  }[k as ScaleKey] ?? "Les bons jours, tu pousses. Les autres, ta séance s'allège avant de se rater.";
 }
 export function payHeadlineCoach(a: Answers, name: string, sport = "", sessionName?: string): string {
   const ses = sessionName ? `séance « ${sessionName} »` : FAM[sportFamily(sport)].ses;
@@ -70,7 +65,7 @@ export function payHeadlineCoach(a: Answers, name: string, sport = "", sessionNa
     stress: `La prochaine journée de stress de ${name} ne lui coûtera plus sa ${ses}.`,
     recovery: `Les jambes lourdes de ${name} auront une explication. Et sa séance, le bon dosage.`,
     motivation: `Quand l'envie de ${name} baisse, sa charge se recale avant qu'il décroche.`,
-  }[k as ScaleKey] ?? `Les bons matins, ${name} pousse. Les autres, tu allèges avant la séance.`;
+  }[k as ScaleKey] ?? `Les bons jours, ${name} pousse. Les autres, tu allèges avant la séance.`;
 }
 
 /* ── Écrans du bilan ── */
@@ -99,12 +94,21 @@ const FAM: Record<SportFamily, { ses: string; block: string; noun: string; stres
   collectif: { ses: "séance la plus intense", block: "Séance intense", noun: "haute intensité", stress: [14, 21, 10, 33], heavy: [12, 17, 9, 38] },
 };
 const DATES = ["2026-06-02", "2026-07-07", "2026-08-25", "2026-10-06"];
-const S_SLEEP: BilanSlide = { kind: "ressenti", crashes: 0, crashesSeen: 0, sleepBars: [{ label: "Correct", value: 413, display: "6h53" }, { label: "Bon", value: 453, display: "7h33" }, { label: "Très bon", value: 471, display: "7h51", highlight: true }] };
+/* Sommeil bas (2026-11-03, Gildas : « Son ressenti vaut une montre » jamais dans l'onboarding) : l'écran
+   « deux mauvaises nuits d'affilée », chiffres illustratifs. */
+const S_SLEEP: BilanSlide = { kind: "rythmes", days: null, worst: null, next: null, soireeShare: 0, nights: { one: { part: 1, total: 5 }, two: { part: 4, total: 5 } } };
 const S_FATIGUE: BilanSlide = { kind: "fatigue", soirees: 12, normScore: 71, nextScore: 62, afterScore: null, hrv: { norm: 63, next: 45 }, hard: { easy: 71, hard: 68 } };
-const S_LEVIER: BilanSlide = { kind: "leviers", unit: "sleep", rows: [{ key: "stretching", label: "Stretching le soir", with: "7 h 59", without: "7 h 35", delta: "+24 min", positive: true }] };
 const S_CHARGE: BilanSlide = { kind: "charge", pctInZone: 64, daysHigh: 3, daysCounted: 7, daysLow: 0, daysAbove: 3 };
 const sStress = (f: SportFamily): BilanSlide => { const [a, b, c, d] = FAM[f].stress; return { kind: "predit", lead: { dim: "stress", noun: FAM[f].noun }, blocks: [{ title: `${FAM[f].block} · stress élevé`, rows: [{ label: "Les jours de stress", part: a, total: b, highlight: true }, { label: "Les autres jours", part: c, total: d }] }] }; };
-const sHeavy = (f: SportFamily): BilanSlide => { const [a, b, c, d] = FAM[f].heavy; return { kind: "predit", lead: { dim: "recovery", noun: FAM[f].noun }, blocks: [{ title: `${FAM[f].block} · corps fatigué`, rows: [{ label: "Les matins corps fatigué", part: a, total: b, highlight: true }, { label: "Les autres matins", part: c, total: d }] }] }; };
+/* Cartes de fond (2026-11-03, Gildas : « au pire les insights type 1 nuit pour récupérer selon son
+   sport », « 124 sur 141 jours dans ta zone ») : vraies valeurs du bilan du sportif d'exemple
+   (force récupérée en une nuit, vitesse en 2 jours ; 124 jours sur 141 dans sa zone). Endurance :
+   fractionné / sortie longue, illustratif. */
+const sRecup = (f: SportFamily): BilanSlide => f === "endurance"
+  ? { kind: "recup", norm: 69, families: [{ noun: "fractionné", days: 1, n: 9, steps: [{ label: "Le lendemain", felt: 67, back: true }] }, { noun: "sortie longue", days: 2, n: 6, steps: [{ label: "Le lendemain", felt: 61, back: false }, { label: "2 jours après", felt: 68, back: true }] }] }
+  : { kind: "recup", norm: 69, families: [{ noun: "force", days: 1, n: 8, steps: [{ label: "Le lendemain", felt: 67, back: true }] }, { noun: "vitesse", days: 2, n: 6, steps: [{ label: "Le lendemain", felt: 61, back: false }, { label: "2 jours après", felt: 68, back: true }] }] };
+const S_ZONE: BilanSlide = { kind: "charge", pctInZone: 88, daysHigh: 8, daysCounted: 141, daysLow: 9, daysAbove: 8 };
+const sHeavy = (f: SportFamily): BilanSlide => { const [a, b, c, d] = FAM[f].heavy; return { kind: "predit", lead: { dim: "recovery", noun: FAM[f].noun }, blocks: [{ title: `${FAM[f].block} · corps fatigué`, rows: [{ label: "Les jours corps fatigué", part: a, total: b, highlight: true }, { label: "Les autres jours", part: c, total: d }] }] }; };
 /* Test d'exemple dans le vocabulaire du sport (31/10, Gildas : « Burpees en 3 min » trop vague, squat jump
    réservé aux sports explosifs). Clé = valeur du catalogue ; sport hors catalogue : test de la famille. */
 type TestEx = { name: string; unit: string; pct: number; values: number[] };
@@ -160,75 +164,110 @@ function leadCard(k: CaseKey, f: SportFamily, test: TestEx): Card {
       ? `Le stress de ${n} se paie sur sa ${ses} : plus dure que prévu ${sa} fois sur ${sb}.`
       : `Le stress se paie sur ta ${ses} : plus dure que prévu ${sa} fois sur ${sb}.` },
     sleep: { key: "sleep", slide: S_SLEEP, says: (n?: string) => n
-      ? `${n} ne se trompe pas sur sa nuit : chaque note du réveil colle à un vrai temps de sommeil.`
-      : "Ton ressenti ne te trompe pas : chaque note du réveil colle à un vrai temps de sommeil." },
+      ? `Une mauvaise nuit passe. Deux d'affilée, la séance de ${n} est plus dure 4 fois sur 5.`
+      : "Une mauvaise nuit passe. Deux d'affilée, ta séance est plus dure 4 fois sur 5." },
     recovery: { key: "heavy", slide: sHeavy(f), says: (n?: string) => n
-      ? `Ces matins-là, sa ${ses} passe mal : plus dure que prévu ${ha} fois sur ${hb}.`
-      : `Ces matins-là, ta ${ses} passe mal : plus dure que prévu ${ha} fois sur ${hb}.` },
+      ? `Ces jours-là, sa ${ses} passe mal : plus dure que prévu ${ha} fois sur ${hb}.`
+      : `Ces jours-là, ta ${ses} passe mal : plus dure que prévu ${ha} fois sur ${hb}.` },
     motivation: { key: "charge", slide: S_CHARGE, says: (n?: string) => n
       ? `Pas un manque de volonté : quand l'envie de ${n} baisse, la charge est souvent sortie de la zone.`
       : "Pas un manque de volonté : quand l'envie baisse, ta charge est souvent sortie de ta zone." },
-    ok: { key: "tests", slide: sTests(test), says: () => `Les bons matins poussés s'additionnent : ${test.name} +${test.pct} %.` },
+    ok: { key: "tests", slide: sTests(test), says: () => `Les bons jours poussés s'additionnent : ${test.name} +${test.pct} %.` },
   }[k];
 }
-/* Levier choisi selon sa réponse la plus basse (2026-10-29), d'après l'historique d'un sportif ThePerfClub
-   (n=1, illustration) : marche → nuit, stretching → corps, hydratation → stress et motivation. */
-const lever = (key: string, label: string, unit: "sleep" | "score", w: string, wo: string, delta: string): BilanSlide =>
-  ({ kind: "leviers", unit, rows: [{ key, label, with: w, without: wo, delta, positive: true }] });
-const LEVER: Record<CaseKey, { slide: BilanSlide; says: string }> = {
-  sleep: { slide: lever("walk", "La marche dans la journée", "sleep", "7 h 58", "7 h 29", "+29 min"), says: "Ce qui rallonge la nuit : bouger dans la journée." },
-  recovery: { slide: lever("stretching", "Le stretching le soir", "score", "76", "66", "+10 points"), says: "Ce qui allège le corps le lendemain : le stretching." },
-  stress: { slide: lever("hydration", "Bien s'hydrater", "score", "79", "67", "+12 points"), says: "Un levier simple les jours chargés : l'hydratation." },
-  motivation: { slide: lever("hydration", "Bien s'hydrater", "score", "79", "67", "+12 points"), says: "Un levier simple quand l'envie baisse : l'hydratation." },
-  ok: { slide: S_LEVIER, says: "Un petit geste le soir change la nuit." },
+/* Comportements cochés au point forme (2026-11-03, Gildas : « si je mets des comportements dans
+   l'onboarding je les retrouve pas dans mon bilan ») : la carte du comportement entre dans le
+   carrousel, avec sa pastille. Soirée, stretching, marche, hydratation : chiffres réels du sportif
+   d'exemple ; écran, caféine, repas, tabac, coucher tardif, voyage, lecture, méditation, douche
+   froide : illustratifs. Un bon matin avec un comportement coché ouvre sur ce comportement : c'est le
+   AHA du point forme unique, même sans historique. */
+const lev = (key: string, label: string, unit: "sleep" | "score", w: string, wo: string, delta: string, positive: boolean): BilanSlide =>
+  ({ kind: "leviers", unit, rows: [{ key, label, with: w, without: wo, delta, positive }] });
+const BEHAVIOR_CARD: Record<string, { chip: string; slide: BilanSlide }> = {
+  alcohol: { chip: "soirée", slide: S_FATIGUE }, social_out: { chip: "soirée", slide: S_FATIGUE },
+  screen_late: { chip: "écran tard", slide: lev("screen_late", "Écran tard", "sleep", "7 h 16", "7 h 35", "−19 min", false) },
+  caffeine_late: { chip: "caféine tard", slide: lev("caffeine_late", "Caféine tard", "sleep", "7 h 12", "7 h 35", "−23 min", false) },
+  heavy_meal: { chip: "repas lourd", slide: lev("heavy_meal", "Repas lourd", "sleep", "7 h 20", "7 h 35", "−15 min", false) },
+  tobacco: { chip: "tabac", slide: lev("tobacco", "Tabac", "score", "64", "71", "−7 points", false) },
+  late_sleep: { chip: "couché tard", slide: lev("late_sleep", "Coucher tardif", "score", "64", "71", "−7 points", false) },
+  travel: { chip: "voyage", slide: lev("travel", "Voyage", "score", "63", "71", "−8 points", false) },
+  stretching: { chip: "stretching", slide: lev("stretching", "Stretching le soir", "sleep", "7 h 59", "7 h 35", "+24 min", true) },
+  walk: { chip: "marche", slide: lev("walk", "La marche dans la journée", "sleep", "7 h 58", "7 h 29", "+29 min", true) },
+  hydration: { chip: "bien hydraté", slide: lev("hydration", "Bien s'hydrater", "score", "79", "67", "+12 points", true) },
+  reading: { chip: "lecture", slide: lev("reading", "Lecture", "sleep", "7 h 49", "7 h 35", "+14 min", true) },
+  meditation: { chip: "méditation", slide: lev("meditation", "Méditation", "sleep", "7 h 46", "7 h 35", "+11 min", true) },
+  cold_shower: { chip: "douche froide", slide: lev("cold_shower", "Douche froide", "score", "74", "68", "+6 points", true) },
 };
-const moreCards = (f: SportFamily, k: CaseKey): Card[] => [
-  { key: "levier", slide: LEVER[k].slide, says: () => LEVER[k].says },
-  { key: "fatigue", slide: S_FATIGUE, says: () => "Ce n'est pas la séance de la veille qui fatigue le plus." },
-  { key: "stress", slide: sStress(f), says: () => `Le stress se paie surtout sur la ${FAM[f].ses}.` },
-  { key: "sleep", slide: S_SLEEP, says: () => "Une nuit notée mauvaise est vraiment plus courte." },
-];
+const BEHAVIOR_ORDER = ["alcohol", "social_out", "tobacco", "late_sleep", "travel", "screen_late", "caffeine_late", "heavy_meal", "stretching", "walk", "hydration", "reading", "meditation", "cold_shower"];
+/* Les cartes du carrousel (2026-11-03, Gildas) : d'abord ce qu'il a répondu ou coché ce matin (son moins
+   bon critère toujours en tête, puis chaque autre réponse basse, puis chaque comportement : soirée > négatifs > positifs) ; rien à
+   signaler : Récupération, Charge, puis la carte Tests de son sport. Sinon, puis les cartes de fond, intéressantes pour tous : sa
+   récupération selon son sport et sa charge dans la zone. 5 cartes au plus. */
+function deckFor(answers: Answers, sport: string): (Card & { chip?: string })[] {
+  const f = sportFamily(sport);
+  const test = testFor(sport, f);
+  // Le moins bon critère du point forme toujours en premier, même s'il n'est pas franchement bas
+  // (Gildas, 2026-11-03) ; puis les autres réponses basses.
+  const lows = ORDER.map(k => ({ k, g: good(k, answers[k]) })).sort((x, y) => x.g - y.g).filter((x, i) => i === 0 || x.g <= 5)
+    .map(x => ({ ...leadCard(x.k, f, test), chip: `${QPHRASE[x.k]} ${answerWord(x.k, answers[x.k])}` }));
+  const anyLow = ORDER.some(k => good(k, answers[k]) <= 5);
+  const seen = new Set<BilanSlide>();
+  const bcs = BEHAVIOR_ORDER.filter(b => (answers.behaviors ?? []).includes(b) && !seen.has(BEHAVIOR_CARD[b].slide) && seen.add(BEHAVIOR_CARD[b].slide))
+    .map(b => ({ key: `b_${b}`, slide: BEHAVIOR_CARD[b].slide, chip: BEHAVIOR_CARD[b].chip }));
+  const mine: (Card & { chip?: string })[] = [...lows, ...bcs];
+  const fond: Card[] = [{ key: "recup", slide: sRecup(f) }, { key: "zone", slide: S_ZONE }];
+  // Une seule carte de charge : celle de la motivation si elle est déjà là.
+  const rest = fond.filter(c => !(c.key === "zone" && mine.some(m => m.key === "charge")));
+  // Rien de bas, rien de coché : son moins bon critère, Récupération, Charge, puis Tests.
+  if (!anyLow && !bcs.length) return [lows[0], ...rest, leadCard("ok", f, test)];
+  return [...mine, ...rest].slice(0, 5);
+}
 
 /* Premier bilan dans l'app (2026-11-03) : les mêmes cartes que l'étape bilan de l'onboarding, la
    première choisie par sa réponse la plus basse du matin, avec sa réponse en pastille. */
 export function previewSlides(answers: Answers, sport = ""): { slide: BilanSlide; says: string; chip: string | null }[] {
-  const k = lowestAnswer(answers);
-  const f = sportFamily(sport);
-  const lead = leadCard(k ?? "ok", f, testFor(sport, f));
   const cap = (t: string) => (t.charAt(0).toUpperCase() + t.slice(1)).replace(/ ([:;!?])/g, "\u00a0$1");
-  return [lead, ...moreCards(f, k ?? "ok").filter(c => c.key !== lead.key)].slice(0, 3)
-    .map((c, i) => ({ slide: c.slide, says: cap(c.says ? c.says() : ""), chip: i === 0 && k ? `${QPHRASE[k]} ${answerWord(k, answers[k])}` : null }));
+  return deckFor(answers, sport).slice(0, 3)
+    .map(c => ({ slide: c.slide, says: cap(c.says ? c.says() : ""), chip: c.chip ?? null }));
 }
 
 /* Les cartes parlent au sportif (« ta charge ») ; côté coach, au prénom de son sportif. */
+/* Même mise en page que le bilan dans l'app (2026-11-03, Gildas) : pas de carte encadrée, la photo du
+   thème est derrière tout l'écran (voir InsightStepBody), l'écran du bilan posé dessus. */
 function SlideFrame({ slide, name }: { slide: BilanSlide; name?: string }) {
   return (
-    <div style={{ borderRadius: 22, overflow: "hidden", background: "#070a0d", backgroundImage: `radial-gradient(ellipse 110% 60% at 50% -8%, ${GLOW[slide.kind]} 0%, transparent 65%)`, border: "1px solid rgba(255,255,255,.10)" }}>
-      <div style={{ zoom: 0.86, padding: "16px 16px 18px", display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ ...MONO, fontSize: 11, color: "rgba(255,255,255,.75)" }}>Bilan · {KICKER_COACH[slide.kind] ?? KICKER[slide.kind]}</div>
-        <SlideBody s={slide} bilan={BILAN} onShare={() => {}} shared={false} recal={RECAL} n={name} />
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ ...MONO, fontSize: 11, color: "rgba(255,255,255,.85)", textShadow: "0 1px 6px rgba(0,0,0,.6)" }}>Bilan · {(name && KICKER_COACH[slide.kind]) || KICKER[slide.kind]}</div>
+      <div aria-hidden="true" style={{ height: 56 }} />
+      <ExampleCtx.Provider value={true}>
+        <SlideBody s={slide} bilan={BILAN} onShare={() => {}} shared={false} recal={RECAL} n={EXAMPLE_N} />
+      </ExampleCtx.Provider>
+      <ExamplePromise n={name} />
     </div>
   );
 }
 
 export function InsightStepBody({ answers, name, sport = "", onIndex }: { answers: Answers; name?: string; sport?: string; onIndex?: (i: number) => void }) {
-  const k = lowestAnswer(answers);
-  const f = sportFamily(sport);
-  const lead = leadCard(k ?? "ok", f, testFor(sport, f));
-  const slides = [lead, ...moreCards(f, k ?? "ok").filter(c => c.key !== lead.key)];
+  const slides = deckFor(answers, sport);
   const [idx, setIdx] = useState(0);
   // Retour sur l'étape : le carrousel repart de la 1re carte, le titre de l'étape aussi.
   useEffect(() => { onIndex?.(0); }, [onIndex]);
   const track = useRef<HTMLDivElement>(null);
   const go = (i: number) => track.current?.scrollTo({ left: i * (track.current.clientWidth + 16), behavior: "smooth" });
+  const cur = slides[Math.min(idx, slides.length - 1)]?.slide;
+  const photo = cur ? photoFor(cur) : null;
   return (
     <div>
+      {/* Photo du thème de la carte visible, derrière tout l'écran (fixed, sous le contenu de QuestionShell). */}
+      {cur && photo && (
+        <div aria-hidden="true" style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 600, height: "min(52vh, 440px)", zIndex: -1, pointerEvents: "none" }}>
+          <PhotoBanner photo={photo} height="100%" sportPhoto={sportPhotoFor(cur, sport)} />
+        </div>
+      )}
       <div ref={track} onScroll={e => { const el = e.currentTarget; const i = Math.round(el.scrollLeft / (el.clientWidth + 16)); setIdx(i); onIndex?.(i); }}
         style={{ display: "flex", overflowX: "auto", scrollSnapType: "x mandatory", scrollbarWidth: "none", gap: 16, alignItems: "flex-start" }}>
-        {slides.map((c, i) => (
+        {slides.map(c => (
           <div key={c.key} style={{ flex: "0 0 100%", scrollSnapAlign: "start" }}>
-            {c.says && <p style={{ margin: "0 0 12px", fontSize: i === 0 ? 16 : 15, fontWeight: 700, lineHeight: 1.35, color: "#fff" }}>{(t => t.charAt(0).toUpperCase() + t.slice(1))(c.says(name)).replace(/ ([:;!?])/g, "\u00a0$1")}</p>}
             <SlideFrame slide={c.slide} name={name} />
           </div>
         ))}
@@ -239,11 +278,6 @@ export function InsightStepBody({ answers, name, sport = "", onIndex }: { answer
             style={{ width: i === idx ? 22 : 8, height: 8, borderRadius: 999, border: 0, padding: 0, cursor: "pointer", background: i === idx ? "#ff8a55" : "rgba(255,255,255,.25)", transition: "width .2s" }} />
         ))}
       </div>
-      <div style={{ ...BOX, borderRadius: 18, padding: "14px 16px", marginTop: 18, display: "flex", alignItems: "center", gap: 14 }}>
-        <span style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, letterSpacing: "-0.02em", color: "#ff8a55", lineHeight: 1 }}>111</span>
-        <span style={{ fontSize: 13.5, lineHeight: 1.4, color: "rgba(255,255,255,.8)" }}>séances ajustées en 6 mois par un sportif ThePerfClub, au lieu d&apos;être faites au ressenti.</span>
-      </div>
-      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, color: "rgba(255,255,255,.4)", marginTop: 12, textAlign: "center" }}>Exemples tirés du bilan ThePerfClub</div>
     </div>
   );
 }

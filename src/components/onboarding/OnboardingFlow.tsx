@@ -28,7 +28,7 @@ import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, PROG
 import { COUNT_OPTIONS, HealthStepBody, WeekStepBody, PlannedWeekBody, NotifStepBody, AppPushStepBody, StreakTitle, type ObCount, type WeekSession } from "@/components/onboarding/EliteSteps";
 import { requestStoreReview } from "@/lib/storeReview";
 import { fetchReplay, demoReplay, replayUsable, replayDownCount, replayUpCount, type Replay } from "@/lib/healthReplay";
-import { InsightStepBody, ReplayStepBody, insightTitle, payHeadline, payHeadlineCoach, decideOptions, decideLead, decideOptionsCoach, decideLeadCoach, contrastTitle, contrastTitleCoach, weekCostLine, pickWords, pickWordsCoach, lowestAnswer, lowWords, sportFamily, answerRows, testFor, type Answers, type Pick, type PickCoach } from "@/components/onboarding/InsightSteps";
+import { InsightStepBody, ReplayStepBody, payHeadline, payHeadlineCoach, decideOptions, decideLead, decideOptionsCoach, decideLeadCoach, contrastTitle, contrastTitleCoach, weekCostLine, pickWords, pickWordsCoach, lowestAnswer, lowWords, sportFamily, answerRows, testFor, type Answers, type Pick, type PickCoach } from "@/components/onboarding/InsightSteps";
 import { SessionTemplateCard } from "@/components/programs/SessionTemplateCard";
 import AnalysisReveal, { ReadingReveal, type AnalysisStep } from "@/components/onboarding/AnalysisReveal";
 import { computeAutoregSuggestion } from "@/lib/autoregulation";
@@ -477,7 +477,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [obInsightRevealed, setObInsightRevealed] = useState(false);
   /* Carte visible du carrousel ob_insight (2026-11-03) : le titre « Ce matin, stress fort » ne vaut que
      pour la 1re carte (choisie par cette réponse) ; les suivantes parlent d'autres thèmes. */
-  const [obInsightIdx, setObInsightIdx] = useState(0);
+  const [, setObInsightIdx] = useState(0);
   const [obCount, setObCount] = useState<ObCount | null>(null);
   const [obHealthBusy, setObHealthBusy] = useState(false);
   /* Rejeu des 30 jours de la montre (2026-11-02), rempli après la connexion Santé. null = pas (encore)
@@ -2104,7 +2104,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     const saveCheckin = async (data: { sleep: number; stress: number; recovery: number; motivation: number; behaviors: string[]; bedtime: string; base_score: number; score: number; plannedIntensity?: unknown }) => {
       if (!eliteUid) {
         // ?dbgstep sans compte : rien n'est enregistré, le parcours continue.
-        setObAnswers({ sleep: data.sleep, stress: data.stress, recovery: data.recovery, motivation: data.motivation });
+        setObAnswers({ sleep: data.sleep, stress: data.stress, recovery: data.recovery, motivation: data.motivation, behaviors: data.behaviors });
         setObExample(false); obRingRef.current = null;
         setObCheckinScore(data.score); setObCheckinOpen(false); obAdvance();
         return;
@@ -2122,7 +2122,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         .select().single();
       if (error) console.error("[ob_checkin] wellness upsert error:", error);
       posthog.capture("onboarding_checkin_saved", { ok: !error, role });
-      setObAnswers({ sleep: data.sleep, stress: data.stress, recovery: data.recovery, motivation: data.motivation });
+      setObAnswers({ sleep: data.sleep, stress: data.stress, recovery: data.recovery, motivation: data.motivation, behaviors: data.behaviors });
       setObExample(false); obRingRef.current = null;
       setObCheckinScore(error ? null : ((saved as { score?: number } | null)?.score ?? payload.score));
       setObCheckinBusy(false);
@@ -2336,7 +2336,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       const insightSes = ringSession();
       const insightSug = computeAutoregSuggestion(obCheckinScore, insightSes.target_difficulty, syntheticBaselineFor(obCheckinScore ?? 60));
       return (
-        <QuestionShell {...common} dark eyebrow="Ce que disent nos données" title={obInsightIdx > 0 ? (coach ? `Ce que le bilan de ${coachFirst} trouvera aussi.` : "Ce que ton bilan trouvera aussi.") : obExample && !coach ? "Une nuit courte, par exemple." : capS(insightTitle(answers, coach ? coachFirst : undefined))}
+        <QuestionShell {...common} dark
           onSkip={() => obAdvance()}
           cta={{ label: coach ? `Voir la séance de ${coachFirst}` : (insightSug ? "Voir ma séance ajustée" : "Voir ma séance du jour"), onClick: () => obAdvance() }}>
           <InsightStepBody answers={answers} name={coach ? coachFirst : undefined} sport={sportForCopy} onIndex={setObInsightIdx} />
