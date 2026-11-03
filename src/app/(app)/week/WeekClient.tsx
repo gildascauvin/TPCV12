@@ -901,7 +901,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
         onOpenBilan={sandboxMode ? undefined : (kind, anchor) => setBilanOpen({ kind, anchor })}
         bilanSince={bilanSince}
       />
-      {bilanOpen && <BilanCarousel userId={userId} kind={bilanOpen.kind} anchor={bilanOpen.anchor} today={todayStr} source="planning" onClose={() => setBilanOpen(null)} />}
+      {bilanOpen && <BilanCarousel userId={userId} kind={bilanOpen.kind} anchor={bilanOpen.anchor} today={todayStr} source="planning" locked={!sandboxMode && !isActive} onUnlock={() => setPaywallStep("priming")} onClose={() => setBilanOpen(null)} />}
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
 
       {/* Bannière programme fusionnée dans le bandeau d'activité du header (2026-10-04). */}

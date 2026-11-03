@@ -21,13 +21,16 @@ export async function GET(req: Request) {
   const uid = link.user_id as string;
 
   const admin = createAdminClient();
-  const [p, s, w, t] = await Promise.all([
-    admin.from("profiles").select("created_at, autoreg_shift, autoreg_shift_high, autoreg_recal_events").eq("user_id", uid).maybeSingle(),
+  const week = new Date(today + "T12:00:00"); week.setDate(week.getDate() + 7);
+  const [p, s, w, t, u] = await Promise.all([
+    admin.from("profiles").select("created_at, sport, autoreg_shift, autoreg_shift_high, autoreg_recal_events").eq("user_id", uid).maybeSingle(),
     admin.from("sessions").select("id,date,name,notes,rpe,target_difficulty,duration,done,created_at,autoreg_decision,autoreg_proposal,autoreg_followed").eq("user_id", uid).eq("done", true).lte("date", today),
     admin.from("wellness_daily").select("date,sleep,stress,recovery,motivation,score,base_score,behaviors,bedtime,device_sleep_minutes,device_hrv_ms,device_resting_hr,device_rhr_baseline,device_hrv_baseline,created_at").eq("user_id", uid).lte("date", today),
     admin.from("test_results").select("date,value,unit,tests(name)").eq("subject_user_id", uid),
+    // Séances prévues des 7 prochains jours : écran « La semaine qui vient » (2026-11-03).
+    admin.from("sessions").select("date,name,notes,target_difficulty").eq("user_id", uid).eq("done", false).gt("date", today).lte("date", week.toISOString().slice(0, 10)),
   ]);
-  const err = p.error || s.error || w.error || t.error;
+  const err = p.error || s.error || w.error || t.error || u.error;
   if (err) return Response.json({ error: err.message }, { status: 500 });
-  return Response.json({ profile: p.data, sessions: s.data ?? [], checkins: w.data ?? [], tests: t.data ?? [] });
+  return Response.json({ profile: p.data, sessions: s.data ?? [], checkins: w.data ?? [], tests: t.data ?? [], upcoming: u.data ?? [] });
 }

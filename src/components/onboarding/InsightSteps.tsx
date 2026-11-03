@@ -6,7 +6,7 @@
    plus basse (« Nos données indiquent qu'un sportif stressé… »).
    Les cartes sont les vrais écrans du bilan (SlideBody de BilanCarousel), dans un cadre réduit. */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SlideBody, GLOW, KICKER, KICKER_COACH } from "@/components/bilan/BilanCarousel";
 import { SCALE_WORDS, type ScaleKey } from "@/lib/wellnessWords";
 import type { Bilan, BilanSlide } from "@/lib/bilan";
@@ -92,19 +92,19 @@ export function sportFamily(sport: string): SportFamily {
   if (/foot|rugby|basket|hand|volley|tennis|padel|hockey|combat|boxe|judo|mma/.test(s)) return "collectif";
   return "mixte";
 }
-const FAM: Record<SportFamily, { ses: string; block: string; stress: [number, number, number, number]; heavy: [number, number, number, number] }> = {
-  force: { ses: "séance de force", block: "Force", stress: [17, 26, 13, 38], heavy: [14, 20, 12, 44] },
-  endurance: { ses: "séance de fractionné", block: "Fractionné", stress: [15, 22, 11, 34], heavy: [13, 18, 10, 41] },
-  mixte: { ses: "séance la plus intense", block: "Metcon", stress: [16, 24, 12, 36], heavy: [14, 19, 11, 42] },
-  collectif: { ses: "séance la plus intense", block: "Séance intense", stress: [14, 21, 10, 33], heavy: [12, 17, 9, 38] },
+const FAM: Record<SportFamily, { ses: string; block: string; noun: string; stress: [number, number, number, number]; heavy: [number, number, number, number] }> = {
+  force: { ses: "séance de force", block: "Force", noun: "force", stress: [17, 26, 13, 38], heavy: [14, 20, 12, 44] },
+  endurance: { ses: "séance de fractionné", block: "Fractionné", noun: "fractionné", stress: [15, 22, 11, 34], heavy: [13, 18, 10, 41] },
+  mixte: { ses: "séance la plus intense", block: "Metcon", noun: "haute intensité", stress: [16, 24, 12, 36], heavy: [14, 19, 11, 42] },
+  collectif: { ses: "séance la plus intense", block: "Séance intense", noun: "haute intensité", stress: [14, 21, 10, 33], heavy: [12, 17, 9, 38] },
 };
 const DATES = ["2026-06-02", "2026-07-07", "2026-08-25", "2026-10-06"];
 const S_SLEEP: BilanSlide = { kind: "ressenti", crashes: 0, crashesSeen: 0, sleepBars: [{ label: "Correct", value: 413, display: "6h53" }, { label: "Bon", value: 453, display: "7h33" }, { label: "Très bon", value: 471, display: "7h51", highlight: true }] };
 const S_FATIGUE: BilanSlide = { kind: "fatigue", soirees: 12, normScore: 71, nextScore: 62, afterScore: null, hrv: { norm: 63, next: 45 }, hard: { easy: 71, hard: 68 } };
-const S_LEVIER: BilanSlide = { kind: "leviers", unit: "sleep", rows: [{ label: "Stretching le soir", with: "7 h 59", without: "7 h 35", delta: "+24 min", positive: true }] };
-const S_CHARGE: BilanSlide = { kind: "charge", pctInZone: 64, daysHigh: 3, daysCounted: 7 };
-const sStress = (f: SportFamily): BilanSlide => { const [a, b, c, d] = FAM[f].stress; return { kind: "predit", blocks: [{ title: `${FAM[f].block} · stress élevé`, rows: [{ label: "Les jours de stress", part: a, total: b, highlight: true }, { label: "Les autres jours", part: c, total: d }] }] }; };
-const sHeavy = (f: SportFamily): BilanSlide => { const [a, b, c, d] = FAM[f].heavy; return { kind: "predit", blocks: [{ title: `${FAM[f].block} · corps fatigué`, rows: [{ label: "Les matins corps fatigué", part: a, total: b, highlight: true }, { label: "Les autres matins", part: c, total: d }] }] }; };
+const S_LEVIER: BilanSlide = { kind: "leviers", unit: "sleep", rows: [{ key: "stretching", label: "Stretching le soir", with: "7 h 59", without: "7 h 35", delta: "+24 min", positive: true }] };
+const S_CHARGE: BilanSlide = { kind: "charge", pctInZone: 64, daysHigh: 3, daysCounted: 7, daysLow: 0, daysAbove: 3 };
+const sStress = (f: SportFamily): BilanSlide => { const [a, b, c, d] = FAM[f].stress; return { kind: "predit", lead: { dim: "stress", noun: FAM[f].noun }, blocks: [{ title: `${FAM[f].block} · stress élevé`, rows: [{ label: "Les jours de stress", part: a, total: b, highlight: true }, { label: "Les autres jours", part: c, total: d }] }] }; };
+const sHeavy = (f: SportFamily): BilanSlide => { const [a, b, c, d] = FAM[f].heavy; return { kind: "predit", lead: { dim: "recovery", noun: FAM[f].noun }, blocks: [{ title: `${FAM[f].block} · corps fatigué`, rows: [{ label: "Les matins corps fatigué", part: a, total: b, highlight: true }, { label: "Les autres matins", part: c, total: d }] }] }; };
 /* Test d'exemple dans le vocabulaire du sport (31/10, Gildas : « Burpees en 3 min » trop vague, squat jump
    réservé aux sports explosifs). Clé = valeur du catalogue ; sport hors catalogue : test de la famille. */
 type TestEx = { name: string; unit: string; pct: number; values: number[] };
@@ -173,13 +173,13 @@ function leadCard(k: CaseKey, f: SportFamily, test: TestEx): Card {
 }
 /* Levier choisi selon sa réponse la plus basse (2026-10-29), d'après l'historique d'un sportif ThePerfClub
    (n=1, illustration) : marche → nuit, stretching → corps, hydratation → stress et motivation. */
-const lever = (label: string, unit: "sleep" | "score", w: string, wo: string, delta: string): BilanSlide =>
-  ({ kind: "leviers", unit, rows: [{ label, with: w, without: wo, delta, positive: true }] });
+const lever = (key: string, label: string, unit: "sleep" | "score", w: string, wo: string, delta: string): BilanSlide =>
+  ({ kind: "leviers", unit, rows: [{ key, label, with: w, without: wo, delta, positive: true }] });
 const LEVER: Record<CaseKey, { slide: BilanSlide; says: string }> = {
-  sleep: { slide: lever("La marche dans la journée", "sleep", "7 h 58", "7 h 29", "+29 min"), says: "Ce qui rallonge la nuit : bouger dans la journée." },
-  recovery: { slide: lever("Le stretching le soir", "score", "76", "66", "+10 points"), says: "Ce qui allège le corps le lendemain : le stretching." },
-  stress: { slide: lever("Bien s'hydrater", "score", "79", "67", "+12 points"), says: "Un levier simple les jours chargés : l'hydratation." },
-  motivation: { slide: lever("Bien s'hydrater", "score", "79", "67", "+12 points"), says: "Un levier simple quand l'envie baisse : l'hydratation." },
+  sleep: { slide: lever("walk", "La marche dans la journée", "sleep", "7 h 58", "7 h 29", "+29 min"), says: "Ce qui rallonge la nuit : bouger dans la journée." },
+  recovery: { slide: lever("stretching", "Le stretching le soir", "score", "76", "66", "+10 points"), says: "Ce qui allège le corps le lendemain : le stretching." },
+  stress: { slide: lever("hydration", "Bien s'hydrater", "score", "79", "67", "+12 points"), says: "Un levier simple les jours chargés : l'hydratation." },
+  motivation: { slide: lever("hydration", "Bien s'hydrater", "score", "79", "67", "+12 points"), says: "Un levier simple quand l'envie baisse : l'hydratation." },
   ok: { slide: S_LEVIER, says: "Un petit geste le soir change la nuit." },
 };
 const moreCards = (f: SportFamily, k: CaseKey): Card[] => [
@@ -188,6 +188,17 @@ const moreCards = (f: SportFamily, k: CaseKey): Card[] => [
   { key: "stress", slide: sStress(f), says: () => `Le stress se paie surtout sur la ${FAM[f].ses}.` },
   { key: "sleep", slide: S_SLEEP, says: () => "Une nuit notée mauvaise est vraiment plus courte." },
 ];
+
+/* Premier bilan dans l'app (2026-11-03) : les mêmes cartes que l'étape bilan de l'onboarding, la
+   première choisie par sa réponse la plus basse du matin, avec sa réponse en pastille. */
+export function previewSlides(answers: Answers, sport = ""): { slide: BilanSlide; says: string; chip: string | null }[] {
+  const k = lowestAnswer(answers);
+  const f = sportFamily(sport);
+  const lead = leadCard(k ?? "ok", f, testFor(sport, f));
+  const cap = (t: string) => (t.charAt(0).toUpperCase() + t.slice(1)).replace(/ ([:;!?])/g, "\u00a0$1");
+  return [lead, ...moreCards(f, k ?? "ok").filter(c => c.key !== lead.key)].slice(0, 3)
+    .map((c, i) => ({ slide: c.slide, says: cap(c.says ? c.says() : ""), chip: i === 0 && k ? `${QPHRASE[k]} ${answerWord(k, answers[k])}` : null }));
+}
 
 /* Les cartes parlent au sportif (« ta charge ») ; côté coach, au prénom de son sportif. */
 function SlideFrame({ slide, name }: { slide: BilanSlide; name?: string }) {
@@ -201,17 +212,19 @@ function SlideFrame({ slide, name }: { slide: BilanSlide; name?: string }) {
   );
 }
 
-export function InsightStepBody({ answers, name, sport = "" }: { answers: Answers; name?: string; sport?: string }) {
+export function InsightStepBody({ answers, name, sport = "", onIndex }: { answers: Answers; name?: string; sport?: string; onIndex?: (i: number) => void }) {
   const k = lowestAnswer(answers);
   const f = sportFamily(sport);
   const lead = leadCard(k ?? "ok", f, testFor(sport, f));
   const slides = [lead, ...moreCards(f, k ?? "ok").filter(c => c.key !== lead.key)];
   const [idx, setIdx] = useState(0);
+  // Retour sur l'étape : le carrousel repart de la 1re carte, le titre de l'étape aussi.
+  useEffect(() => { onIndex?.(0); }, [onIndex]);
   const track = useRef<HTMLDivElement>(null);
   const go = (i: number) => track.current?.scrollTo({ left: i * (track.current.clientWidth + 16), behavior: "smooth" });
   return (
     <div>
-      <div ref={track} onScroll={e => { const el = e.currentTarget; setIdx(Math.round(el.scrollLeft / (el.clientWidth + 16))); }}
+      <div ref={track} onScroll={e => { const el = e.currentTarget; const i = Math.round(el.scrollLeft / (el.clientWidth + 16)); setIdx(i); onIndex?.(i); }}
         style={{ display: "flex", overflowX: "auto", scrollSnapType: "x mandatory", scrollbarWidth: "none", gap: 16, alignItems: "flex-start" }}>
         {slides.map((c, i) => (
           <div key={c.key} style={{ flex: "0 0 100%", scrollSnapAlign: "start" }}>

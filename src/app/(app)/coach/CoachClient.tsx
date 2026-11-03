@@ -1200,7 +1200,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       </CoachPageBg>
 
       {bilanFor && (
-        <BilanCarousel userId={bilanFor.subject?.athleteId ?? userId} kind={bilanFor.kind} anchor={bilanFor.anchor} today={today} source="coach" subject={bilanFor.subject} group={!bilanFor.subject} onClose={() => setBilanFor(null)} />
+        <BilanCarousel userId={bilanFor.subject?.athleteId ?? userId} kind={bilanFor.kind} anchor={bilanFor.anchor} today={today} source="coach" subject={bilanFor.subject} group={!bilanFor.subject} locked={!sandboxMode && !isActive} onUnlock={() => setPaywallStep("priming")} onClose={() => setBilanFor(null)} />
       )}
       {reviewAthlete && (
         <CoachSessionModal

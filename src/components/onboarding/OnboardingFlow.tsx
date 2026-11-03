@@ -475,6 +475,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   // Écrans « on analyse » (2026-10-29, qualité perçue) : joués une fois, avant le programme et avant le bilan.
   const [obPlanRevealed, setObPlanRevealed] = useState(false);
   const [obInsightRevealed, setObInsightRevealed] = useState(false);
+  /* Carte visible du carrousel ob_insight (2026-11-03) : le titre « Ce matin, stress fort » ne vaut que
+     pour la 1re carte (choisie par cette réponse) ; les suivantes parlent d'autres thèmes. */
+  const [obInsightIdx, setObInsightIdx] = useState(0);
   const [obCount, setObCount] = useState<ObCount | null>(null);
   const [obHealthBusy, setObHealthBusy] = useState(false);
   /* Rejeu des 30 jours de la montre (2026-11-02), rempli après la connexion Santé. null = pas (encore)
@@ -2333,10 +2336,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       const insightSes = ringSession();
       const insightSug = computeAutoregSuggestion(obCheckinScore, insightSes.target_difficulty, syntheticBaselineFor(obCheckinScore ?? 60));
       return (
-        <QuestionShell {...common} dark eyebrow="Ce que disent nos données" title={obExample && !coach ? "Une nuit courte, par exemple." : capS(insightTitle(answers, coach ? coachFirst : undefined))}
+        <QuestionShell {...common} dark eyebrow="Ce que disent nos données" title={obInsightIdx > 0 ? (coach ? `Ce que le bilan de ${coachFirst} trouvera aussi.` : "Ce que ton bilan trouvera aussi.") : obExample && !coach ? "Une nuit courte, par exemple." : capS(insightTitle(answers, coach ? coachFirst : undefined))}
           onSkip={() => obAdvance()}
           cta={{ label: coach ? `Voir la séance de ${coachFirst}` : (insightSug ? "Voir ma séance ajustée" : "Voir ma séance du jour"), onClick: () => obAdvance() }}>
-          <InsightStepBody answers={answers} name={coach ? coachFirst : undefined} sport={sportForCopy} />
+          <InsightStepBody answers={answers} name={coach ? coachFirst : undefined} sport={sportForCopy} onIndex={setObInsightIdx} />
         </QuestionShell>
       );
     }

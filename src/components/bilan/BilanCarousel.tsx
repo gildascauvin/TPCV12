@@ -5,14 +5,18 @@
    seuil de données. Plein écran, au-dessus de la bottom nav (zIndex modale). */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import posthog from "posthog-js";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { computeBilan, isSynthetic, periodFor, type Bilan, type BilanCheckin, type BilanPeriodKind, type BilanSession, type BilanSlide, type BilanTest } from "@/lib/bilan";
+import type { PersonalDim } from "@/lib/autoregPersonal";
 import { loadBilanRaw, type BilanRaw } from "@/lib/bilanData";
 import { outcomeRight } from "@/lib/adviceJudge";
 import { requestPhysioReplay } from "@/lib/physioData";
 import { VerdictStrip, StripLegend } from "@/components/bilan/VerdictStrip";
+import LockedBlur from "@/components/paywall/LockedBlur";
+import { previewSlides } from "@/components/onboarding/InsightSteps";
 import { fr1 } from "@/components/physio/PhysioRevealHost";
 import { computeGroupBilan, type GroupAthlete, type GroupBilan, type GroupSlide, type DayMark } from "@/lib/groupBilan";
 
@@ -27,6 +31,11 @@ type Props = {
   subject?: { athleteId: string; name: string };
   /* Coach, vue Groupe (2026-10-26) : bilan de tous ses sportifs inscrits (GET /api/coach/group-bilan). */
   group?: boolean;
+  /* Freemium (2026-11-03, Gildas : « floute dès le premier ») : le bilan est une sortie. Gratuit sans
+     coach payant = Régularité et aperçu nets, les autres écrans entièrement floutés (titre compris, le
+     titre est déjà un insight), seul le thème en haut reste lisible ; pas de carte « partage ». */
+  locked?: boolean;
+  onUnlock?: () => void;
   onClose: () => void;
 };
 type AnySlide = BilanSlide | GroupSlide;
@@ -34,21 +43,37 @@ type AnySlide = BilanSlide | GroupSlide;
 export const GLOW: Record<AnySlide["kind"], string> = {
   g_decroche: "rgba(212,64,0,0.45)", g_seances: "rgba(242,138,0,0.40)", g_appris: "rgba(168,85,247,0.38)", g_conseils: "rgba(47,158,68,0.38)", g_charge: "rgba(56,189,248,0.36)",
   regularite: "rgba(212,64,0,0.45)", charge: "rgba(47,158,68,0.40)", ressenti: "rgba(56,189,248,0.38)",
+  envie: "rgba(242,138,0,0.40)", recup: "rgba(56,189,248,0.36)", rythmes: "rgba(212,64,0,0.40)", prochaine: "rgba(47,158,68,0.38)", apercu: "rgba(212,64,0,0.42)",
   predit: "rgba(212,64,0,0.40)", biais: "rgba(242,138,0,0.40)", fatigue: "rgba(168,85,247,0.38)",
   leviers: "rgba(47,158,68,0.38)", tendance: "rgba(56,189,248,0.36)", tests: "rgba(212,64,0,0.45)", conseils: "rgba(47,158,68,0.38)", suivre: "rgba(168,85,247,0.36)", partage: "rgba(56,189,248,0.20)",
 };
 export const KICKER: Record<AnySlide["kind"], string> = {
   g_decroche: "QUI DÉCROCHE", g_seances: "TES SÉANCES", g_appris: "APPRIS SUR CHACUN", g_conseils: "CONSEILS VÉRIFIÉS", g_charge: "CHARGE",
-  regularite: "RÉGULARITÉ", charge: "CHARGE", ressenti: "RESSENTI VS MONTRE", predit: "CE QUI TE PRÉDIT",
-  biais: "TES BIAIS", fatigue: "CE QUI TE FATIGUE", leviers: "TES LEVIERS", tendance: "TENDANCE", tests: "TESTS", conseils: "CONSEILS VÉRIFIÉS", suivre: "SUIVRE OU PAS", partage: "EN UNE CARTE",
+  regularite: "RÉGULARITÉ", charge: "CHARGE", ressenti: "RESSENTI VS MONTRE", predit: "CE QUI DURCIT TES SÉANCES",
+  biais: "TES BIAIS", fatigue: "CE QUI TE FATIGUE", leviers: "TES LEVIERS", tendance: "TENDANCE", tests: "TESTS", conseils: "L'APP AVAIT-ELLE RAISON ?", suivre: "SUIVRE OU PAS", partage: "EN UNE CARTE",
+  envie: "TA TÊTE OU TON CORPS", recup: "TA RÉCUPÉRATION", rythmes: "TES RYTHMES", prochaine: "LA SEMAINE QUI VIENT", apercu: "TON PREMIER BILAN",
 };
-export const KICKER_COACH: Partial<Record<BilanSlide["kind"], string>> = { predit: "CE QUI LE PRÉDIT", biais: "SES BIAIS", fatigue: "CE QUI LE FATIGUE", leviers: "SES LEVIERS" };
-const LEARNED = new Set<BilanSlide["kind"]>(["conseils", "ressenti", "predit", "biais", "fatigue", "suivre", "leviers"]);
+export const KICKER_COACH: Partial<Record<BilanSlide["kind"], string>> = { predit: "CE QUI DURCIT SES SÉANCES", biais: "SES BIAIS", fatigue: "CE QUI LE FATIGUE", leviers: "SES LEVIERS", envie: "SA TÊTE OU SON CORPS", recup: "SA RÉCUPÉRATION", rythmes: "SES RYTHMES" };
+const LEARNED = new Set<BilanSlide["kind"]>(["conseils", "ressenti", "predit", "biais", "fatigue", "suivre", "leviers", "envie", "recup", "rythmes"]);
 
 const card: React.CSSProperties = { background: "rgba(255,255,255,0.06)", borderRadius: 18, padding: 16, display: "flex", flexDirection: "column", gap: 10 };
 const h2: React.CSSProperties = { margin: 0, fontFamily: "var(--font-display)", fontSize: 30, lineHeight: 1.12, fontWeight: 700, color: "#fff" };
 const body: React.CSSProperties = { margin: 0, fontSize: 15, lineHeight: 1.5, color: "rgba(255,255,255,0.75)" };
 const small: React.CSSProperties = { fontSize: 13, color: "rgba(255,255,255,0.65)" };
+/* Sous-titre (2026-11-03) : le conseil se lit sous le titre, plus en bas d'écran. */
+const sub: React.CSSProperties = { margin: "-8px 0 0", fontSize: 15, lineHeight: 1.45, color: "rgba(255,255,255,0.78)" };
+const PREDIT_WORDS: Record<PersonalDim, { subject: string; low: string; high: string }> = {
+  stress: { subject: "Le stress", low: "Les matins stressés", high: "Les matins calmes" },
+  sleep: { subject: "Une nuit moyenne", low: "Après une nuit correcte ou moins", high: "Après une bonne nuit" },
+  recovery: { subject: "Un corps fatigué", low: "Les matins où le corps tire", high: "Les matins corps frais" },
+  motivation: { subject: "Le manque d'envie", low: "Les matins sans grande envie", high: "Les matins motivés" },
+};
+/* Retrouve la dimension d'un bloc depuis son titre (« Force maximale · ton stress mental »). */
+const DIM_HINT: Record<PersonalDim, string> = { stress: "stress", sleep: "sommeil", recovery: "état physique", motivation: "motivation" };
+const LEVER_WHEN: Record<string, string> = {
+  stretching: "Les soirs de stretching", screen_late: "Les soirs d'écran tard", walk: "Les jours de marche", hydration: "Les jours bien hydratés",
+  reading: "Les soirs de lecture", meditation: "Les jours de méditation", cold_shower: "Les jours de douche froide", caffeine_late: "Les jours de caféine tard", heavy_meal: "Les soirs de repas lourd",
+};
 const round = (x: number) => Math.round(x);
 
 function Bars({ bars, height = 140, color = "#ff6a2b", dim = "rgba(255,255,255,0.28)", showValues = false }: { bars: { label: string; value: number; display: string; highlight?: boolean }[]; height?: number; color?: string; dim?: string; showValues?: boolean }) {
@@ -67,12 +92,12 @@ function Bars({ bars, height = 140, color = "#ff6a2b", dim = "rgba(255,255,255,0
   );
 }
 
-function Rows({ rows, color }: { rows: { label: string; part: number; total: number; highlight?: boolean }[]; color: string }) {
+function Rows({ rows, color }: { rows: { label: string; part: number; total: number; highlight?: boolean; unit?: string }[]; color: string }) {
   return (
     <>
       {rows.map((r, i) => (
         <div key={i} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "rgba(255,255,255,0.78)" }}><span>{r.label}</span><b style={{ color: "#fff" }}>{r.part} sur {r.total}</b></div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "rgba(255,255,255,0.78)" }}><span>{r.label}</span><b style={{ color: "#fff", whiteSpace: "nowrap" }}>{r.part} {r.unit ?? "sur"} {r.total}</b></div>
           <div style={{ height: 12, borderRadius: 6, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}><div style={{ width: `${Math.max(3, (r.part / r.total) * 100)}%`, height: "100%", borderRadius: 6, background: r.highlight ? color : "rgba(255,255,255,0.45)" }} /></div>
         </div>
       ))}
@@ -88,71 +113,59 @@ type Recal = { state: "idle" | "saving" | "done" | "kept" | "error"; apply: (dir
 /* Bilan vu par le coach (2026-10-24) : `n` = prénom du sportif, tout passe à la 3e personne. Registre
    impersonnel des deux côtés (2026-10-24 soir) : ni « je » ni « l'app ». Le recalage reste au
    sportif : le coach voit l'état. */
-export function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bilan: Bilan; onShare: () => void; shared: boolean; recal: Recal; n?: string }) {
+export function SlideBody({ s, bilan, onShare, shared, recal, n, onPlanning }: { s: BilanSlide; bilan: Bilan; onShare: () => void; shared: boolean; recal: Recal; n?: string; onPlanning?: () => void }) {
   const T = <A, B>(you: A, them: B): A | B => (n ? them : you);
   switch (s.kind) {
     case "conseils": {
-      /* Registre impersonnel (2026-10-24) : constats sans « je » ni « l'app ». */
-      const lowRate = s.low.judged ? s.low.justified / s.low.judged : null;
+      /* Wording 2026-11-03 (POC GSXeRzonoyn2UdnD46L9ML) : un titre, la frise, deux constats courts, une
+         question oui / non pour le recalage. Registre impersonnel : ni « je » ni « l'app ». */
       const right = s.strip.filter(c => outcomeRight(c.outcome)).length;
       const r = s.recal;
       const verb = r?.dir === "high" ? "pousser" : "alléger";
+      const Fact = ({ when, what }: { when: string; what: string }) => <div style={{ display: "flex", flexDirection: "column", gap: 2 }}><span style={small}>{when}</span><b style={{ fontSize: 15, color: "#fff" }}>{what}</b></div>;
       return (<>
-        <h2 style={h2}>{s.low.judged >= 5 && lowRate! < 0.35
-          ? T(<>Tu encaisses mieux <span style={{ color: "#7ee08f" }}>que prévu.</span></>, <>{n} encaisse mieux <span style={{ color: "#7ee08f" }}>que prévu.</span></>)
-          : s.lift.ratio !== null && s.lift.ratio >= 1.2 ? <>Les alertes <span style={{ color: "#7ee08f" }}>tombent juste.</span></>
-          : <>Chaque conseil, <span style={{ color: "#7ee08f" }}>vérifié.</span></>}</h2>
+        {/* 2026-11-03 : le titre porte sur la frise (dernières séances jugées), les constats sur tout
+            l'historique. Les deux portées sont écrites, sinon « 14 sur 14 » puis « 9 sur 30 » se contredisent. */}
+        <h2 style={h2}>Sur {T("tes", "ses")} {s.strip.length} dernières séances, le conseil du matin <span style={{ color: "#7ee08f" }}>a vu juste {right} fois.</span></h2>
         <div style={card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{right} confirmés sur {s.strip.length}</span>
-            <StripLegend />
-          </div>
           <VerdictStrip cells={s.strip} onOpen={n ? undefined : id => requestPhysioReplay({ kind: "session", sessionId: id })} />
+          <StripLegend />
         </div>
-        {s.trend.length >= 2 && (
-          <div style={card}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Conseils confirmés, mois par mois</div>
-            <Bars bars={s.trend.map((t, i) => ({ label: `${t.label}${t.recal ? " ↻" : ""}`, value: t.rate, display: `${t.rate} %`, highlight: i === s.trend.length - 1 }))} height={90} color="#7ee08f" dim="rgba(126,224,143,0.35)" showValues />
-            {s.trend.some(t => t.recal) && <div style={small}>↻ mois où le seuil a été recalé. Chaque jour est compté avec le seuil en vigueur ce jour-là.</div>}
+        {(s.none.total >= 3 || s.low.judged >= 3 || s.high.judged >= 3) && (
+          <div style={{ ...card, gap: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Sur tout {T("ton", "son")} historique</div>
+            {s.none.total >= 3 && <Fact when="Les jours sans conseil" what={`Séance comme prévu : ${s.none.same} fois sur ${s.none.total}`} />}
+            {s.low.judged >= 3 && <Fact when="Les jours où alléger était conseillé" what={`Séance vraiment trop dure : ${s.low.justified} fois sur ${s.low.judged}`} />}
+            {s.high.judged >= 3 && <Fact when="Les jours où pousser était conseillé" what={`Séance bien passée : ${s.high.right} fois sur ${s.high.judged}`} />}
           </div>
         )}
-        <div style={card}>
-          {s.none.total > 0 && <>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Les jours sans alerte</div>
-            <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${(s.none.same / s.none.total) * 100}%`, background: "#fff" }} /><div style={{ flex: 1, background: "rgba(255,255,255,0.18)" }} /></div>
-            <div style={small}>Dans la zone prévue {s.none.same} fois sur {s.none.total}{s.none.harder ? `, plus dure ${s.none.harder} fois` : ""}.</div>
-          </>}
-          {s.low.judged > 0 && <>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginTop: 6 }}>Les jours d'alerte</div>
-            <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${lowRate! * 100}%`, background: "#fff" }} /><div style={{ flex: 1, background: "rgba(255,255,255,0.25)" }} /></div>
-            <div style={small}>Alerte confirmée {s.low.justified} fois sur {s.low.judged}.{s.low.judged - s.low.justified ? ` Les ${s.low.judged - s.low.justified} autres fois, ${T("tu avais", `${n} avait`)} de la marge.` : ""}{s.low.followed ? ` ${s.low.followed} séance${s.low.followed > 1 ? "s" : ""} allégée${s.low.followed > 1 ? "s" : ""} et bien passée${s.low.followed > 1 ? "s" : ""}, hors des comptes.` : ""}</div>
-          </>}
-          {s.high.judged > 0 && <>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginTop: 6 }}>Les jours où pousser était conseillé</div>
-            <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${(s.high.right / s.high.judged) * 100}%`, background: "#fff" }} /><div style={{ flex: 1, background: "rgba(255,255,255,0.25)" }} /></div>
-            <div style={small}>Surcharge justifiée {s.high.right} fois sur {s.high.judged}.</div>
-          </>}
-        </div>
+        {s.trend.length >= 2 && (
+          <div style={card}>
+            <div style={small}>Vu juste, mois par mois</div>
+            <Bars bars={s.trend.map((t, i) => ({ label: `${t.label}${t.recal ? " ↻" : ""}`, value: t.rate, display: `${t.rate} %`, highlight: i === s.trend.length - 1 }))} height={80} color="#7ee08f" dim="rgba(126,224,143,0.35)" showValues />
+            {s.trend.some(t => t.recal) && <div style={small}>↻ mois où le conseil a été recalé.</div>}
+          </div>
+        )}
         {n && (s.currentShift > 0 || s.currentShiftHigh > 0 || r) && (
           <div style={{ ...card, gap: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#7ee08f" }}>{s.currentShift > 0 || s.currentShiftHigh > 0 ? "Seuil recalé" : "Recalage proposé"}</div>
             <div style={{ fontSize: 15, lineHeight: 1.45, color: "#fff" }}>{s.currentShift > 0 || s.currentShiftHigh > 0
-              ? `${n} a choisi de se recaler : ${[s.currentShift > 0 ? "les alertes d'allègement sont plus rares" : null, s.currentShiftHigh > 0 ? "pousser est proposé moins souvent" : null].filter(Boolean).join(", ")}.`
-              : `Les conseils « ${verb} » de ${n} ont rarement été confirmés. Un seuil plus net lui est proposé. C'est ${n} qui décide.`}</div>
+              ? `${n} a choisi de recaler ses conseils : ${[s.currentShift > 0 ? "alléger n'est proposé que sur une vraie baisse" : null, s.currentShiftHigh > 0 ? "pousser n'est proposé que sur une vraie forme" : null].filter(Boolean).join(", ")}.`
+              : `Quand ${verb} était conseillé, ${n} a souvent tenu sa séance sans problème. Un réglage plus strict lui est proposé, c'est ${n} qui décide.`}</div>
           </div>
         )}
         {!n && r && recal.state !== "kept" && (
           <div style={{ ...card, gap: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#7ee08f" }}>{recal.state === "done" ? "Recalage enregistré" : "Recalage proposé"}</div>
-            <div style={{ fontSize: 15, lineHeight: 1.45, color: "#fff" }}>{recal.state === "done"
-              ? `Les conseils « ${verb} » seront plus rares, réservés aux signaux nets. Le bilan mesurera si c'était le bon réglage.`
-              : r.dir === "high" ? "Quand pousser est conseillé, la séance reste souvent dure. Un signal plus net sera attendu avant de te le proposer." : "Une récup un peu sous ta norme pèse peu sur tes séances. Un signal plus net sera attendu avant de te conseiller d'alléger."}</div>
-            {recal.state !== "done" && <div style={small}>Rejoué sur ton historique : les jours de conseil donnent raison {fr1(r.liftThen)} fois plus souvent que les autres jours, au lieu de {fr1(r.liftNow)}.</div>}
-            {recal.state === "error" && <div style={{ ...small, color: "#ffb59a" }}>Impossible d'enregistrer. Réessaie dans un instant.</div>}
+            {recal.state === "done"
+              ? <div style={{ fontSize: 15, lineHeight: 1.45, color: "#fff" }}>{r.dir === "high" ? "C'est noté : pousser ne sera conseillé que sur une vraie forme." : "C'est noté : alléger ne sera conseillé que sur une vraie baisse."} Le bilan dira si c&apos;était le bon réglage.</div>
+              : <>
+                <div style={{ fontSize: 15, lineHeight: 1.45, color: "#fff" }}>{r.dir === "high" ? "Quand pousser était conseillé, ta séance est souvent restée dure." : "Quand alléger était conseillé, tu as souvent tenu ta séance sans problème."}</div>
+                <div style={small}>{r.dir === "high" ? "Ne te conseiller de pousser que si ta forme est nettement au-dessus de ta norme ?" : "Ne te conseiller d'alléger que si ta récup baisse nettement ?"}</div>
+              </>}
+            {recal.state === "error" && <div style={{ ...small, color: "#ffb59a" }}>Impossible d&apos;enregistrer. Réessaie dans un instant.</div>}
             {(recal.state === "idle" || recal.state === "error" || recal.state === "saving") && (
               <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-                <button onClick={recal.keep} style={{ flex: 1, height: 46, borderRadius: 12, border: 0, background: "rgba(255,255,255,0.1)", color: "#fff", fontFamily: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Garder l'ancien</button>
-                <button onClick={() => recal.apply(r.dir === "high" ? "high" : "low", r.shift)} disabled={recal.state === "saving"} style={{ flex: 1.4, height: 46, borderRadius: 12, border: 0, background: "#fff", color: "#14181b", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{recal.state === "saving" ? "…" : "Me recaler"}</button>
+                <button onClick={recal.keep} style={{ flex: 1, height: 46, borderRadius: 12, border: 0, background: "rgba(255,255,255,0.1)", color: "#fff", fontFamily: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Non, garder</button>
+                <button onClick={() => recal.apply(r.dir === "high" ? "high" : "low", r.shift)} disabled={recal.state === "saving"} style={{ flex: 1.4, height: 46, borderRadius: 12, border: 0, background: "#fff", color: "#14181b", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{recal.state === "saving" ? "…" : "Oui"}</button>
               </div>
             )}
           </div>
@@ -162,11 +175,11 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSli
     case "suivre": {
       const diff = s.followed.felt - s.ignored.felt;
       const bars = [{ label: `${T("Tu as allégé", "Allégé")} (${s.followed.n} fois)`, value: s.followed.felt, display: String(round(s.followed.felt)), highlight: true }, { label: `${T("Tu as gardé ta séance", "Séance gardée")} (${s.ignored.n} fois)`, value: s.ignored.felt, display: String(round(s.ignored.felt)) }];
+      const subtitle = Math.abs(diff) < 5 ? (s.shifted ? T("C'est pour ça que tes alertes sont devenues plus rares.", "C'est pour ça que ses alertes sont devenues plus rares.") : null) : diff > 0 ? T("Les jours d'alerte, alléger vaut le coup.", `Les jours d'alerte, alléger vaut le coup pour ${n}.`) : T("Tu encaisses ces séances : les alertes peuvent être plus rares.", `${n} encaisse ces séances : les alertes peuvent être plus rares.`);
       return (<>
         <h2 style={h2}>{Math.abs(diff) < 5 ? <>Alléger ou pas, <span style={{ color: "#c79bf7" }}>{T("ton", "son")} lendemain est le même.</span></> : diff > 0 ? <>{T("Quand tu allèges,", `Quand ${n} allège,`)} <span style={{ color: "#c79bf7" }}>{T("ton", "son")} lendemain est meilleur.</span></> : <>{T("Garder ta séance", "Garder sa séance")} <span style={{ color: "#c79bf7" }}>{T("ne t'a rien coûté.", `n'a rien coûté à ${n}.`)}</span></>}</h2>
+        {subtitle && <p style={sub}>{subtitle}</p>}
         <div style={card}><div style={small}>{T("Les jours d'alerte · ta forme ressentie le lendemain", "Les jours d'alerte · sa forme ressentie le lendemain")}</div><Bars bars={bars} height={100} color="#a855f7" dim="rgba(199,155,247,0.4)" showValues /></div>
-        <p style={body}>{n ? (Math.abs(diff) < 5 ? `Garder sa séance ces jours-là n'a rien coûté à ${n}.${s.shifted ? " C'est pour ça que son seuil a été relevé." : ""}` : diff > 0 ? `Suivre l'ajustement fait arriver ${n} plus frais le lendemain.` : `${n} encaisse ces séances : les alertes peuvent être plus rares.`) : Math.abs(diff) < 5 ? (s.shifted ? "Garder ta séance ces jours-là ne t'a rien coûté : c'est pour ça que ton seuil a été relevé." : "Garder ta séance ces jours-là ne t'a rien coûté. L'écran « Conseils vérifiés » propose d'en tenir compte.") : diff > 0 ? "Suivre l'ajustement te fait arriver plus frais le lendemain." : "Tu encaisses ces séances : les alertes peuvent être plus rares."}</p>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>{T("Plus tard : ta progression aux tests, les semaines où tu suis et celles où tu ne suis pas.", "Plus tard : sa progression aux tests, les semaines où l'ajustement est suivi et celles où il ne l'est pas.")}</div>
       </>);
     }
     case "regularite": {
@@ -177,35 +190,55 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSli
         <p style={body}>{T("Ton", "Son")} point forme rempli {s.checkins} matin{s.checkins > 1 ? "s" : ""} sur {s.days}, {scope}.</p>
       </>);
     }
-    case "charge":
-      return (<>
-        <h2 style={h2}>{s.pctInZone >= 70 ? T(<>Tu t'entraînes dur, <span style={{ color: "#7ee08f" }}>sans t'enterrer.</span></>, <>{n} s'entraîne dur, <span style={{ color: "#7ee08f" }}>sans s'enterrer.</span></>) : <>{T("Ta charge est sortie de ta zone", "Sa charge est sortie de sa zone")} <span style={{ color: "#ffb347" }}>{100 - s.pctInZone} % du temps.</span></>}</h2>
-        <div style={{ position: "relative", width: 220, height: 220, alignSelf: "center" }}>
-          <svg width="220" height="220" viewBox="0 0 220 220" role="img" aria-label={`${s.pctInZone} % des jours dans la zone de charge`}>
-            <circle cx="110" cy="110" r="88" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="20" />
-            <circle cx="110" cy="110" r="88" fill="none" stroke="#2f9e44" strokeWidth="20" strokeLinecap="round" strokeDasharray={`${(s.pctInZone / 100) * 553} 553`} transform="rotate(-90 110 110)" />
-          </svg>
-          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}><b style={{ fontSize: 48, lineHeight: 1, color: "#fff" }}>{s.pctInZone} %</b><span style={small}>des jours en zone</span></div>
-        </div>
-        <p style={body}>{T("Ta charge des 7 derniers jours est restée dans ta zone optimale", "Sa charge des 7 derniers jours est restée dans sa zone optimale")} {s.pctInZone} % du temps{s.daysHigh ? `, et ${s.daysHigh} jour${s.daysHigh > 1 ? "s" : ""} au-dessus de la zone de risque.` : ", sans jamais passer dans la zone de risque."}</p>
+    case "charge": {
+      /* 2026-11-03 : trop basse, dans ta zone, montée trop vite, comptés à part (avant : un seul « sortie
+         de ta zone » qui se lisait comme un danger). Le titre suit la plus grosse catégorie. */
+      const total = s.daysCounted, above = s.daysAbove ?? s.daysHigh, low = s.daysLow ?? 0, inZone = Math.max(0, total - above - low);
+      const tooFast = above / total >= 0.15, margin = !tooFast && low / total >= 0.25 && above / total < 0.1;
+      const Row = ({ label, days, color }: { label: string; days: number; color: string }) => (<>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "rgba(255,255,255,0.8)" }}><span>{label}</span><b style={{ color: "#fff" }}>{days} jour{days > 1 ? "s" : ""}</b></div>
+        <div style={{ height: 10, borderRadius: 5, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}><div style={{ width: `${Math.max(2, (days / total) * 100)}%`, height: "100%", borderRadius: 5, background: color }} /></div>
       </>);
+      return (<>
+        <h2 style={h2}>{tooFast
+          ? <>{T("Ta", "Sa")} charge est montée trop vite <span style={{ color: "#ffb347" }}>{above} jour{above > 1 ? "s" : ""}.</span></>
+          : margin ? <>Pas de risque de blessure. <span style={{ color: "#8cc4f5" }}>{T("Tu as", `${n} a`)} de la marge.</span></>
+          : T(<>Tu t&apos;entraînes dur, <span style={{ color: "#7ee08f" }}>sans t&apos;enterrer.</span></>, <>{n} s&apos;entraîne dur, <span style={{ color: "#7ee08f" }}>sans s&apos;enterrer.</span></>)}</h2>
+        {(tooFast || margin) && <p style={sub}>{tooFast ? T("Avant d'ajouter du volume, laisse ta charge se stabiliser une semaine.", "Avant d'ajouter du volume, laisse sa charge se stabiliser une semaine.") : T("Tu peux ajouter une séance légère par semaine.", `${n} peut ajouter une séance légère par semaine.`)}</p>}
+        <div style={card}>
+          <div style={small}>{T("Ta", "Sa")} dernière semaine, comparée à {T("ton", "son")} mois · {total} jours</div>
+          <Row label="Trop basse" days={low} color="#8cc4f5" />
+          <Row label={T("Dans ta zone", "Dans sa zone")} days={inZone} color="#fff" />
+          <Row label="Montée trop vite" days={above} color="#ff6a2b" />
+        </div>
+      </>);
+    }
     case "ressenti":
       return (<>
         <h2 style={h2}>{T("Ton", "Son")} ressenti <span style={{ color: "#8cc4f5" }}>vaut une montre.</span></h2>
         <div style={card}><div style={small}>Sommeil mesuré, selon {T("ta", "sa")} réponse au réveil</div><Bars bars={s.sleepBars} height={100} color="#6da7ec" dim="rgba(109,167,236,0.4)" showValues /></div>
-        {s.crashes >= 3 && <div style={card}><div style={{ fontSize: 14, lineHeight: 1.45, color: "rgba(255,255,255,0.85)" }}>{s.crashesSeen === s.crashes ? `Les ${s.crashes} matins où ${T("ta", "sa")} VFC s'est effondrée, ${T("ton", "son")} point forme l'avait vu aussi.` : `Sur les ${s.crashes} matins où ${T("ta", "sa")} VFC s'est effondrée, ${T("ton", "son")} point forme l'avait vu ${s.crashesSeen} fois.`}</div></div>}
+        {s.crashes >= 3 && <div style={card}><div style={{ fontSize: 14, lineHeight: 1.45, color: "rgba(255,255,255,0.85)" }}>{s.crashesSeen === s.crashes ? `Les ${s.crashes} matins où ${T("ta", "sa")} VFC était nettement sous ${T("ta", "sa")} norme, ${T("ton", "son")} point forme l'avait vu aussi.` : `Sur les ${s.crashes} matins où ${T("ta", "sa")} VFC était nettement sous ${T("ta", "sa")} norme, ${T("ton", "son")} point forme l'avait vu ${s.crashesSeen} fois.`}</div></div>}
       </>);
-    case "predit":
+    case "predit": {
+      /* 2026-11-03 : le titre nomme la cause et le type de séance ; les lignes disent ce qui est compté. */
+      const L = s.lead ? PREDIT_WORDS[s.lead.dim] : null;
       return (<>
-        <h2 style={h2}>Ce qui rend {T("tes", "ses")} séances <span style={{ color: "#ff8a5c" }}>plus dures que prévu.</span></h2>
-        {s.blocks.map((b, i) => <div key={i} style={card}><div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>{n ? b.title.replace(/\bton /g, "son ").replace(/\bta /g, "sa ") : b.title}</div><Rows rows={b.rows} color="#ff6a2b" /></div>)}
-        <p style={{ ...body, fontSize: 14 }}>{T("Séances ressenties plus dures que ce que tu avais prévu, selon ton point forme du matin.", "Séances ressenties plus dures que prévu, selon son point forme du matin.")}</p>
+        <h2 style={h2}>{L && s.lead ? <>{L.subject} <span style={{ color: "#ff8a5c" }}>durcit {T("tes", "ses")} séances de {s.lead.noun}.</span></> : <>Ce qui rend {T("tes", "ses")} séances <span style={{ color: "#ff8a5c" }}>plus dures que prévu.</span></>}</h2>
+        {L && s.lead && <p style={sub}>{L.low}, {T(`ton conseil du matin allège déjà ta séance de ${s.lead.noun}.`, `son conseil du matin allège déjà sa séance de ${s.lead.noun}.`)}</p>}
+        {s.blocks.map((b, i) => {
+          const dim = (Object.keys(PREDIT_WORDS) as PersonalDim[]).find(d => b.title.includes(DIM_HINT[d])) ?? null;
+          const W = dim ? PREDIT_WORDS[dim] : null;
+          const fam = b.title.split(" · ")[0];
+          return <div key={i} style={card}><div style={small}>{fam} · séances ressenties plus dures que prévu</div><Rows rows={b.rows.map((r, j) => ({ ...r, label: W ? (j === 0 ? W.low : W.high) : r.label, unit: "fois sur" }))} color="#ff6a2b" /></div>;
+        })}
       </>);
+    }
     case "biais":
       return (<>
         <h2 style={h2}>{plural(s.planned) && plural(s.feltWord)
           ? <>{T("Tes", "Ses")} séances prévues {plural(s.planned)}, <span style={{ color: "#ffb347" }}>{T("tu les ressens", `${n} les ressent`)} {plural(s.feltWord)}.</span></>
           : <>{T("Tes", "Ses")} séances <span style={{ color: "#ffb347" }}>sont plus dures que prévu.</span></>}</h2>
+        <p style={sub}>{T("Prévois-les un cran plus haut.", "Prévois-les un cran plus haut pour lui.")}</p>
         <div style={card}>
           <div style={small}>Prévu (trait) et ressenti (barre)</div>
           <div style={{ display: "flex", gap: 7, alignItems: "flex-end", height: 160 }} role="img" aria-label={`${s.harder} séances sur ${s.total} plus dures que prévu`}>
@@ -221,31 +254,39 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSli
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: s.accurate ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)", gap: 10 }}>
-          <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 26, color: "#ffb347" }}>{s.harder} / {s.total}</b><span style={small}>prévues {s.planned}s, ressenties plus dures</span></div>
-          {s.accurate && <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 26, color: "#fff" }}>{s.accurate.ok} / {s.accurate.total}</b><span style={small}>{plural(s.accurate.planned) ? `prévues ${plural(s.accurate.planned)}, ressenties comme prévu` : "ressenties comme prévu"}</span></div>}
+          <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 22, color: "#ffb347" }}>{s.harder} fois sur {s.total}</b><span style={small}>prévues {s.planned}s, ressenties plus dures</span></div>
+          {s.accurate && <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 22, color: "#fff" }}>{s.accurate.ok} fois sur {s.accurate.total}</b><span style={small}>{plural(s.accurate.planned) ? `prévues ${plural(s.accurate.planned)}, ressenties comme prévu` : "ressenties comme prévu"}</span></div>}
         </div>
-        <p style={{ ...body, fontSize: 14 }}>Conseil : prévois-les un cran plus haut.{s.accurate && plural(s.accurate.planned) ? ` ${T("Tes", "Ses")} séances prévues ${plural(s.accurate.planned)}, elles, tombent juste.` : ""}</p>
       </>);
     case "fatigue": {
+      /* 2026-11-03 : chaque barre part de « le matin… » (la barre « Soirée » montrait en fait le lendemain). */
       const bars = [
-        ...(s.hard ? [{ label: "Séance normale", value: s.hard.easy, display: String(round(s.hard.easy)) }, { label: "Séance très dure", value: s.hard.hard, display: String(round(s.hard.hard)) }] : [{ label: T("Ta norme", "Sa norme"), value: s.normScore, display: String(round(s.normScore)) }]),
-        { label: "Soirée", value: s.nextScore, display: String(round(s.nextScore)), highlight: true },
-        ...(s.afterScore !== null ? [{ label: "2 jours après une soirée", value: s.afterScore, display: String(round(s.afterScore)) }] : []),
+        ...(s.hard ? [{ label: "après une séance très dure", value: s.hard.hard, display: String(round(s.hard.hard)) }] : []),
+        { label: "après une soirée", value: s.nextScore, display: String(round(s.nextScore)), highlight: true },
+        ...(s.afterScore !== null ? [{ label: "le surlendemain", value: s.afterScore, display: String(round(s.afterScore)) }] : []),
       ];
       const hardFree = s.hard && Math.abs(s.hard.hard - s.hard.easy) < 5;
-      const back = s.afterScore !== null && s.normScore - s.afterScore < 5;
       return (<>
-        <h2 style={h2}>{hardFree ? <>Une séance très dure ne {T("te", "lui")} coûte rien le lendemain. <span style={{ color: "#c79bf7" }}>Une soirée, si.</span></> : <>Une soirée (alcool ou sortie) <span style={{ color: "#c79bf7" }}>se paie le lendemain.</span></>}</h2>
-        <div style={card}><div style={small}>{T("Ta", "Sa")} forme ressentie le lendemain de…, sur 100</div><Bars bars={bars} height={110} color="#a855f7" dim="rgba(199,155,247,0.35)" showValues /></div>
-        <p style={body}>{s.hrv ? `Le lendemain d'une soirée (alcool ou sortie), ${T("ta", "sa")} VFC tombe de ${round(s.hrv.norm)} à ${round(s.hrv.next)} ms. ` : `Mesuré sur ${s.soirees} soirées (alcool ou sortie). `}{back ? `Le surlendemain, tout est revenu dans ${T("ta", "sa")} norme.` : ""}</p>
+        <h2 style={h2}>Une soirée (alcool ou sortie) <span style={{ color: "#c79bf7" }}>se paie le lendemain.</span>{hardFree ? " Une grosse séance, non." : ""}</h2>
+        <p style={sub}>{T("Séance clé le lendemain ? Décale la soirée, pas l'entraînement.", `Séance clé le lendemain ? Mieux vaut que ${n} décale la soirée, pas l'entraînement.`)}</p>
+        <div style={card}>
+          <div style={small}>{T("Ta", "Sa")} forme ressentie le matin…</div>
+          <Bars bars={bars} height={110} color="#a855f7" dim="rgba(199,155,247,0.35)" showValues />
+          <div style={small}>{T("Ta", "Sa")} forme habituelle : {round(s.normScore)}.{s.hrv ? ` La montre voit la même chose : VFC ${round(s.hrv.norm)} → ${round(s.hrv.next)} ms.` : ""}</div>
+        </div>
       </>);
     }
     case "leviers": {
+      /* 2026-11-03 : un lien observé, pas une cause (« les soirs de… tu dors »), et le test à faire en sous-titre. */
       const top = s.rows[0];
+      const when = (top.key && LEVER_WHEN[top.key]) || `Avec ${top.label.toLowerCase()}`;
+      const amount = top.delta.replace(/^[+−]/, "");
+      const what = s.unit === "sleep" ? `${T("tu dors", "il dort")} ${amount} de ${top.positive ? "plus" : "moins"}.` : `${T("ta", "sa")} forme du matin ${top.positive ? "gagne" : "perd"} ${amount}.`;
       return (<>
-        <h2 style={h2}>{top.positive ? <>{top.label} <span style={{ color: "#7ee08f" }}>{s.unit === "sleep" ? `${T("te", "lui")} rend ${top.delta.replace("+", "")} de nuit.` : `${T("te", "lui")} fait gagner ${top.delta.replace("+", "")} de forme.`}</span></> : <>{top.label} <span style={{ color: "#ffb347" }}>{s.unit === "sleep" ? `${T("te", "lui")} coûte ${top.delta.replace("−", "")} de nuit.` : `${T("te", "lui")} coûte ${top.delta.replace("−", "")} de forme.`}</span></>}</h2>
+        <h2 style={h2}>{when}, <span style={{ color: top.positive ? "#7ee08f" : "#ffb347" }}>{what}</span></h2>
+        <p style={sub}>{top.positive ? T("Teste 2 semaines d'affilée. Le bilan dira si ça tient.", "À tester 2 semaines d'affilée. Le bilan dira si ça tient.") : T("Essaie 2 semaines sans. Le bilan dira si ça tient.", "À tester 2 semaines sans. Le bilan dira si ça tient.")}</p>
         <div style={card}>
-          <div style={small}>{s.unit === "sleep" ? "Sommeil mesuré" : "Forme du matin"}, hors soirées (alcool ou sortie)</div>
+          <div style={small}>{s.unit === "sleep" ? `Sommeil mesuré par ${T("ta", "sa")} montre` : "Forme du matin"}, hors soirées (alcool ou sortie)</div>
           {s.rows.map((r, i) => (
             <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: "rgba(255,255,255,0.85)" }}><span>{r.label}</span><b style={{ color: r.positive ? "#7ee08f" : "#fff" }}>{r.delta}</b></div>
@@ -253,7 +294,7 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSli
             </div>
           ))}
         </div>
-        <p style={{ ...body, fontSize: 14 }}>{T("Chacun a ses leviers. Garde ton énergie pour ceux qui marchent chez toi.", `Chacun a ses leviers. Ceux-là marchent chez ${n}.`)}</p>
+        <div style={small}>Observé sur {T("tes", "ses")} nuits, pas encore prouvé.</div>
       </>);
     }
     case "tendance": {
@@ -262,7 +303,7 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSli
         <h2 style={h2}>{s.direction === "down" ? <>{T("Ta", "Sa")} forme baisse. {s.lateNights && <span style={{ color: "#8cc4f5" }}>{T("Tes", "Ses")} couchers reculent.</span>}</> : s.direction === "up" ? <>{T("Ta", "Sa")} forme <span style={{ color: "#7ee08f" }}>remonte.</span></> : <>{T("Ta", "Sa")} forme est <span style={{ color: "#8cc4f5" }}>stable.</span></>}</h2>
         <div style={card}><div style={small}>Forme moyenne par mois</div><Bars bars={s.months} height={90} color="#6da7ec" dim="rgba(109,167,236,0.45)" showValues /></div>
         {s.lateNights && <div style={card}><div style={small}>Couchers après minuit</div><Bars bars={s.lateNights} height={50} color="#f28a00" dim="rgba(109,167,236,0.45)" showValues /></div>}
-        <p style={{ ...body, fontSize: 14 }}>{(() => { const peak = s.months.reduce((a, b) => (b.value > a.value ? b : a)); if (s.direction === "stable") { const vs = s.months.map(m => m.value); return `Entre ${Math.min(...vs)} et ${Math.max(...vs)} chaque mois : ${T("tu tiens ton", `${n} tient son`)} niveau.`; } return (peak !== last ? `Au plus haut en ${peak.label.replace(".", "")} (${peak.display}), ${last.display} en ${last.label.replace(".", "")}.` : `${last.display} en ${last.label.replace(".", "")}, ${T("ton", "son")} meilleur mois.`) + T(" Le signal est lent : tu ne le sens pas d'un jour à l'autre.", " Le signal est lent : il ne se sent pas d'un jour à l'autre."); })()}</p>
+        <p style={{ ...body, fontSize: 14 }}>{(() => { const peak = s.months.reduce((a, b) => (b.value > a.value ? b : a)); if (s.direction === "stable") { const vs = s.months.map(m => m.value); return `Entre ${Math.min(...vs)} et ${Math.max(...vs)} chaque mois : ${T("tu tiens ton", `${n} tient son`)} niveau.`; } return (peak !== last ? `Au plus haut en ${peak.label.replace(".", "")} (${peak.display}), ${last.display} en ${last.label.replace(".", "")}.` : `${last.display} en ${last.label.replace(".", "")}, ${T("ton", "son")} meilleur mois.`) + T(" Ça ne se sent pas d'un jour à l'autre, ça se voit sur un mois.", " Ça ne se sent pas d'un jour à l'autre, ça se voit sur un mois."); })()}</p>
       </>);
     }
     case "tests": {
@@ -281,6 +322,81 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSli
         {s.others.map((o, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.06)", borderRadius: 14, padding: "12px 14px" }}><span style={{ fontSize: 14, color: "rgba(255,255,255,0.8)" }}>{o.name}</span><span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{o.from} → {o.to} <span style={{ color: "#7ee08f" }}>+{o.pct} %</span></span></div>)}
       </>);
     }
+    case "envie": {
+      const okRate = s.ok.part / s.ok.total;
+      return (<>
+        <h2 style={h2}>{okRate >= 0.6
+          ? <>Pas envie ? {T("Ta", "Sa")} séance passe quand même <span style={{ color: "#ffb347" }}>{s.ok.part} fois sur {s.ok.total}.</span></>
+          : <>Sans envie, {T("ta", "sa")} séance <span style={{ color: "#ffb347" }}>coince souvent.</span></>}</h2>
+        <p style={sub}>{okRate >= 0.6 ? T("Lance au moins l'échauffement, la suite vient.", "Qu'il lance au moins l'échauffement, la suite vient.") : T("Ces matins-là, alléger n'a rien d'un manque de volonté.", "Ces matins-là, alléger n'a rien d'un manque de volonté.")}</p>
+        <div style={{ ...card, gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><span style={small}>Pas envie, mais le corps en état</span><Rows rows={[{ label: "Séance comme prévu", part: s.ok.part, total: s.ok.total, highlight: true, unit: "fois sur" }]} color="#f28a00" /></div>
+          {s.tired && <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><span style={small}>Pas envie, et le corps fatigué</span><Rows rows={[{ label: "Séance plus dure que prévu", part: s.tired.part, total: s.tired.total, unit: "fois sur" }]} color="#f28a00" /></div>}
+        </div>
+      </>);
+    }
+    case "recup": {
+      const [a, b] = s.families;
+      const inDays = (d: number) => d === 1 ? "dès le lendemain" : d > 3 ? "en plus de 3 jours" : `en ${d} jours`;
+      return (<>
+        <h2 style={h2}>Après une grosse séance de {a.noun}, <span style={{ color: "#8cc4f5" }}>{a.days === 1 ? T("tu récupères en une nuit.", "il récupère en une nuit.") : a.days > 3 ? T("il te faut plus de 3 jours.", "il lui faut plus de 3 jours.") : T(`il te faut ${a.days} jours.`, `il lui faut ${a.days} jours.`)}</span></h2>
+        {b && b.days !== a.days && <p style={sub}>{T("Ta", "Sa")} séance de {b.noun}, elle, est récupérée {inDays(b.days)}.</p>}
+        {s.families.map((f, i) => (
+          <div key={i} style={card}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{f.noun.replace(/^./, x => x.toUpperCase())}, séance très dure</div>
+            {f.steps.map((st, j) => (
+              <div key={j} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "rgba(255,255,255,0.8)" }}><span>{st.label}</span><b style={{ color: "#fff" }}>{st.back ? `dans ${T("ta", "sa")} norme ✓` : `${round(s.norm - st.felt)} points sous ${T("ta", "sa")} norme`}</b></div>
+                <div style={{ position: "relative", height: 10, borderRadius: 5, background: "rgba(255,255,255,0.1)" }}>
+                  <div style={{ width: `${st.felt}%`, height: "100%", borderRadius: 5, background: st.back ? "#6da7ec" : "rgba(255,255,255,0.45)" }} />
+                  <div aria-hidden="true" style={{ position: "absolute", top: -3, bottom: -3, left: `${s.norm}%`, width: 2, borderRadius: 1, background: "#fff" }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+        <div style={small}>Forme ressentie. Le trait blanc : {T("ta", "sa")} forme habituelle ({round(s.norm)}).</div>
+      </>);
+    }
+    case "rythmes":
+      return (<>
+        <h2 style={h2}>{s.worst ? <>{T("Tes", "Ses")} {s.worst} sont <span style={{ color: "#ff8a5c" }}>{T("tes", "ses")} pires matins.</span></> : <>Une mauvaise nuit passe. <span style={{ color: "#ff8a5c" }}>Deux d&apos;affilée, non.</span></>}</h2>
+        {s.worst && (s.soireeShare >= 0.4 || s.next) && <p style={sub}>{s.soireeShare >= 0.4 ? "Souvent le lendemain d'une soirée (alcool ou sortie)." : `Une séance dure ce jour-là passerait mieux le ${s.next}.`}</p>}
+        {s.days && <div style={card}><div style={small}>Forme ressentie moyenne, par jour</div><Bars bars={s.days} height={90} color="#ff6a2b" dim="rgba(255,255,255,0.3)" showValues /></div>}
+        {s.nights && <div style={{ ...card, gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><span style={small}>Après une mauvaise nuit</span><Rows rows={[{ label: "Séance plus dure que prévu", part: s.nights.one.part, total: s.nights.one.total, unit: "fois sur" }]} color="#ff6a2b" /></div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><span style={small}>Après deux mauvaises nuits d&apos;affilée</span><Rows rows={[{ label: "Séance plus dure que prévu", part: s.nights.two.part, total: s.nights.two.total, highlight: true, unit: "fois sur" }]} color="#ff6a2b" /></div>
+        </div>}
+      </>);
+    case "prochaine":
+      return (<>
+        <h2 style={h2}>{T("Ta", "Sa")} semaine qui vient, <span style={{ color: "#7ee08f" }}>relue avec ce que {T("tes", "ses")} données ont appris.</span></h2>
+        <div style={{ ...card, gap: 12 }}>
+          {s.rows.map((r, i) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "76px minmax(0, 1fr)", gap: 10, fontSize: 14 }}>
+              <b style={{ color: "#fff" }}>{r.label}</b>
+              <span style={{ color: "rgba(255,255,255,0.85)", minWidth: 0 }}>{r.name}
+                <span style={{ display: "block", fontSize: 12.5, marginTop: 2, color: r.flag ? "#ffb38a" : "rgba(255,255,255,0.55)" }}>{r.flag ? `▲ ${r.flag}` : "✓ Rien à signaler"}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+        {onPlanning && <button onClick={onPlanning} style={{ height: 48, borderRadius: 14, border: 0, background: "#fff", color: "#14181b", fontFamily: "inherit", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>Ouvrir mon planning</button>}
+      </>);
+    case "apercu":
+      /* Aperçu (2026-11-03) : tant que ses propres écrans n'ont pas assez de données, un écran d'exemple
+         choisi par sa réponse du matin (mêmes cartes que l'étape bilan de l'onboarding). Jamais flouté. */
+      return (<>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", color: "#fff", background: "rgba(255,255,255,0.14)", borderRadius: 999, padding: "4px 10px" }}>APERÇU</span>
+          {s.chip && <span style={{ fontSize: 12, fontWeight: 700, color: "#ffd9c7", background: "rgba(212,64,0,0.3)", borderRadius: 999, padding: "4px 10px" }}>Toi ce matin : {s.chip}</span>}
+        </div>
+        <p style={{ margin: 0, fontSize: 16, fontWeight: 700, lineHeight: 1.35, color: "#fff" }}>{s.says}</p>
+        <div style={{ borderRadius: 18, border: "1px solid rgba(255,255,255,0.12)", padding: 14, display: "flex", flexDirection: "column", gap: 14, zoom: 0.9 }}>
+          <SlideBody s={s.inner} bilan={bilan} onShare={onShare} shared={shared} recal={recal} n={n} />
+        </div>
+        <div style={small}>Exemple tiré du bilan ThePerfClub. Le tien se remplit avec tes points forme.</div>
+      </>);
     case "partage":
       return (<>
         <div style={{ borderRadius: 22, padding: "22px 20px", background: "linear-gradient(160deg, #2a1206 0%, #14181b 55%, #0c1a26 100%)", border: "1px solid rgba(255,255,255,0.12)", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -405,7 +521,17 @@ function GroupSlideBody({ s, open }: { s: GroupSlide; open: OpenAthlete }) {
   }
 }
 
-export default function BilanCarousel({ userId, kind, anchor, today, source, subject, group = false, onClose }: Props) {
+function lockSlide(node: React.ReactNode, surface: string, coach: boolean, onUnlock: () => void) {
+  return (
+    <LockedBlur locked surface={surface} onUnlock={onUnlock} top radius={18} title={coach ? "Ce que ses données ont appris" : "Ce que tes données ont appris"} cta={coach ? "Débloquer le bilan" : "Débloquer mon bilan"}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>{node}</div>
+    </LockedBlur>
+  );
+}
+const OPEN_SLIDES = new Set<string>(["regularite", "apercu"]);
+
+export default function BilanCarousel({ userId, kind, anchor, today, source, subject, group = false, locked = false, onUnlock, onClose }: Props) {
+  const router = useRouter();
   const n = subject?.name;
   const { close, exitClass } = useExitAnimation(onClose);
   const [bilan, setBilan] = useState<Bilan | GroupBilan | null>(null);
@@ -445,7 +571,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
       const firstDate = athletes.flatMap(a => [...a.sessions, ...a.checkins].filter(x => !isSynthetic(x, a.signupAt)).map(x => x.date)).sort()[0] ?? today;
       const b = computeGroupBilan({ period: periodFor(kind, anchor, firstDate), today, athletes });
       setBilan(b);
-      posthog.capture("bilan_opened", { period: kind, source: "coach_group", slides: b.slides.length, slide_kinds: b.slides.map(x => x.kind).join(","), athletes: athletes.length });
+      posthog.capture("bilan_opened", { period: kind, source: "coach_group", slides: b.slides.length, slide_kinds: b.slides.map(x => x.kind).join(","), athletes: athletes.length, locked });
     })();
     return () => { alive = false; };
   }, [group, kind, anchor, today]);
@@ -467,14 +593,22 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
         .map(r => ({ date: r.date, value: Number(r.value), unit: r.unit, name: (Array.isArray(r.tests) ? r.tests[0]?.name : r.tests?.name) ?? "" }))
         .filter(r => r.name);
       const period = periodFor(kind, anchor, firstDate);
-      const b = computeBilan({ period, today, signupAt, sessions, checkins, tests, currentShift: p.data?.autoreg_shift ?? 0, currentShiftHigh: p.data?.autoreg_shift_high ?? 0, recalEvents: p.data?.autoreg_recal_events ?? [] });
-      // Le coach ne partage pas la carte du sportif à sa place.
-      if (subject) b.slides = b.slides.filter(x => x.kind !== "partage");
+      const b = computeBilan({ period, today, signupAt, sessions, checkins, tests, upcoming: raw.upcoming, currentShift: p.data?.autoreg_shift ?? 0, currentShiftHigh: p.data?.autoreg_shift_high ?? 0, recalEvents: p.data?.autoreg_recal_events ?? [] });
+      // Le coach ne partage pas la carte du sportif à sa place ; un gratuit ne partage pas des chiffres floutés.
+      if (subject || locked) b.slides = b.slides.filter(x => x.kind !== "partage");
+      /* Premier bilan (2026-11-03) : tant qu'aucun écran « appris » n'a assez de données, des écrans
+         d'exemple choisis par son dernier point forme, après Régularité. Côté sportif seulement. */
+      const lastCheckin = [...checkins].filter(c => !isSynthetic(c, signupAt)).sort((x, y) => y.date.localeCompare(x.date))[0];
+      if (!subject && lastCheckin && !b.slides.some(x => LEARNED.has(x.kind))) {
+        const pre = previewSlides(lastCheckin, p.data?.sport ?? "").map((c): BilanSlide => ({ kind: "apercu", inner: c.slide, says: c.says, chip: c.chip }));
+        const at = b.slides.findIndex(x => x.kind === "regularite") + 1;
+        b.slides.splice(at, 0, ...pre);
+      }
       setBilan(b);
-      posthog.capture("bilan_opened", { period: kind, source, slides: b.slides.length, slide_kinds: b.slides.map(x => x.kind).join(",") });
+      posthog.capture("bilan_opened", { period: kind, source, slides: b.slides.length, slide_kinds: b.slides.map(x => x.kind).join(","), locked });
     })();
     return () => { alive = false; };
-  }, [userId, kind, anchor, today, source, subject, group]);
+  }, [userId, kind, anchor, today, source, subject, group, locked]);
 
   const slides = useMemo<AnySlide[]>(() => bilan?.slides ?? [], [bilan]);
   const slide = slides[idx];
@@ -506,6 +640,11 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
   }
 
   const last = idx >= slides.length - 1;
+  const unlock = () => { close(); onUnlock?.(); };
+  const slideNode = !bilan || !slide ? null : slide.kind.startsWith("g_")
+    ? <GroupSlideBody s={slide as GroupSlide} open={(id, name) => { posthog.capture("coach_bilan_opened", { from: "group_bilan", period: kind, slide: slide.kind }); setDrill({ athleteId: id, name }); }} />
+    : <SlideBody s={slide as BilanSlide} bilan={bilan as Bilan} onShare={share} shared={shared} recal={recal} n={n}
+        onPlanning={n || group ? undefined : () => { posthog.capture("bilan_planning_opened", { period: kind }); close(); router.push("/week"); }} />;
   const content = (
     <div
       className={exitClass}
@@ -536,9 +675,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
           {!bilan && !failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "On rassemble les données du groupe…" : n ? "On rassemble ses données…" : "On rassemble tes données…"}</div>}
           {failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "Impossible de charger le bilan du groupe." : n ? `Impossible de charger le bilan de ${n}.` : "Impossible de charger ton bilan."} Réessaie dans un instant.</div>}
           {bilan && !slides.length && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "Pas encore assez de données pour ce bilan. Il se construit tout seul quand tes sportifs remplissent leur point forme et notent leurs séances." : n ? `Pas encore assez de données pour ce bilan. Il se construit tout seul quand ${n} remplit son point forme et note ses séances.` : "Pas encore assez de données pour ce bilan. Remplis ton point forme et note tes séances quelques jours : il se construit tout seul."}</div>}
-          {bilan && slide && (slide.kind.startsWith("g_")
-            ? <GroupSlideBody s={slide as GroupSlide} open={(id, name) => { posthog.capture("coach_bilan_opened", { from: "group_bilan", period: kind, slide: slide.kind }); setDrill({ athleteId: id, name }); }} />
-            : <SlideBody s={slide as BilanSlide} bilan={bilan as Bilan} onShare={share} shared={shared} recal={recal} n={n} />)}
+          {slide && slideNode && (locked && !OPEN_SLIDES.has(slide.kind) ? lockSlide(slideNode, `bilan_${slide.kind}`, !!n || group, unlock) : slideNode)}
         </div>
 
         {slides.length > 0 && (
@@ -553,6 +690,6 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
   if (typeof document === "undefined") return null;
   return (<>
     {createPortal(content, document.body)}
-    {drill && <BilanCarousel userId={drill.athleteId} kind={kind} anchor={anchor} today={today} source="coach" subject={drill} onClose={() => setDrill(null)} />}
+    {drill && <BilanCarousel userId={drill.athleteId} kind={kind} anchor={anchor} today={today} source="coach" subject={drill} locked={locked} onUnlock={() => { setDrill(null); unlock(); }} onClose={() => setDrill(null)} />}
   </>);
 }

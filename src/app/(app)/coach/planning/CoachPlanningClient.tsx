@@ -1404,7 +1404,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       )}
 
       {bilanFor && (
-        <BilanCarousel userId={bilanFor.subject.athleteId} kind={bilanFor.kind} anchor={bilanFor.anchor} today={todayStr} source="coach" subject={bilanFor.subject} onClose={() => setBilanFor(null)} />
+        <BilanCarousel userId={bilanFor.subject.athleteId} kind={bilanFor.kind} anchor={bilanFor.anchor} today={todayStr} source="coach" subject={bilanFor.subject} locked={!sandboxMode && !isActive} onUnlock={() => setPaywallStep("priming")} onClose={() => setBilanFor(null)} />
       )}
       {completing && athlete && (
         <CoachCompleteModal

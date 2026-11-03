@@ -997,7 +997,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           return weekLabels[mondayIso] || null;
         }}
       />
-      {bilanOpen && userId && <BilanCarousel userId={userId} kind={bilanOpen.kind} anchor={bilanOpen.anchor} today={initialDate} source={bilanOpen.source} onClose={() => setBilanOpen(null)} />}
+      {bilanOpen && userId && <BilanCarousel userId={userId} kind={bilanOpen.kind} anchor={bilanOpen.anchor} today={initialDate} source={bilanOpen.source} locked={!sandboxMode && !isActive} onUnlock={() => setPaywallStep("priming")} onClose={() => setBilanOpen(null)} />}
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
       <div style={{ padding: `14px ${pad}px 0`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
 

@@ -272,12 +272,12 @@ export function AhaBilanPreview({ ses = "séances de force" }: { ses?: string })
   return (
     <BilanSynthesis title="Ton bilan du mois" kicker="APPRIS SUR TOI" headline={<>Ce qui pèse vraiment <span style={{ color: "#c79bf7" }}>sur tes séances.</span></>} blocks={[
       { kicker: "Ce qui te fatigue", color: "#c79bf7", text: "Une soirée te coûte plus qu'une séance très dure.", extra: <>
-        <SynthBar k={k} label="Lendemain de séance très dure" value="68" pct={92} color="rgba(199,155,247,.4)" />
-        <SynthBar k={k} label="Lendemain de soirée" value="62" pct={84} color="#a855f7" />
+        <SynthBar k={k} label="Le matin après une séance très dure" value="68" pct={92} color="rgba(199,155,247,.4)" />
+        <SynthBar k={k} label="Le matin après une soirée" value="62" pct={84} color="#a855f7" />
       </> },
-      { kicker: "Ce qui te prédit", color: "#ff8a5c", text: `Le stress pèse sur tes ${ses}.`, extra:
-        <SynthBar k={k} label="Plus dures que prévu, stressé" value="7 sur 9" pct={78} color="#ff6a2b" /> },
-      { kicker: "Tes leviers", color: "#7ee08f", text: "Le stretching du soir te rend 24 min de nuit.", extra:
+      { kicker: "Ce qui durcit tes séances", color: "#ff8a5c", text: `Le stress durcit tes ${ses}.`, extra:
+        <SynthBar k={k} label="Les matins stressés, plus dures que prévu" value="7 fois sur 9" pct={78} color="#ff6a2b" /> },
+      { kicker: "Tes leviers", color: "#7ee08f", text: "Les soirs de stretching, tu dors 24 min de plus.", extra:
         <div style={{ fontSize: 12, color: "rgba(255,255,255,.6)" }}>Avec : 7h59 · Sans : 7h35</div> },
     ]} />
   );

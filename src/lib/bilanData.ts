@@ -1,13 +1,13 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import type { BilanCheckin, BilanSession, RecalEvent } from "@/lib/bilan";
+import type { BilanCheckin, BilanSession, BilanUpcoming, RecalEvent } from "@/lib/bilan";
 
 /* Données du bilan et des comptes de l'écran post-séance (2026-10-24) : une seule lecture, côté
    sportif (RLS, ses lignes) ou côté coach (GET /api/coach/bilan, lien vérifié). */
 export type BilanRaw = {
-  profile: { created_at?: string; autoreg_shift?: number | null; autoreg_shift_high?: number | null; autoreg_recal_events?: RecalEvent[] | null } | null;
-  sessions: BilanSession[]; checkins: BilanCheckin[];
+  profile: { created_at?: string; sport?: string | null; autoreg_shift?: number | null; autoreg_shift_high?: number | null; autoreg_recal_events?: RecalEvent[] | null } | null;
+  sessions: BilanSession[]; checkins: BilanCheckin[]; upcoming: BilanUpcoming[];
   tests: { date: string; value: number; unit: string; tests: { name: string } | { name: string }[] | null }[];
 };
 
@@ -19,16 +19,18 @@ export async function loadBilanRaw(opts: { userId: string; today: string; athlet
     const r = await fetch(`/api/coach/bilan?athleteId=${encodeURIComponent(opts.athleteId)}&today=${opts.today}`);
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${r.status}`);
-    return { profile: j.profile ?? null, sessions: j.sessions ?? [], checkins: j.checkins ?? [], tests: j.tests ?? [] };
+    return { profile: j.profile ?? null, sessions: j.sessions ?? [], checkins: j.checkins ?? [], tests: j.tests ?? [], upcoming: j.upcoming ?? [] };
   }
   const supabase = createClient();
-  const [p, s, w, t] = await Promise.all([
-    supabase.from("profiles").select("created_at, autoreg_shift, autoreg_shift_high, autoreg_recal_events").eq("user_id", opts.userId).maybeSingle(),
+  const week = new Date(opts.today + "T12:00:00"); week.setDate(week.getDate() + 7);
+  const [p, s, w, t, u] = await Promise.all([
+    supabase.from("profiles").select("created_at, sport, autoreg_shift, autoreg_shift_high, autoreg_recal_events").eq("user_id", opts.userId).maybeSingle(),
     supabase.from("sessions").select(BILAN_SESSION_COLS).eq("user_id", opts.userId).eq("done", true).lte("date", opts.today),
     supabase.from("wellness_daily").select(CHECKIN_COLS).eq("user_id", opts.userId).lte("date", opts.today),
     supabase.from("test_results").select("date,value,unit,tests(name)").eq("subject_user_id", opts.userId),
+    supabase.from("sessions").select("date,name,notes,target_difficulty").eq("user_id", opts.userId).eq("done", false).gt("date", opts.today).lte("date", week.toISOString().slice(0, 10)),
   ]);
-  const err = p.error || s.error || w.error || t.error;
+  const err = p.error || s.error || w.error || t.error || u.error;
   if (err) throw new Error(err.message);
-  return { profile: p.data, sessions: (s.data ?? []) as BilanSession[], checkins: (w.data ?? []) as BilanCheckin[], tests: (t.data ?? []) as BilanRaw["tests"] };
+  return { profile: p.data, sessions: (s.data ?? []) as BilanSession[], checkins: (w.data ?? []) as BilanCheckin[], tests: (t.data ?? []) as BilanRaw["tests"], upcoming: (u.data ?? []) as BilanUpcoming[] };
 }

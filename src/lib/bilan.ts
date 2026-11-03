@@ -19,7 +19,7 @@ import { computeWellnessBaselineAt } from "@/lib/wellnessBaseline";
 import { chronicPenaltyFor } from "@/lib/decisionCard";
 import { type AutoregDecisionRecord } from "@/lib/autoregDecisionRecord";
 import { adviceOf, resolveFollow, judge, outcomeRight, HARDER_POINTS, EASIER_POINTS, type Outcome } from "@/lib/adviceJudge";
-import { learnSignals, FAMILY_LABEL, type AutoregProposal, type PersonalDim } from "@/lib/autoregPersonal";
+import { learnSignals, sessionTypes, FAMILY_LABEL, type AutoregProposal, type PersonalDim, type SessionFamily } from "@/lib/autoregPersonal";
 import { SCALE_WORDS } from "@/lib/wellnessWords";
 
 export type BilanPeriodKind = "week" | "month" | "all";
@@ -34,18 +34,25 @@ export type BilanCheckin = {
   base_score?: number | null; device_resting_hr?: number | null; device_rhr_baseline?: number | null; device_hrv_baseline?: number | null;
 };
 export type BilanTest = { name: string; unit: string; date: string; value: number };
+/* Séance à venir (non faite, 7 prochains jours) : relue par l'écran « La semaine qui vient ». */
+export type BilanUpcoming = { date: string; name: string | null; notes?: string | null; target_difficulty: number | null };
 
 export type Bar = { label: string; value: number; display: string; highlight?: boolean };
 export type Compare = { label: string; part: number; total: number; highlight?: boolean };
 
 export type BilanSlide =
   | { kind: "regularite"; sessions: number; checkins: number; days: number; noGap: boolean; bars: Bar[] }
-  | { kind: "charge"; pctInZone: number; daysHigh: number; daysCounted: number }
+  | { kind: "charge"; pctInZone: number; daysHigh: number; daysCounted: number; daysLow?: number; daysAbove?: number }
   | { kind: "ressenti"; sleepBars: Bar[]; crashes: number; crashesSeen: number }
-  | { kind: "predit"; blocks: { title: string; rows: Compare[] }[] }
+  | { kind: "predit"; blocks: { title: string; rows: Compare[] }[]; lead?: { dim: PersonalDim; noun: string } }
   | { kind: "biais"; planned: DifficultyWord; feltWord: DifficultyWord; harder: number; total: number; points: { label: string; planned: number; felt: number }[]; accurate: { planned: DifficultyWord; ok: number; total: number } | null }
   | { kind: "fatigue"; soirees: number; normScore: number; nextScore: number; afterScore: number | null; hrv: { norm: number; next: number } | null; hard: { easy: number; hard: number } | null }
-  | { kind: "leviers"; rows: { label: string; with: string; without: string; delta: string; positive: boolean }[]; unit: "sleep" | "score" }
+  | { kind: "leviers"; rows: { label: string; with: string; without: string; delta: string; positive: boolean; key?: string }[]; unit: "sleep" | "score" }
+  | { kind: "envie"; ok: { part: number; total: number }; tired: { part: number; total: number } | null }
+  | { kind: "recup"; norm: number; families: { noun: string; days: number; steps: { label: string; felt: number; back: boolean }[]; n: number }[] }
+  | { kind: "rythmes"; days: Bar[] | null; worst: string | null; next: string | null; soireeShare: number; nights: { one: { part: number; total: number }; two: { part: number; total: number } } | null }
+  | { kind: "prochaine"; rows: { date: string; label: string; name: string; flag: string | null }[] }
+  | { kind: "apercu"; inner: BilanSlide; says: string; chip: string | null }
   | { kind: "tendance"; months: Bar[]; lateNights: Bar[] | null; direction: "down" | "up" | "stable" }
   | { kind: "tests"; main: { name: string; unit: string; points: { date: string; value: number }[]; pct: number }; others: { name: string; from: string; to: string; pct: number }[] }
   | { kind: "conseils"; none: { same: number; harder: number; total: number }; low: { justified: number; judged: number; followed: number }; high: { right: number; judged: number }; strip: StripCell[]; trend: TrendPoint[]; lift: Lift; recal: Recal | null; currentShift: number; currentShiftHigh: number }
@@ -147,7 +154,9 @@ function charge(period: BilanPeriod, sessions: BilanSession[], today: string): B
   if (inPeriod.length < (period.kind === "week" ? 5 : 10)) return null;
   const inZone = inPeriod.filter(p => p.value! >= 0.8 && p.value! <= 1.3).length;
   const high = inPeriod.filter(p => p.value! > 1.5).length;
-  return { kind: "charge", pctInZone: Math.round(100 * inZone / inPeriod.length), daysHigh: high, daysCounted: inPeriod.length };
+  /* 2026-11-03 : « sortie de ta zone » mélangeait trop chargé et pas assez ; les deux sont comptés à part. */
+  const above = inPeriod.filter(p => p.value! > 1.3).length, below = inPeriod.filter(p => p.value! < 0.8).length;
+  return { kind: "charge", pctInZone: Math.round(100 * inZone / inPeriod.length), daysHigh: high, daysCounted: inPeriod.length, daysLow: below, daysAbove: above };
 }
 
 function ressenti(checkins: BilanCheckin[]): BilanSlide | null {
@@ -183,10 +192,17 @@ const DIM_TEXT: Record<PersonalDim, [string, string, string]> = {
   recovery: ["ton état physique", "État physique correct ou moins", "État physique bien ou mieux"],
   motivation: ["ta motivation", "Motivation correcte ou moins", "Motivation bonne ou plus"],
 };
+/* « tes séances de force » : le type de séance en nom commun, pour les titres. */
+const FAMILY_NOUN: Partial<Record<SessionFamily, string>> = {
+  force: "force", puissance: "puissance", reactivite: "réactivité", vitesse: "vitesse", agilite: "agilité", endurance: "endurance",
+  mobilite: "mobilité", technique: "technique", force_puissance: "force", vitesse_reactivite: "vitesse",
+};
+export const familyNoun = (f: SessionFamily) => FAMILY_NOUN[f] ?? FAMILY_LABEL[f].toLowerCase();
+
 function predit(sessions: BilanSession[], checkins: BilanCheckin[]): BilanSlide | null {
   const sig = learnSignals(sessions.map(s => ({ date: s.date, notes: s.notes ?? null, rpe: s.rpe, target_difficulty: s.target_difficulty, done: s.done })), checkins);
   if (!sig.length) return null;
-  return { kind: "predit", blocks: sig.map(g => ({ title: `${FAMILY_LABEL[g.family]} · ${DIM_TEXT[g.dim][0]}`, rows: [
+  return { kind: "predit", lead: { dim: sig[0].dim, noun: familyNoun(sig[0].family) }, blocks: sig.map(g => ({ title: `${FAMILY_LABEL[g.family]} · ${DIM_TEXT[g.dim][0]}`, rows: [
     { label: DIM_TEXT[g.dim][1], part: g.low.part, total: g.low.total, highlight: true },
     { label: DIM_TEXT[g.dim][2], part: g.high.part, total: g.high.total },
   ] })) };
@@ -422,22 +438,148 @@ function leviers(checkins: BilanCheckin[]): BilanSlide | null {
   const useSleep = withSleep.length >= 20;
   const pool = useSleep ? withSleep : days;
   const val = (c: BilanCheckin) => useSleep ? c.device_sleep_minutes! : felt(c);
-  const rows: { label: string; with: string; without: string; delta: string; positive: boolean; d: number }[] = [];
+  const rows: { key: string; label: string; with: string; without: string; delta: string; positive: boolean; d: number }[] = [];
   for (const k of keys) {
     const w = pool.filter(c => (c.behaviors ?? []).includes(k)), wo = pool.filter(c => !(c.behaviors ?? []).includes(k));
     if (w.length < 5 || wo.length < 5) continue;
     const d = mean(w.map(val)) - mean(wo.map(val));
     const fmt = (x: number) => useSleep ? hm(x) : String(Math.round(x));
     const delta = useSleep ? `${d >= 0 ? "+" : "−"}${Math.round(Math.abs(d))} min` : `${d >= 0 ? "+" : "−"}${Math.round(Math.abs(d))} pts`;
-    rows.push({ label: LABEL[k][0], with: fmt(mean(w.map(val))), without: fmt(mean(wo.map(val))), delta, positive: d > 0, d });
+    /* 2026-11-03 : une habitude positive tombée sur de moins bonnes nuits (ou l'inverse) donnait
+       « Méditation te coûte 12 min de nuit » : contre-intuitif et sans doute du hasard, on ne l'affiche pas. */
+    if ((d > 0) !== LABEL[k][1]) continue;
+    rows.push({ key: k, label: LABEL[k][0], with: fmt(mean(w.map(val))), without: fmt(mean(wo.map(val))), delta, positive: d > 0, d });
   }
   const strong = rows.filter(r => Math.abs(r.d) >= (useSleep ? 10 : 3));
   if (!strong.length) return null;
   strong.sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
   // Le contraste « écran tard : presque rien » est gardé s'il existe : c'est lui qui rend le levier crédible.
-  const screen = rows.find(r => r.label === "Écran tard" && !strong.includes(r));
+  const screen = rows.find(r => r.key === "screen_late" && !strong.includes(r));
   const shown = [...strong.slice(0, 2), ...(screen && strong.length < 3 ? [screen] : [])].map(({ d: _d, ...r }) => r);
   return { kind: "leviers", rows: shown, unit: useSleep ? "sleep" : "score" };
+}
+
+/* ── Nouveaux écrans (2026-11-03, POC GSXeRzonoyn2UdnD46L9ML) ─────────────────────────────────── */
+const WEEKDAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+const WEEKDAYS_PL = ["lundis", "mardis", "mercredis", "jeudis", "vendredis", "samedis", "dimanches"];
+const dow = (iso: string) => (new Date(iso + "T12:00:00").getDay() + 6) % 7;
+const harderThanPlanned = (s: BilanSession) => wordIdx(s.rpe!) > wordIdx(s.target_difficulty!);
+
+/* « Pas envie » : les matins à motivation basse (basse ou moins), séparés selon l'état physique. La
+   tête seule ne dit rien de la séance ; la tête ET le corps, si. */
+function envie(joined: Joined[]): BilanSlide | null {
+  const low = joined.filter(j => j.c && j.c.motivation <= 4);
+  const ok = low.filter(j => j.c!.recovery >= 6), tired = low.filter(j => j.c!.recovery <= 5);
+  if (ok.length < 5) return null;
+  return {
+    kind: "envie",
+    ok: { part: ok.filter(j => !harderThanPlanned(j.s)).length, total: ok.length },
+    tired: tired.length >= 3 ? { part: tired.filter(j => harderThanPlanned(j.s)).length, total: tired.length } : null,
+  };
+}
+
+/* Délai de récupération par type de séance : après une séance ressentie très dure, la forme ressentie
+   des jours suivants (hors lendemains de soirée) jusqu'à revenir dans la norme. ≥ 5 cas. Un creux ne
+   compte qu'à 5 points sous la norme ou plus (2026-11-03 : à 3 points, 67 « en dessous » puis 68
+   « revenu » sur 5 séances, un écart d'un point qui faisait basculer le verdict). */
+const RECUP_DIP = 5;
+function recupDays(sessions: BilanSession[], checkins: BilanCheckin[]) {
+  const byDate = new Map(checkins.map(c => [c.date, c]));
+  const calm = checkins.filter(c => !(c.behaviors ?? []).some(b => SOIREE_WIDE.has(b)));
+  if (calm.length < 10) return null;
+  const norm = mean(calm.map(felt));
+  const by = new Map<SessionFamily, string[]>();
+  for (const s of sessions) {
+    if (s.rpe === null || wordIdx(s.rpe) < 3) continue;
+    const t = sessionTypes(s.notes); const f = t.group ?? t.quality;
+    if (f) by.set(f, [...(by.get(f) ?? []), s.date]);
+  }
+  const fams: { family: SessionFamily; noun: string; days: number; steps: { label: string; felt: number; back: boolean }[]; n: number }[] = [];
+  for (const [family, dates] of Array.from(by.entries())) {
+    const steps: { label: string; felt: number; back: boolean }[] = [];
+    let n = 0;
+    for (let k = 1; k <= 3; k++) {
+      const v = dates.map(d => byDate.get(addDays(d, k))).filter((c): c is BilanCheckin => !!c && !(c.behaviors ?? []).some(b => SOIREE_WIDE.has(b))).map(felt);
+      if (k === 1) n = v.length;
+      if (v.length < 5) break;
+      const back = mean(v) > norm - RECUP_DIP;
+      steps.push({ label: k === 1 ? "Le lendemain" : `${k} jours après`, felt: mean(v), back });
+      if (back) break;
+    }
+    if (!steps.length || n < 5) continue;
+    const last = steps[steps.length - 1];
+    fams.push({ family, noun: familyNoun(family), days: last.back ? steps.length : 4, steps, n });
+  }
+  return { norm, fams: fams.sort((a, b) => b.n - a.n) };
+}
+function recup(sessions: BilanSession[], checkins: BilanCheckin[]): BilanSlide | null {
+  const r = recupDays(sessions, checkins);
+  if (!r || !r.fams.length) return null;
+  return { kind: "recup", norm: r.norm, families: r.fams.slice(0, 2).map(({ family: _f, ...x }) => x) };
+}
+
+/* Tes rythmes : la forme ressentie par jour de la semaine (≥ 3 matins chaque jour, ≥ 28 en tout) et
+   l'effet de deux mauvaises nuits d'affilée sur la séance (≥ 4 cas de chaque côté). */
+function weekdayProfile(checkins: BilanCheckin[]) {
+  if (checkins.length < 28) return null;
+  const by: number[][] = WEEKDAYS.map(() => []);
+  for (const c of checkins) by[dow(c.date)].push(felt(c));
+  if (by.some(v => v.length < 3)) return null;
+  const means = by.map(mean), all = mean(checkins.map(felt));
+  const w = means.indexOf(Math.min(...means));
+  if (means[w] > all - 5) return { means, worst: null as number | null, all };
+  return { means, worst: w as number | null, all };
+}
+function rythmes(joined: Joined[], checkins: BilanCheckin[]): BilanSlide | null {
+  const wp = weekdayProfile(checkins);
+  const byDate = new Map(checkins.map(c => [c.date, c]));
+  const lowNight = (c: BilanCheckin | undefined) => !!c && c.sleep <= 5;
+  const one = joined.filter(j => lowNight(j.c) && byDate.get(addDays(j.s.date, -1)) && !lowNight(byDate.get(addDays(j.s.date, -1))));
+  const two = joined.filter(j => lowNight(j.c) && lowNight(byDate.get(addDays(j.s.date, -1))));
+  let nights: { one: { part: number; total: number }; two: { part: number; total: number } } | null = null;
+  if (one.length >= 4 && two.length >= 4) {
+    const o = { part: one.filter(j => harderThanPlanned(j.s)).length, total: one.length }, t = { part: two.filter(j => harderThanPlanned(j.s)).length, total: two.length };
+    if (t.part / t.total - o.part / o.total >= 0.25) nights = { one: o, two: t };
+  }
+  const worst = wp?.worst ?? null;
+  if (worst === null && !nights) return null;
+  let next: string | null = null, soireeShare = 0, days: Bar[] | null = null;
+  if (wp && worst !== null) {
+    const n = (worst + 1) % 7;
+    if (wp.means[n] >= wp.all) next = WEEKDAYS[n];
+    const onDay = checkins.filter(c => dow(c.date) === worst);
+    soireeShare = onDay.filter(isSoiree).length / onDay.length;
+    days = wp.means.map((m, i) => ({ label: WEEKDAYS[i].slice(0, 3).replace(/^./, x => x.toUpperCase()), value: m, display: String(Math.round(m)), highlight: i === worst }));
+  }
+  return { kind: "rythmes", days, worst: worst === null ? null : WEEKDAYS_PL[worst], next, soireeShare, nights };
+}
+
+/* La semaine qui vient : les séances prévues des 7 prochains jours, relues avec ce que le bilan a appris
+   (jour faible, soirée habituelle, deux séances dures du même type trop rapprochées). L'écran n'existe
+   que s'il signale au moins une séance : chaque signal renvoie à un écran du bilan. */
+function prochaine(upcoming: BilanUpcoming[], sessions: BilanSession[], checkins: BilanCheckin[], today: string): BilanSlide | null {
+  const ups = upcoming.filter(u => u.date > today && u.date <= addDays(today, 7) && u.target_difficulty).sort((a, b) => a.date.localeCompare(b.date));
+  if (!ups.length) return null;
+  const wp = weekdayProfile(checkins);
+  const soireeDay = WEEKDAYS.map((_, d) => { const on = checkins.filter(c => dow(c.date) === d); return on.length >= 3 && on.filter(isSoiree).length / on.length >= 0.4; });
+  const rec = recupDays(sessions, checkins);
+  const daysFor = new Map((rec?.fams ?? []).map(f => [f.family, f.days]));
+  const hard = (u: BilanUpcoming) => wordIdx(u.target_difficulty!) >= 2;
+  const famOf = (u: BilanUpcoming) => { const t = sessionTypes(u.notes ?? null); return t.group ?? t.quality; };
+  const rows = ups.slice(0, 6).map(u => {
+    const d = dow(u.date);
+    let flag: string | null = null;
+    if (hard(u)) {
+      const f = famOf(u), need = f ? daysFor.get(f) : undefined;
+      const prev = need && need > 1 ? ups.find(p => p !== u && p.date < u.date && hard(p) && famOf(p) === f && daysBetween(p.date, u.date) < need) : undefined;
+      if (prev) flag = `Trop près de ta séance de ${familyNoun(f!)} de ${WEEKDAYS[dow(prev.date)]} : il te faut ${need} jours`;
+      else if (soireeDay[d]) flag = "Souvent le lendemain d'une soirée (alcool ou sortie)";
+      else if (wp?.worst === d) flag = wp.means[(d + 1) % 7] >= wp.all ? `Tes ${WEEKDAYS_PL[d]} sont bas : la passer au ${WEEKDAYS[(d + 1) % 7]} ?` : `Tes ${WEEKDAYS_PL[d]} sont tes pires matins`;
+    }
+    return { date: u.date, label: WEEKDAYS[d].replace(/^./, x => x.toUpperCase()), name: `${u.name ?? "Séance"} · ${qualitativeDifficulty(u.target_difficulty!)}`, flag };
+  });
+  if (!rows.some(r => r.flag)) return null;
+  return { kind: "prochaine", rows };
 }
 
 function tendance(period: BilanPeriod, checkins: BilanCheckin[]): BilanSlide | null {
@@ -486,7 +628,7 @@ function tests(period: BilanPeriod, rows: BilanTest[]): BilanSlide | null {
 export function computeBilan(input: {
   period: BilanPeriod; today: string; signupAt: string;
   sessions: BilanSession[]; checkins: BilanCheckin[]; tests: BilanTest[];
-  currentShift?: number; currentShiftHigh?: number; recalEvents?: RecalEvent[];
+  currentShift?: number; currentShiftHigh?: number; recalEvents?: RecalEvent[]; upcoming?: BilanUpcoming[];
 }): Bilan {
   const { period, today, signupAt } = input;
   const sessions = input.sessions.filter(s => s.done && s.rpe !== null && !isSynthetic(s, signupAt) && s.date <= period.end);
@@ -497,8 +639,10 @@ export function computeBilan(input: {
   const periodSlides = [regularite(period, sessions, checkins, today), charge(period, sessions, today)];
   const rows = replay(sessions, checkins);
   const shift = input.currentShift ?? 0, shiftHigh = input.currentShiftHigh ?? 0;
-  const learned = [conseils(rows, shift, shiftHigh, input.recalEvents ?? []), ressenti(checkins), predit(sessions, checkins), biais(joined), fatigue(checkins, sessions), suivre(rows, checkins, shift), leviers(checkins)].filter((x): x is BilanSlide => !!x);
-  const late = [tendance(period, checkins), tests(period, input.tests)];
+  const learned = [conseils(rows, shift, shiftHigh, input.recalEvents ?? []), ressenti(checkins), predit(sessions, checkins), biais(joined), fatigue(checkins, sessions), envie(joined), recup(sessions, checkins), rythmes(joined, checkins), suivre(rows, checkins, shift), leviers(checkins)].filter((x): x is BilanSlide => !!x);
+  // « La semaine qui vient » : toujours relative à aujourd'hui, quel que soit le bilan ouvert (le bilan de
+  // la semaine passée se termine naturellement sur la suivante).
+  const late = [tendance(period, checkins), tests(period, input.tests), prochaine(input.upcoming ?? [], sessions, checkins, today)];
   const slides = [...periodSlides, ...(period.kind === "week" ? learned.slice(0, 2) : learned), ...late].filter((x): x is BilanSlide => !!x);
 
   const kpis: { value: string; label: string }[] = [];
