@@ -45,7 +45,7 @@ Identifiants non secrets : bundle/package `com.theperfclub.app`, Team Apple `B4A
 
 ## 4. Sortir une version iOS
 
-État au 03/11 : 1.2 (build 13) publiée (rejeu Santé, demande de note, abonnements « départ »). Les deux occurrences (Debug/Release) sont dans `ios/App/App.xcodeproj/project.pbxproj`.
+État au 03/11 : 1.2 (build 13) publiée (rejeu Santé, demande de note, abonnements « départ ») ; 1.2.1 (build 14, même code) en revue pour l ASO : nom « ThePerfClub: Coach sportif », sous-titre « Entraînement adapté à ta forme », mots-clés renouvelés, publication automatique. Les deux occurrences (Debug/Release) sont dans `ios/App/App.xcodeproj/project.pbxproj`.
 
 1. **Version** : `MARKETING_VERSION` (ex. 1.1 → 1.2) si nouvelle version store ; **toujours** incrémenter `CURRENT_PROJECT_VERSION` (12 → 13). Vérifier : `grep -n "CURRENT_PROJECT_VERSION\|MARKETING_VERSION" ios/App/App.xcodeproj/project.pbxproj`.
 2. **Sync** (obligatoire, même sans nouveau plugin : `ios/App/App/capacitor.config.json` est gitignoré) :
@@ -79,6 +79,7 @@ Identifiants non secrets : bundle/package `com.theperfclub.app`, Team Apple `B4A
 
 ## 6. Textes de fiche
 
+- ASO (03/11) : nom App Store et titre Play « ThePerfClub: Coach sportif » ; ne jamais répéter dans les mots-clés iOS un mot du nom ou du sous-titre. Nomination Apple « Bilans hebdo » envoyée pour le 04/01/2027 (la refonte des bilans doit être en ligne avant).
 - App Store : kit de soumission (textes FR, notes de revue EN, questionnaire confidentialité) https://claude.ai/artifact/3GfK8B3AniaHMt6PVu7JRa. À la prochaine soumission : remplacer « check-in » par « point forme » dans la description.
 - Play : textes FR alignés sur l'App Store (choix de Gildas), 8 captures 1080×1920 + bannière 1024×500 dans `~/Desktop/Captures Play Store/`.
 - Règles de wording du projet : pas de tiret long en prose, « sportif » (pas « athlète »), « groupe » côté coach, check-in = « 10 secondes ».
