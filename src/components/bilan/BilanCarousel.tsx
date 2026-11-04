@@ -125,9 +125,15 @@ const TEST_ILLU: [RegExp, string][] = [
 const SPORT_ILLU: [RegExp, string][] = [
   [/vitesse|sprint/, "sprint"], [/saut|pliom|puissance|explosiv/, "pliometrie"], [/halt|power|muscu|crossfit|fitness/, "crossfit"],
   [/calisth|gymnast/, "gym"], [/hyrox|perte de poids|police|gendarm|pompier|gign|arm[ée]e/, "circuit"], [/trail/, "trail"],
-  [/v[ée]lo|cyclis|bmx/, "velo"], [/natation/, "natation"], [/aviron/, "aviron"], [/ski/, "ski"], [/hockey/, "hockey"],
-  [/martia|combat/, "mma"], [/escalade/, "escalade"], [/golf/, "golf"], [/voile/, "voile"], [/[ée]quitation/, "equitation"],
-  [/collectif|baseball|rugby|foot|basket|hand|volley/, "collectif"], [/pr[ée]vention|r[ée][ée]ducation/, "mobilite"], [/endurance|triathlon|course/, "course"],
+  [/\bv[ée]lo\b|cyclis|bmx/, "velo"], [/natation/, "natation"], [/aviron/, "aviron"], [/ski/, "ski"], [/hockey/, "hockey"],
+  [/martia|combat|\bmma\b/, "mma"], [/boxe/, "boxe"], [/judo/, "judo"],
+  /* Sport tapé dans la recherche IA (« Autre - X ») ou famille large (2026-11-04) : chaque sport collectif a sa
+     photo (un handballeur voyait du foot), tennis/padel/surf ont la leur, la prépa physique générale va au cross-training. */
+  [/tennis/, "tennis"], [/padel/, "padel"], [/surf/, "surf"],
+  [/pr[ée]paration physique|polyvalent|cross-training|hybrid|d[ée]velopp[ée]/, "crossfit"],
+  [/escalade/, "escalade"], [/golf/, "golf"], [/voile/, "voile"], [/[ée]quitation/, "equitation"],
+  [/hand/, "handball"], [/basket/, "basket"], [/rugby/, "rugby"], [/volley/, "volley"],
+  [/collectif|baseball|foot/, "collectif"], [/pr[ée]vention|r[ée][ée]ducation|mobilit/, "mobilite"], [/endurance|triathlon|course/, "course"],
 ];
 /* Cadrage vertical des illustrations en portrait (2026-11-03) : le bandeau est large, il faut viser le
    sportif, pas le haut de l'image (le filet au-dessus de l'athlète de crossfit). */
