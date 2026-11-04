@@ -105,7 +105,7 @@ Côté serveur :
 Usage en salle (tablette sur le compte coach). Sur la `CoachCard page` d'un vrai sportif uniquement (`user_id` non null, jamais en sandbox) :
 - « Faire le point forme de X » / « Modifier son point forme » → `WellnessModal` prop `subject` (3e personne, historique via `GET /api/coach/bilan`, pas d'écran de résultat).
 - Enregistrement `POST /api/coach/checkin` (lien vérifié, admin, `withDeviceScore`, `.error` vérifié), puis `/api/sessions/proposal` avec `athleteUserId` : le conseil du matin est figé comme si le sportif l'avait fait. Échec : message visible, modale ouverte.
-- Terminer une séance → `CoachCompleteModal` (le même qu'au Planning), `action: "complete"`, puis écran de résultat `CoachResultHost` (`sessionVerdict`, `lib/sessionInsight.ts`).
+- Terminer une séance → `CoachCompleteModal` (le même qu'au Planning), `action: "complete"`, puis écran de résultat `CoachResultHost` (`sessionVerdict`, `lib/sessionInsight.ts`). Depuis le 2026-11-04 : mini bilan plein écran à la 3e personne (« Sa semaine », « Ressenti vs prévu ») ; point forme saisi par le coach → slide unique « Sa séance du jour » (détail dans le skill `autoregulation-analyses`).
 - Toucher une séance faite ouvre aussi cet écran (Coach Control, revue, Planning après notation). Le verdict vit seulement dans l'écran de résultat, jamais sur la carte.
 
 ## Bilans

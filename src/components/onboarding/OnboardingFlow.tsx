@@ -27,6 +27,8 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, PROGRAM_QUESTION_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
 import { COUNT_OPTIONS, HealthStepBody, WeekStepBody, PlannedWeekBody, NotifStepBody, AppPushStepBody, StreakTitle, type ObCount, type WeekSession } from "@/components/onboarding/EliteSteps";
 import { requestStoreReview } from "@/lib/storeReview";
+import type { HealthRow } from "@/lib/deviceWellness";
+import { onboardingSlides } from "@/components/physio/miniSlides";
 import { fetchReplay, demoReplay, replayUsable, replayDownCount, replayUpCount, type Replay } from "@/lib/healthReplay";
 import { InsightStepBody, ReplayStepBody, payHeadline, payHeadlineCoach, decideOptions, decideLead, decideOptionsCoach, decideLeadCoach, contrastTitle, contrastTitleCoach, weekCostLine, pickWords, pickWordsCoach, lowestAnswer, lowWords, sportFamily, answerRows, testFor, type Answers, type Pick, type PickCoach } from "@/components/onboarding/InsightSteps";
 import { SessionTemplateCard } from "@/components/programs/SessionTemplateCard";
@@ -601,6 +603,16 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      net juste après account_created avec onboarding_undefined_viewed. */
   const safeStepIdx  = Math.min(stepIdx, path.length - 1);
   const currentStep  = path[safeStepIdx];
+  /* Étape d'insight (2026-11-04) : sa vraie nuit (Apple Santé / Health Connect) pour l'écran « ressenti
+     vs mesures » en tête du carrousel. Lu une fois, seulement si la Santé a été connectée (obReplay). */
+  const [obHealthRows, setObHealthRows] = useState<HealthRow[] | null>(null);
+  const healthUid = userId || newUserId;
+  useEffect(() => {
+    if (currentStep !== "ob_insight" || !obReplay || !healthUid || obHealthRows) return;
+    const since = new Date(); since.setDate(since.getDate() - 60);
+    supabase.from("health_daily").select("date, resting_hr, sleep_minutes, hrv_ms").eq("user_id", healthUid).gte("date", since.toISOString().slice(0, 10))
+      .then(({ data, error }) => { if (error) { console.error("[ob_insight] health_daily", error.message); return; } setObHealthRows((data ?? []) as HealthRow[]); });
+  }, [currentStep, obReplay, healthUid, obHealthRows]); // eslint-disable-line react-hooks/exhaustive-deps
   const isLast       = safeStepIdx === path.length - 1;
 
   useEffect(() => {
@@ -2339,7 +2351,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         <QuestionShell {...common} dark
           onSkip={() => obAdvance()}
           cta={{ label: coach ? `Voir la séance de ${coachFirst}` : (insightSug ? "Voir ma séance ajustée" : "Voir ma séance du jour"), onClick: () => obAdvance() }}>
-          <InsightStepBody answers={answers} name={coach ? coachFirst : undefined} sport={sportForCopy} onIndex={setObInsightIdx} />
+          <InsightStepBody answers={answers} name={coach ? coachFirst : undefined} sport={sportForCopy} onIndex={setObInsightIdx}
+            real={!coach && obAnswers && obCheckinScore != null ? onboardingSlides({ date: today, score: obCheckinScore, answers: obAnswers, health: obHealthRows }, sportForCopy) : []} />
         </QuestionShell>
       );
     }

@@ -1,19 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
-import { RADIUS } from "@/lib/theme";
 import { loadPhysioData, PHYSIO_REVEAL, PHYSIO_REPLAY, type PhysioData, type PhysioRevealDetail, type PhysioReplayDetail } from "@/lib/physioData";
-import { HEART_CALIBRATION, HEART_FAMILY_LABEL, heartResultFor, physioVerdictAt, type HeartResult, type PhysioVerdict } from "@/lib/physioCompare";
+import { heartResultFor, matchWorkout, physioVerdictAt, type HeartResult, type PhysioVerdict, type PhysioWorkout } from "@/lib/physioCompare";
 import posthog from "posthog-js";
-import { deviceInputsFor, type HealthRow } from "@/lib/deviceWellness";
-import { checkinResult, recoveryGauge, type CheckinResult } from "@/lib/checkinInsight";
-import { sessionResult, sessionZone, type SessionResult, type ResultSession, type WeekSession } from "@/lib/sessionInsight";
-import { computeAccounts, type StripCell, type Lift } from "@/lib/bilan";
-import { loadBilanRaw } from "@/lib/bilanData";
-import { loadCheckinContext, loadSessionContext } from "@/lib/resultContext";
-import AggregateGauge from "@/components/conseils/AggregateGauge";
-import { DARK_CARD_BG } from "@/lib/theme";
+import type { HealthRow } from "@/lib/deviceWellness";
+import { checkinResult, type CheckinResult, type CheckinRow } from "@/lib/checkinInsight";
+import { sessionResult, type SessionResult, type ResultSession, type WeekSession } from "@/lib/sessionInsight";
+import type { StripCell, Lift } from "@/lib/bilan";
+import { loadCheckinContext, loadSessionContext, type TodaySession } from "@/lib/resultContext";
+import MiniBilan, { miniCard } from "@/components/physio/MiniBilan";
+import { sessionSlides, wellnessSlides } from "@/components/physio/miniSlides";
 import { createClient } from "@/lib/supabase/client";
 
 /* Écran de résultat (2026-10-22) : après CHAQUE point forme et CHAQUE séance notée, pour tous, montre ou
@@ -26,8 +25,8 @@ import { createClient } from "@/lib/supabase/client";
    étant déjà figée en base. Monté une fois dans le layout de l'app, côté sportif. */
 
 type Shown =
-  | { kind: "session"; detail: Extract<PhysioRevealDetail, { kind: "session" }>; result: HeartResult | null; summary?: SessionResult | null; session?: ResultSession | null; week?: WeekSession[]; accounts?: Accounts | null; recal?: RecalNotice | null }
-  | { kind: "wellness"; verdict: PhysioVerdict | null; night: string | null; checkin?: CheckinResult | null };
+  | { kind: "session"; detail: Extract<PhysioRevealDetail, { kind: "session" }>; result: HeartResult | null; summary?: SessionResult | null; session?: ResultSession | null; week?: WeekSession[]; accounts?: Accounts | null; recal?: RecalNotice | null; workout?: PhysioWorkout | null; before?: WeekSession[] }
+  | { kind: "wellness"; date: string; verdict: PhysioVerdict | null; checkin?: CheckinResult | null; row?: CheckinRow | null; history?: CheckinRow[]; todaySession?: TodaySession | null; restDay?: boolean; health?: HealthRow[] };
 
 /* Comptes de l'écran post-séance (2026-10-24) : les 14 derniers conseils jugés, même règle que le bilan. */
 export type Accounts = { right: number; judged: number; strip: StripCell[]; lift: Lift };
@@ -41,11 +40,6 @@ export async function checkRecalAfter(sessionId: string): Promise<RecalNotice | 
   if (!r.ok) throw new Error(`recalage ${r.status}`);
   const j = await r.json() as { applied: { dir: "low" | "high"; liftBefore?: number; liftAfter?: number } | null };
   return j.applied ? { dir: j.applied.dir, liftBefore: j.applied.liftBefore, liftAfter: j.applied.liftAfter, state: "applied" } : null;
-}
-const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
-export async function loadAccounts(opts: { userId: string; athleteId?: string }): Promise<Accounts | null> {
-  const raw = await loadBilanRaw({ userId: opts.userId, today: todayIso(), athleteId: opts.athleteId });
-  return computeAccounts({ sessions: raw.sessions, checkins: raw.checkins, signupAt: raw.profile?.created_at ?? new Date().toISOString(), shift: raw.profile?.autoreg_shift ?? 0, shiftHigh: raw.profile?.autoreg_shift_high ?? 0, events: raw.profile?.autoreg_recal_events ?? [] });
 }
 
 /* Relecture (2026-10-17) : liste des séances comparées (ou des matins comparés) et position. */
@@ -74,7 +68,8 @@ async function buildShown(kind: Nav["kind"], key: string, data: PhysioData | nul
     const result = heart && heart.kind === "ok" ? heart : null;
     const summary = s ? sessionResult(s, ctx!.week) : null;
     if (!s || (!result && !summary)) return null;
-    return { kind: "session", detail: { kind: "session", sessionId: key, date: s.date, rpe: s.rpe, duration: s.duration ?? 0 }, result, summary, session: s, week: ctx!.week };
+    const workout = data ? matchWorkout({ date: s.date, duration: s.duration }, data.workouts) : null;
+    return { kind: "session", detail: { kind: "session", sessionId: key, date: s.date, rpe: s.rpe, duration: s.duration ?? 0 }, result, summary, session: s, week: ctx!.week, before: ctx!.before, workout };
   }
   const ctx = await loadCheckinContext(userId, key).catch(() => null);
   const checkins = data?.checkins.filter(c => c.bedtime != null) ?? [];
@@ -82,19 +77,31 @@ async function buildShown(kind: Nav["kind"], key: string, data: PhysioData | nul
   const verdict = c && data ? physioVerdictAt(key, c, checkins, data.health, "athlete", ctx?.restDay ?? false) : null;
   const checkin = ctx?.today ? checkinResult(ctx.today, ctx.history, ctx.sessions, ctx.tomorrowDifficulty, ctx.form, ctx.restDay) : null;
   if (!verdict && !checkin) return null;
-  return { kind: "wellness", verdict, night: data && verdict ? nightSentence(key, data.health) : null, checkin };
+  return { kind: "wellness", date: key, verdict, checkin, row: ctx?.today ?? null, history: ctx?.history ?? [], todaySession: ctx?.todaySession ?? null, restDay: ctx?.restDay ?? false, health: data?.health ?? [] };
 }
 
 /* userId absent (onboarding, compte créé en cours de parcours) : résolu à l'ouverture. */
 export default function PhysioRevealHost({ userId: userIdProp }: { userId?: string }) {
   const [shown, setShown] = useState<Shown | null>(null);
   const [nav, setNav] = useState<Nav | null>(null);
+  const [sport, setSport] = useState<string | null>(null);
+  const router = useRouter();
+
+  /* Sport du sportif : la photo des slides séance (même image que son onboarding et son bilan). */
+  const sportFor = useRef<string | null>(null);
+  const loadSport = (userId: string) => {
+    if (sportFor.current === userId) return;
+    sportFor.current = userId;
+    createClient().from("profiles").select("sport").eq("user_id", userId).maybeSingle()
+      .then(({ data, error }) => { if (error) console.error("[mini bilan] sport", error.message); setSport((data as { sport?: string | null } | null)?.sport ?? null); });
+  };
 
   useEffect(() => {
     const onReveal = async (e: Event) => {
       const detail = (e as CustomEvent<PhysioRevealDetail>).detail;
       const userId = userIdProp ?? (await createClient().auth.getUser()).data.user?.id;
       if (!userId) return;
+      loadSport(userId);
       if (detail.kind === "session") {
         const [data, ctx] = await Promise.all([
           loadPhysioData(userId, true).catch(() => null),
@@ -105,7 +112,8 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
         const summary = ctx?.session ? sessionResult(ctx.session, ctx.week) : null;
         if (!result && !summary) return;
         setNav(null);
-        setShown({ kind: "session", detail, result, summary, session: ctx?.session ?? null, week: ctx?.week ?? [] });
+        const workout = data ? matchWorkout({ date: detail.date, duration: detail.duration }, data.workouts) : null;
+        setShown({ kind: "session", detail, result, summary, session: ctx?.session ?? null, week: ctx?.week ?? [], before: ctx?.before ?? [], workout });
         posthog.capture("session_result_shown", { rows: summary?.rows.length ?? 0, heart: result ? (result.kind === "ok" ? result.verdict : "calibrating") : null });
         if (result) posthog.capture("physio_reveal_shown", { kind: "session", result: result.kind === "ok" ? result.verdict : "calibrating" });
       } else {
@@ -117,7 +125,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
         const checkin = ctx?.today ? checkinResult(ctx.today, ctx.history, ctx.sessions, ctx.tomorrowDifficulty, ctx.form, ctx.restDay) : null;
         if (!verdict && !checkin) return;
         setNav(null);
-        setShown({ kind: "wellness", verdict, night: data && verdict ? nightSentence(detail.date, data.health) : null, checkin });
+        setShown({ kind: "wellness", date: detail.date, verdict, checkin, row: ctx?.today ?? null, history: ctx?.history ?? [], todaySession: ctx?.todaySession ?? null, restDay: ctx?.restDay ?? false, health: data?.health ?? [] });
         posthog.capture("checkin_result_shown", { day: checkin?.day ?? null, relative: checkin?.relative ?? null, physio: verdict?.kind ?? null });
         if (verdict) posthog.capture("physio_reveal_shown", { kind: "wellness", result: verdict.kind });
       }
@@ -126,6 +134,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
       const detail = (e as CustomEvent<PhysioReplayDetail>).detail;
       const userId = userIdProp ?? (await createClient().auth.getUser()).data.user?.id;
       if (!userId) return;
+      loadSport(userId);
       const data = await loadPhysioData(userId).catch(() => null);
       const key = detail.kind === "session" ? detail.sessionId : detail.date;
       // Flèches entre les éléments comparés à la physio quand celui-ci en fait partie, sinon écran seul.
@@ -153,8 +162,8 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
       // Recalage d'abord (il change les seuils), puis les comptes.
       const rc = await checkRecalAfter(accountsKey).catch(e => { console.error("[résultat séance] recalage", e); return null; });
       if (rc) posthog.capture("autoreg_recalibrated", { dir: rc.dir, source: "auto", lift_before: rc.liftBefore, lift_after: rc.liftAfter });
-      const a = await loadAccounts({ userId: uid }).catch(e => { console.error("[résultat séance] comptes", e); return null; });
-      if (alive) setShown(cur => cur && cur.kind === "session" && cur.session?.id === accountsKey ? { ...cur, accounts: a, recal: rc } : cur);
+      // Les comptes ne s'affichent plus après la séance (slide « ThePerfClub apprend » retirée le 2026-11-04).
+      if (alive) setShown(cur => cur && cur.kind === "session" && cur.session?.id === accountsKey ? { ...cur, accounts: null, recal: rc } : cur);
     })();
     return () => { alive = false; };
   }, [accountsKey, userIdProp]);
@@ -181,8 +190,6 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
     const next = { ...ss, autoreg_followed: followed };
     posthog.capture("autoreg_followed_corrected", { followed, side: "athlete" });
     setShown(cur => cur && cur.kind === "session" && cur.session?.id === ss.id ? { ...cur, session: next, summary: sessionResult(next, cur.week ?? []) } : cur);
-    const uid = nav?.userId ?? userIdProp ?? (await createClient().auth.getUser()).data.user?.id;
-    if (uid) loadAccounts({ userId: uid }).then(a => setShown(cur => cur && cur.kind === "session" && cur.session?.id === ss.id ? { ...cur, accounts: a } : cur)).catch(() => {});
   };
   const go = async (delta: number) => {
     if (!nav) return;
@@ -202,342 +209,85 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
     } else navTitle = `${dateFr(key)} · point forme`;
   }
 
-  let title = "", mean = "", gauge: React.ReactNode = null, extra: string | null = null;
-  const hasPhysio = shown.kind === "session" ? !!shown.result : !!shown.verdict;
-  if (shown.kind === "session" && shown.result) {
-    const r = shown.result;
-    if (r.kind === "calibrating") {
-      const left = HEART_CALIBRATION - r.have, fam = HEART_FAMILY_LABEL[r.family];
-      title = "On apprend encore ton profil";
-      mean = `Encore ${left} séance${left > 1 ? "s" : ""}${fam ? ` ${fam}` : ""} avec ta fréquence cardiaque et on pourra comparer ton ressenti à ce qu'elle mesure.`;
-    } else {
-      if (r.verdict === "harder") { title = "Ta séance t'a paru plus dure que ce qu'a mesuré ta fréquence cardiaque"; mean = "Quand ça se répète, c'est souvent de la fatigue qui s'installe : surveille ta récupération ces prochains jours."; }
-      else if (r.verdict === "easier") { title = "Ta fréquence cardiaque a mesuré une séance plus dure que ton ressenti"; mean = "Signe de forme, ou effort sous-estimé. La charge retenue reste ton ressenti."; }
-      else { title = "Ton ressenti et ta fréquence cardiaque sont d'accord"; mean = "Séance encaissée comme d'habitude, rien à signaler."; }
-      gauge = (
-        <TwoMarkGauge
-          eyebrow={shown.summary ? "Ressenti vs fréquence cardiaque" : "Difficulté de la séance"}
-          track="linear-gradient(90deg,#bfeec8,#ffe0a0 45%,#ffb5a7)"
-          a={{ pos: r.rpe * 10, label: `Ressenti · ${diffWord(r.rpe)}`, color: diffColor(r.rpe) }}
-          b={{ pos: r.predicted * 10, label: `Mesuré · ${diffWord(r.predicted)}`, color: "#171b1f" }}
-          ticks={["Légère", "Modérée", "Dure", "Très dure"]}
-        />
-      );
-    }
-  }
-  // Séance notée : la jauge à zone remplace la jauge à 2 points, avec ou sans montre.
-  const zone = shown.kind === "session" && shown.summary && shown.session ? sessionZone(shown.session) : null;
-  if (shown.kind === "session" && shown.session && zone) {
-    gauge = <ZoneGauge zone={zone} felt={shown.session.rpe} watch={shown.result?.kind === "ok" ? shown.result.predicted : null} />;
+  /* Mini bilan plein écran (2026-11-04) : les textes du calcul (mean) restent, la mise en forme change. */
+  let mean = "";
+  if (shown.kind === "session" && shown.result?.kind === "ok") {
+    const v = shown.result.verdict;
+    mean = v === "harder" ? "Quand ça se répète, c'est souvent de la fatigue qui s'installe : surveille ta récupération ces prochains jours."
+      : v === "easier" ? "Signe de forme, ou effort sous-estimé. La charge retenue reste ton ressenti."
+      : "Séance encaissée comme d'habitude, rien à signaler.";
   } else if (shown.kind === "wellness" && shown.verdict) {
     const v = shown.verdict;
-    if (v.kind === "less") { title = "Tes mesures de la nuit sont moins bonnes que ton ressenti"; mean = "Vas-y progressivement aujourd'hui : ton ressenti est bon, mais ta nuit dit le contraire."; }
-    else if (v.kind === "more") { title = "Tes mesures de la nuit sont meilleures que ton ressenti"; mean = v.reason ?? ""; }
-    else { title = "Tes mesures de la nuit confirment ton ressenti"; mean = "Tes deux signaux vont dans le même sens : tu peux te fier à ce que tu ressens."; }
-    gauge = (
-      <TwoMarkGauge
-        eyebrow={shown.checkin ? "Ressenti vs nuit mesurée" : "Ta récupération ce matin"}
-        track="linear-gradient(90deg,#cde2fb,#6da7ec 50%,#184f95)"
-        normBand
-        a={{ pos: zPos(v.zFeel), label: `Ressenti · ${zShort(v.zFeel)}`, color: "#2a78d6" }}
-        b={{ pos: zPos(v.zPhysio), label: `Mesuré · ${zShort(v.zPhysio)}`, color: "#171b1f" }}
-        ticks={["Moins bien", "Ta norme", "Mieux"]}
-      />
-    );
-    extra = shown.night;
+    mean = v.kind === "less" ? "Vas-y progressivement aujourd'hui : ton ressenti est bon, mais ta nuit dit le contraire."
+      : v.kind === "more" ? v.reason ?? "" : "Tes deux signaux vont dans le même sens : tu peux te fier à ce que tu ressens.";
   }
-
-  /* Point forme (2026-10-23, Gildas : « beaucoup trop d'info ») : score, une phrase, le conseil, et la
-     nuit mesurée en une ligne. Le détail ressenti vs mesuré reste sur la carte Récupération. */
-  const compact = (shown.kind === "wellness" && !!shown.checkin) || (shown.kind === "session" && !!shown.summary);
-  // Séance : le cœur en une ligne, seulement s'il apporte quelque chose (calibrage = rien).
-  // Sous la jauge à 2 points, une phrase seulement quand ressenti et mesure ne disent pas la même chose.
-  const compactNote = shown.kind === "session"
-    ? (shown.result?.kind === "ok" && shown.result.verdict !== "agree" ? mean : null)
-    : (shown.verdict && shown.verdict.kind !== "agree" ? mean : null);
-
-  return (
-    <div
-      className={exitClass}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2147483150, padding: 18 }}
-      onClick={e => { if (e.target === e.currentTarget) dismiss(); }}
-    >
-      <div style={{ background: "#fff", color: "#171b1f", border: "1px solid rgba(0,0,0,.10)", boxShadow: "0 42px 120px rgba(0,0,0,.34)", borderRadius: RADIUS.card, padding: 26, width: "100%", maxWidth: 400, maxHeight: "calc(100dvh - 36px)", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16, animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
-        {nav && nav.keys.length > 1 && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <NavArrow dir="prev" disabled={nav.idx === 0} onClick={() => go(-1)} label={nav.kind === "session" ? "Séance précédente" : "Matin précédent"} />
-            <div style={{ textAlign: "center", minWidth: 0 }}>
-              <div style={{ fontWeight: 800, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{navTitle}</div>
-              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 600, letterSpacing: ".08em", color: "#6b7177", marginTop: 3, textTransform: "uppercase" }}>
-                {nav.kind === "session" ? `Séance ${nav.idx + 1} sur ${nav.keys.length} comparées` : `Matin ${nav.idx + 1} sur ${nav.keys.length}`}
-              </div>
-            </div>
-            <NavArrow dir="next" disabled={nav.idx === nav.keys.length - 1} onClick={() => go(1)} label={nav.kind === "session" ? "Séance suivante" : "Matin suivant"} />
-          </div>
-        )}
-        {compact && shown.kind === "wellness" && shown.checkin && (
-          <CheckinBlock r={shown.checkin} />
-        )}
-        {shown.kind === "session" && shown.summary && <SessionBlock r={shown.summary} onCorrect={correct} accounts={shown.accounts} recal={shown.recal} onUndoRecal={undoRecal} />}
-        {hasPhysio && !compact && (
-          <div>
-            {shown.kind === "session" && shown.summary && (
-              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 6 }}>
-                Ressenti vs fréquence cardiaque
-              </div>
-            )}
-            <div style={{ fontFamily: "var(--font-display)", fontSize: shown.kind === "session" && shown.summary ? 18 : 23, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.12, textWrap: "balance" }}>{title}</div>
-            <div style={{ fontSize: 14, color: "#3d4247", marginTop: 8, lineHeight: 1.45 }}>{mean}</div>
-          </div>
-        )}
-        {gauge && (
-          <div style={{ background: "#f7f8f9", borderRadius: RADIUS.block, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-            {gauge}
-            {(compact ? compactNote : extra) && <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.45 }}>{compact ? compactNote : extra}</div>}
-          </div>
-        )}
-        {hasPhysio && !compact && (
-          <div style={{ fontSize: 11.5, color: "#8a8f94", textAlign: "center" }}>
-            {shown.kind === "session" ? "Ta note est enregistrée : la comparaison ne la modifie pas." : "Tes réponses sont enregistrées : la comparaison ne les modifie pas."}
-          </div>
-        )}
-        {canEdit ? (
-          /* Relecture ouverte par un geste de modification : le formulaire d'origine est à un tap. */
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <button
-              onClick={() => { const fn = nav?.onEdit; close(); fn?.(); }}
-              style={{ height: 46, borderRadius: RADIUS.control, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#171b1f", fontSize: 14, fontWeight: 800, cursor: "pointer" }}
-            >
-              {shown.kind === "session" ? "Modifier ma note" : "Modifier mes réponses"}
-            </button>
-            <button
-              onClick={dismiss}
-              style={{ height: 46, borderRadius: RADIUS.control, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)" }}
-            >
-              Fermer
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={dismiss}
-            style={{ height: 46, borderRadius: RADIUS.control, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)" }}
-          >
-            Fermer
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
-const diffWord = (d: number) => (d >= 7.5 ? "Très dure" : d >= 4.5 ? "Dure" : d >= 2.5 ? "Modérée" : "Légère"); // mots de Foster, voir qualitativeDifficulty
-const diffColor = (d: number) => (d >= 7.5 ? "#d44000" : d >= 4.5 ? "#e07a00" : "#2f9e44");
-// Écart à la norme (en écarts-types) : mêmes seuils que les textes de physioCompare (±0,5).
-const zShort = (z: number) => (z <= -0.5 ? "sous ta norme" : z >= 0.5 ? "au-dessus" : "dans ta norme");
-const zPos = (z: number) => 50 + clamp(z, -2, 2) * 22;
-
-/* « Tu as dormi 58 min de moins que d'habitude et ta fréquence cardiaque au repos est 4 bpm au-dessus de ta norme. »
-   Norme du sommeil = moyenne des nuits mesurées des 28 jours précédents (au moins 5). */
-function nightSentence(date: string, health: HealthRow[]): string | null {
-  const today = health.find(h => h.date === date);
-  const parts: string[] = [];
-  const sleep = today?.sleep_minutes;
-  if (sleep != null) {
-    const prior = health.filter(h => h.date < date && h.sleep_minutes != null).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 28).map(h => Number(h.sleep_minutes));
-    if (prior.length >= 5) {
-      const ds = Math.round(Number(sleep) - prior.reduce((a, b) => a + b, 0) / prior.length);
-      parts.push(Math.abs(ds) < 15 ? "Tu as dormi comme d'habitude" : `Tu as dormi ${Math.abs(ds)} min de ${ds > 0 ? "plus" : "moins"} que d'habitude`);
-    }
-  }
-  const d = deviceInputsFor(date, health);
-  if (d.device_resting_hr != null && d.device_rhr_baseline != null) {
-    const dr = Math.round(Number(d.device_resting_hr) - Number(d.device_rhr_baseline));
-    const fc = Math.abs(dr) < 2 ? "ta fréquence cardiaque au repos est dans ta norme" : `ta fréquence cardiaque au repos est ${Math.abs(dr)} bpm ${dr > 0 ? "au-dessus" : "en dessous"} de ta norme`;
-    parts.push(parts.length ? fc : fc.charAt(0).toUpperCase() + fc.slice(1));
-  }
-  return parts.length ? `${parts.join(" et ")}.` : null;
-}
-
-type Mark = { pos: number; label: string; color: string };
-
-/* Une échelle, deux repères (POC A9XZaSXeHW9WW5amXDzEHv) : l'écart entre Ressenti et Mesuré est le message. */
-function TwoMarkGauge({ eyebrow, track, a, b, ticks, normBand }: { eyebrow: string; track: string; a: Mark; b: Mark; ticks: string[]; normBand?: boolean }) {
-  const pa = clamp(a.pos, 4, 96), pb = clamp(b.pos, 4, 96);
-  const pin = (m: Mark, p: number, top: boolean): React.CSSProperties => ({
-    position: "absolute", left: `${p}%`, [top ? "top" : "bottom"]: 0,
-    // Près d'un bord, l'étiquette s'aligne sur le repère au lieu de déborder de la carte.
-    transform: p < 25 ? "translateX(-12px)" : p > 75 ? "translateX(calc(-100% + 12px))" : "translateX(-50%)",
-    fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap", padding: "3px 8px", borderRadius: RADIUS.pill, color: "#fff", background: m.color,
-  });
-  const dot = (m: Mark, p: number): React.CSSProperties => ({
-    position: "absolute", top: "50%", left: `${p}%`, width: 14, height: 14, borderRadius: "50%", transform: "translate(-50%,-50%)",
-    background: m.color, border: "2.5px solid #fff", boxShadow: "0 1px 4px rgba(0,0,0,.25)",
-  });
-  return (
-    <div>
-      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#8a8f94" }}>{eyebrow}</div>
-      <div style={{ position: "relative", padding: "26px 0", margin: "0 6px" }}>
-        <span style={pin(a, pa, true)}>{a.label}</span>
-        <div style={{ position: "relative", height: 10, borderRadius: RADIUS.pill, background: track }}>
-          {normBand && <span style={{ position: "absolute", left: "39%", width: "22%", top: -4, bottom: -4, borderRadius: 6, background: "rgba(255,255,255,.25)", border: "1px dashed rgba(255,255,255,.7)" }} />}
-          <span style={{ position: "absolute", top: "50%", height: 4, transform: "translateY(-50%)", left: `${Math.min(pa, pb)}%`, width: `${Math.abs(pa - pb)}%`, background: "repeating-linear-gradient(90deg,#171b1f 0 4px,transparent 4px 7px)" }} />
-          <span style={dot(a, pa)} />
-          <span style={dot(b, pb)} />
-        </div>
-        <span style={pin(b, pb, false)}>{b.label}</span>
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase", color: "#8a8f94" }}>
-        {ticks.map(t => <span key={t}>{t}</span>)}
-      </div>
-    </div>
-  );
-}
-
-/* Fin de séance (2026-10-26, maquette 9t5rLydc67SrpDSReD93SF) : la zone de la jauge de décision
-   (pointillés, débord de 0,35 point, bouts ronds comme DecisionRing), le ressenti en rond et la montre
-   en carré quand elle existe. Formes différentes : lisible sans les couleurs. Une rangée par étiquette,
-   rien ne se chevauche. Les mots du bas sont centrés sur leur vraie zone (seuils de diffWord). */
-const ZONE_PAD = 0.35;
-function ZoneGauge({ zone, felt, watch }: { zone: { low: number; high: number; advised: boolean }; felt: number; watch: number | null }) {
-  const at = (v: number) => clamp(v * 10, 3, 97);
-  const zl = at(Math.max(0, zone.low - ZONE_PAD)), zr = at(Math.min(10, zone.high + ZONE_PAD)), zm = (zl + zr) / 2;
-  const pf = at(felt), pw = watch != null ? at(watch) : null;
-  const shift = (p: number) => (p < 25 ? "translateX(-12px)" : p > 75 ? "translateX(calc(-100% + 12px))" : "translateX(-50%)");
-  const pill = (p: number, bg: string): React.CSSProperties => ({ position: "absolute", top: 0, left: `${p}%`, transform: shift(p), fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap", padding: "3px 8px", borderRadius: RADIUS.pill, color: "#fff", background: bg });
-  const mono: React.CSSProperties = { fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", whiteSpace: "nowrap" };
-  const label = zone.advised ? "Conseillé" : "Prévu";
-  return (
-    <div>
-      <div style={{ ...mono, fontSize: 10, fontWeight: 700, letterSpacing: ".1em", color: "#8a8f94" }}>{watch != null ? `${label}, ressenti, montre` : `${label} vs ressenti`}</div>
-      <div style={{ margin: "12px 6px 0" }}>
-        <div style={{ position: "relative", height: 24 }}><span style={pill(pf, diffColor(felt))}>Ressenti · {diffWord(felt)}</span></div>
-        <div style={{ position: "relative", height: 18 }}>
-          <span style={{ ...mono, position: "absolute", bottom: 4, left: `${zm}%`, transform: shift(zm), fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", color: "#171b1f" }}>{label}</span>
-        </div>
-        <div style={{ position: "relative", height: 10, margin: "6px 0", borderRadius: RADIUS.pill, background: "linear-gradient(90deg,#bfeec8,#ffe0a0 45%,#ffb5a7)" }}>
-          <span style={{ position: "absolute", top: -7, bottom: -7, left: `${zl}%`, width: `${zr - zl}%`, border: "2px dashed rgba(0,0,0,.55)", borderRadius: RADIUS.pill }} />
-          {pw != null && <span style={{ position: "absolute", top: "50%", left: `${pw}%`, width: 13, height: 13, borderRadius: 3, transform: "translate(-50%,-50%)", background: "#171b1f", border: "2.5px solid #fff", boxShadow: "0 1px 4px rgba(0,0,0,.28)" }} />}
-          <span style={{ position: "absolute", top: "50%", left: `${pf}%`, width: 15, height: 15, borderRadius: "50%", transform: "translate(-50%,-50%)", background: diffColor(felt), border: "2.5px solid #fff", boxShadow: "0 1px 4px rgba(0,0,0,.28)" }} />
-        </div>
-        {pw != null && <div style={{ position: "relative", height: 24 }}><span style={pill(pw, "#171b1f")}>Montre · {diffWord(watch!)}</span></div>}
-        <div style={{ ...mono, position: "relative", height: 14, marginTop: 8, fontSize: 10, fontWeight: 600, letterSpacing: ".04em", color: "#8a8f94" }}>
-          <span style={{ position: "absolute", left: 0 }}>Légère</span>
-          <span style={{ position: "absolute", left: "35%", transform: "translateX(-50%)" }}>Modérée</span>
-          <span style={{ position: "absolute", left: "60%", transform: "translateX(-50%)" }}>Dure</span>
-          <span style={{ position: "absolute", right: 0 }}>Très dure</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function NavArrow({ dir, disabled, onClick, label }: { dir: "prev" | "next"; disabled: boolean; onClick: () => void; label: string }) {
-  return (
-    <button
-      onClick={onClick} disabled={disabled} aria-label={label}
-      style={{ width: 44, height: 44, flex: "none", borderRadius: RADIUS.control, border: "1px solid rgba(0,0,0,.10)", background: "#f7f8f9", color: "#171b1f", cursor: disabled ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: disabled ? 0.35 : 1 }}
-    >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d={dir === "prev" ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6"} />
-      </svg>
+  const date = shown.kind === "session" ? shown.detail.date : shown.date;
+  const alt = Math.floor(Date.parse(date + "T12:00:00Z") / 86400000) % 2 === 1;
+  const slides = shown.kind === "wellness"
+    ? wellnessSlides({ date: shown.date, checkin: shown.checkin ?? null, verdict: shown.verdict, mean, row: shown.row ?? null, history: shown.history ?? [], todaySession: shown.todaySession ?? null, restDay: shown.restDay ?? false, health: shown.health ?? [] }, sport)
+    : sessionSlides({
+        session: shown.session ?? null, summary: shown.summary ?? null, result: shown.result, mean, week: shown.week ?? [], before: shown.before ?? [], workout: shown.workout ?? null,
+        extras: shown.summary ? <SessionExtras r={shown.summary} onCorrect={correct} /> : null,
+        recal: shown.recal ? <RecalNote recal={shown.recal} onUndo={undoRecal} /> : null,
+      }, sport);
+  if (!slides.length) return null;
+  const toToday = shown.kind === "wellness" && slides[slides.length - 1].key === "seance";
+  const editBtn = canEdit ? (
+    <button onClick={() => { const fn = nav?.onEdit; close(); fn?.(); }}
+      style={{ height: 46, borderRadius: 14, border: "1px solid rgba(255,255,255,.25)", background: "transparent", color: "#fff", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+      {shown.kind === "session" ? "Modifier ma note" : "Modifier mes réponses"}
     </button>
-  );
-}
-
-/* Résultat du point forme : le score en gros au centre (la jauge ouverte de l'onglet Récupération),
-   l'insight, puis les 5 premiers matins en ronds cochés. */
-function CheckinBlock({ r }: { r: CheckinResult }) {
-  const g = recoveryGauge(r.score);
+  ) : null;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ background: DARK_CARD_BG, borderRadius: RADIUS.block, padding: "18px 12px 14px", display: "flex", flexDirection: "column", alignItems: "center", color: "#fff" }}>
-        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 6 }}>Ta récupération ce matin</div>
-        <AggregateGauge pos={g.pos} band={g.band} bands={g.bands} size={220} />
-      </div>
-      <div style={{ background: "#f7f8f9", color: "#2b3035", borderRadius: RADIUS.block, padding: "12px 14px", lineHeight: 1.4, fontSize: 14 }}>
-        <div>{r.insight}</div>
-        {r.advice && <div style={{ marginTop: 6 }}>{r.advice}</div>}
-      </div>
-      {r.day != null && <NormStreak day={r.day} />}
-    </div>
+    <MiniBilan
+      slides={slides} title={shown.kind === "session" ? "FIN DE SÉANCE" : "POINT FORME"} alt={alt}
+      onClose={dismiss} exitClass={exitClass} actions={editBtn}
+      nav={nav && nav.keys.length > 1 ? {
+        label: navTitle ?? "", sub: nav.kind === "session" ? `Séance ${nav.idx + 1} sur ${nav.keys.length} comparées` : `Matin ${nav.idx + 1} sur ${nav.keys.length}`,
+        prev: nav.idx > 0 ? () => go(-1) : null, next: nav.idx < nav.keys.length - 1 ? () => go(1) : null,
+      } : null}
+      lastLabel={toToday ? "Voir ma séance" : "Fermer"}
+      onLast={toToday ? () => { close(); if (window.location.pathname !== "/today") router.push("/today"); } : undefined}
+      onSlide={(key, index) => posthog.capture("mini_bilan_slide_viewed", { kind: shown.kind, slide: key, index, slides: slides.length })}
+    />
   );
 }
 
-function NormStreak({ day }: { day: number }) {
-  const text = day >= 5 ? "Ta norme est prête : dès demain, ton score se compare à toi-même."
-    : day === 1 ? "Pour l'instant, un repère général. Dès ton 5e matin, on te compare à toi-même."
-    : `Encore ${5 - day} matin${5 - day > 1 ? "s" : ""} et ton score se calera sur toi.`;
-  return (
-    <div style={{ background: "#f7f8f9", borderRadius: RADIUS.block, padding: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#8a8f94" }}>
-        <span>Matin {Math.min(day, 5)} sur 5</span><span>ta norme</span>
-      </div>
-      <div style={{ fontSize: 13.5, color: "#3d4247", marginTop: 6, lineHeight: 1.45 }}>{text}</div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
-        {[1, 2, 3, 4, 5].map(i => {
-          const done = i <= day, today = i === day;
-          return (
-            <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-              <span style={{
-                width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 14,
-                background: done ? "#2a78d6" : "transparent", color: done ? "#fff" : "#a3a8ad",
-                border: done ? "none" : "2px dashed rgba(0,0,0,.18)", boxShadow: today ? "0 0 0 3px rgba(42,120,214,.25)" : undefined,
-              }}>{done ? "✓" : i}</span>
-              <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, color: today ? "#171b1f" : "#a3a8ad" }}>{today ? "AUJ." : `J${i}`}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/* Résultat de séance : ressentie vs prévu, puis au plus 2 lignes (décision du matin, semaine). Depuis
-   le 2026-10-24 : ce que le texte a changé, le lien de correction du réalisé, et les comptes. */
-export function SessionBlock({ r, onCorrect, accounts, recal, onUndoRecal, subject }: { r: SessionResult; onCorrect?: (followed: boolean | null) => void; accounts?: Accounts | null; recal?: RecalNotice | null; onUndoRecal?: () => void; subject?: string }) {
-  const rows = r.rows;
+/* Fin de séance, en sombre : ce que le texte a changé et le lien de correction du réalisé (aussi côté coach, CoachResultHost). */
+export function SessionExtras({ r, onCorrect }: { r: SessionResult; onCorrect?: (followed: boolean | null) => void }) {
   const changes = r.changes ?? [];
+  if (!r.rows.length && !changes.length && !r.correct) return null;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div>
-        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#8a8f94" }}>Séance enregistrée</div>
-        <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.12, marginTop: 4 }}>{r.title}</div>
-        {r.sub && <div style={{ fontSize: 14, color: "#62686e", marginTop: 6 }}>{r.sub}</div>}
-      </div>
-      {(rows.length > 0 || changes.length > 0 || (r.correct && onCorrect)) && (
-        <div style={{ background: "#f7f8f9", borderRadius: RADIUS.block, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
-          {rows.map(row => (
-            <div key={row.text} style={{ display: "flex", gap: 10, fontSize: 14, lineHeight: 1.4, color: "#2b3035" }}>
-              <span style={{ width: 18, flexShrink: 0, textAlign: "center", fontWeight: 800 }}>{row.icon}</span>
-              <span>{row.text}</span>
-            </div>
-          ))}
-          {changes.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, fontFamily: "var(--font-mono), monospace", fontSize: 11.5, lineHeight: 1.45, color: "#3d4247", paddingLeft: 28 }}>
-              {changes.map((c, i) => (
-                <div key={i}>{c.before && <span style={{ textDecoration: "line-through", color: "#a3a8ad" }}>{c.before}</span>}{c.before && c.after ? " → " : ""}{c.after && <span style={{ color: "#d44000", fontWeight: 700 }}>{c.after}</span>}</div>
-              ))}
-            </div>
-          )}
-          {r.correct && onCorrect && (
-            <button type="button" onClick={() => onCorrect(r.correct!.followed)} style={{ alignSelf: "flex-start", marginLeft: 28, background: "none", border: 0, padding: 0, fontFamily: "inherit", fontSize: 13, fontWeight: 700, color: "#d44000", textDecoration: "underline", cursor: "pointer" }}>{r.correct.label}</button>
-          )}
+    <div style={{ ...miniCard, gap: 10 }}>
+      {r.rows.map(row => (
+        <div key={row.text} style={{ display: "flex", gap: 10, fontSize: 14, lineHeight: 1.4, color: "rgba(255,255,255,.85)" }}>
+          <span style={{ width: 18, flexShrink: 0, textAlign: "center", fontWeight: 800 }}>{row.icon}</span><span>{row.text}</span>
+        </div>
+      ))}
+      {changes.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, fontFamily: "var(--font-mono), monospace", fontSize: 11.5, lineHeight: 1.45, color: "rgba(255,255,255,.75)", paddingLeft: 28 }}>
+          {changes.map((c, i) => <div key={i}>{c.before && <span style={{ textDecoration: "line-through", color: "rgba(255,255,255,.45)" }}>{c.before}</span>}{c.before && c.after ? " → " : ""}{c.after && <span style={{ color: "#ffb08a", fontWeight: 700 }}>{c.after}</span>}</div>)}
         </div>
       )}
-      {recal && (
-        <div style={{ border: "1px solid rgba(47,158,68,.35)", background: "rgba(47,158,68,.06)", borderRadius: RADIUS.block, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "#1f7a33" }}>{recal.state === "undone" ? "Recalage annulé" : subject ? `Seuil de ${subject} recalé` : "Seuil recalé"}</div>
-          <div style={{ fontSize: 13.5, lineHeight: 1.4, color: "#2b3035" }}>{recal.state === "undone"
-            ? "Les seuils d'avant sont rétablis. Ce recalage ne sera pas reproposé."
-            : `${recal.dir === "low" ? "Les alertes d'allègement seront plus rares, réservées aux signaux nets." : "Pousser sera proposé moins souvent."}${recal.liftBefore != null && recal.liftAfter != null ? ` Sur l'historique, les jours de conseil donnaient raison ${fr1(recal.liftBefore)} fois plus souvent que les autres jours ; ${fr1(recal.liftAfter)} fois avec ce réglage.` : ""}`}</div>
-          {recal.state !== "undone" && onUndoRecal && (
-            <button type="button" onClick={onUndoRecal} disabled={recal.state === "saving"} style={{ alignSelf: "flex-start", background: "none", border: 0, padding: 0, fontFamily: "inherit", fontSize: 13, fontWeight: 700, color: "#d44000", textDecoration: "underline", cursor: "pointer" }}>{recal.state === "saving" ? "…" : "Annuler"}</button>
-          )}
-        </div>
+      {r.correct && onCorrect && (
+        <button type="button" onClick={() => onCorrect(r.correct!.followed)} style={{ alignSelf: "flex-start", marginLeft: 28, background: "none", border: 0, padding: 0, fontFamily: "inherit", fontSize: 13, fontWeight: 700, color: "#ffb08a", textDecoration: "underline", cursor: "pointer" }}>{r.correct.label}</button>
       )}
-      {/* « Conseils confirmés : X sur Y » retiré de l'écran de fin de séance (2026-10-27, Gildas). Le
-          suivi reste dans le Bilan (BilanCarousel). `accounts` reste chargé pour le recalage. */}
     </div>
   );
 }
+
+/* `subject` côté coach : « Seuil de Léa recalé », sans « Annuler » (le sportif garde l'annulation). */
+export function RecalNote({ recal, onUndo, subject }: { recal: RecalNotice; onUndo?: () => void; subject?: string }) {
+  return (
+    <div style={{ ...miniCard, gap: 6, border: "1px solid rgba(159,240,173,.35)" }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: "#9ff0ad" }}>{recal.state === "undone" ? "Recalage annulé" : subject ? `Seuil de ${subject} recalé` : "Seuil recalé"}</div>
+      <div style={{ fontSize: 13.5, lineHeight: 1.4, color: "rgba(255,255,255,.8)" }}>{recal.state === "undone"
+        ? "Les seuils d'avant sont rétablis. Ce recalage ne sera pas reproposé."
+        : `${recal.dir === "low" ? "Les alertes d'allègement seront plus rares, réservées aux signaux nets." : "Pousser sera proposé moins souvent."}${recal.liftBefore != null && recal.liftAfter != null ? ` Sur l'historique, les jours de conseil donnaient raison ${fr1(recal.liftBefore)} fois plus souvent que les autres jours ; ${fr1(recal.liftAfter)} fois avec ce réglage.` : ""}`}</div>
+      {recal.state !== "undone" && onUndo && (
+        <button type="button" onClick={onUndo} disabled={recal.state === "saving"} style={{ alignSelf: "flex-start", background: "none", border: 0, padding: 0, fontFamily: "inherit", fontSize: 13, fontWeight: 700, color: "#ffb08a", textDecoration: "underline", cursor: "pointer" }}>{recal.state === "saving" ? "…" : "Annuler"}</button>
+      )}
+    </div>
+  );
+}
+

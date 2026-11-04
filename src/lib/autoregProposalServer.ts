@@ -16,9 +16,9 @@ import type { PhysioWorkout } from "@/lib/physioCompare";
 
 const shift = (iso: string, n: number) => { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
-type Result = { sessionId: string; proposal: AutoregProposal; frozen: boolean } | null;
+type Result = { sessionId: string; proposal: AutoregProposal; frozen: boolean; name?: string | null } | null;
 
-type TopSession = { id: string; date: string; notes: string | null; target_difficulty: number | null; autoreg_proposal?: unknown };
+type TopSession = { id: string; date: string; notes: string | null; target_difficulty: number | null; autoreg_proposal?: unknown; name?: string | null };
 
 /* Le calcul de la carte de /today pour une séance donnée, avec les seules données d'avant ce jour-là.
    Partagé par le figeage du matin et par le rejeu des séances faites sans reco figée (2026-10-24 :
@@ -56,19 +56,19 @@ export async function computeProposalFor(admin: SupabaseClient, userId: string, 
 }
 
 export async function freezeMorningProposal(admin: SupabaseClient, userId: string, date: string): Promise<Result> {
-  const planned = await admin.from("sessions").select("id, date, notes, target_difficulty, done, autoreg_proposal").eq("user_id", userId).eq("date", date).eq("done", false);
+  const planned = await admin.from("sessions").select("id, date, name, notes, target_difficulty, done, autoreg_proposal").eq("user_id", userId).eq("date", date).eq("done", false);
   if (planned.error) throw new Error(planned.error.message);
   // Séance à ajuster = la plus dure du jour pas encore faite (même règle que /today).
   const top = [...(planned.data ?? [])].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0];
   if (!top || !top.target_difficulty) return null;
   const existing = top.autoreg_proposal as AutoregProposal | null;
-  if (existing && existing.date === date) return { sessionId: top.id, proposal: existing, frozen: false };
+  if (existing && existing.date === date) return { sessionId: top.id, proposal: existing, frozen: false, name: top.name ?? null };
   const computed = await computeProposalFor(admin, userId, date, top);
   if (!computed) return null;
   const proposal: AutoregProposal = { ...computed, recorded_at: new Date().toISOString() };
   const { error } = await admin.from("sessions").update({ autoreg_proposal: proposal }).eq("id", top.id);
   if (error) throw new Error(error.message);
-  return { sessionId: top.id, proposal, frozen: true };
+  return { sessionId: top.id, proposal, frozen: true, name: top.name ?? null };
 }
 
 /* Coach(s) lié(s) prévenu(s) une seule fois par sportif et par jour, si la reco figée dit d'alléger. */

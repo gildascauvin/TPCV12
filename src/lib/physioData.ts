@@ -57,7 +57,7 @@ export async function fetchPhysioData(supabase: SupabaseClient, userId: string):
   const sinceHealth = isoDaysAgo(PHYSIO_HISTORY_DAYS + 28);
   const [s, w, h, c] = await Promise.all([
     supabase.from("sessions").select("id, date, duration, rpe, done, name").eq("user_id", userId).eq("done", true).gte("date", since),
-    supabase.from("health_workouts").select("date, start_at, duration_min, workout_type, trimp").eq("user_id", userId).gte("date", since),
+    supabase.from("health_workouts").select("date, start_at, duration_min, workout_type, trimp, avg_hr, max_hr").eq("user_id", userId).gte("date", since),
     supabase.from("health_daily").select("date, resting_hr, sleep_minutes, hrv_ms").eq("user_id", userId).gte("date", sinceHealth),
     supabase.from("wellness_daily").select("date, sleep, stress, recovery, motivation, bedtime, device_sleep_minutes, device_resting_hr, device_rhr_baseline, device_hrv_ms, device_hrv_baseline").eq("user_id", userId).gte("date", since),
   ]);

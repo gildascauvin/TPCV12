@@ -20,6 +20,9 @@ export type CheckinRow = Pick<WellnessDaily, "date" | "sleep" | "stress" | "reco
 };
 export type DoneSession = { date: string; rpe: number | null; done: boolean };
 
+export type InsightTheme = { kind: "dim"; key: DimensionKey; positive: boolean } | { kind: "behavior"; key: string } | { kind: "load" | "none" };
+const T = (text: string, theme: InsightTheme) => ({ text, theme });
+
 export interface CheckinResult {
   score: number;
   zone: string;
@@ -28,6 +31,10 @@ export interface CheckinResult {
   /* Numéro du matin tant que la norme se construit (1 à 5), null ensuite. */
   day: number | null;
   insight: string;
+  /* De quoi parle l'insight, et dans quel sens (2026-11-04) : choisit la photo du mini bilan (positif =
+     la ressource, méditation ou réveil ; négatif = le problème). key = question, comportement, ou
+     "load" (charge, séance) / "none" (rien de marquant). */
+  theme: InsightTheme;
   /* Un conseil hors entraînement sur la question la plus basse du matin (null si tout va bien). */
   advice: string | null;
 }
@@ -130,15 +137,15 @@ export function checkinResult(today: CheckinRow, history: CheckinRow[], sessions
   const insight = (() => {
     // 1. Jour 1 : rien à comparer, on vend demain avec le mot qu'il a choisi.
     if (count === 1) return oriented(today, lowest) <= 5
-      ? `${lowPhrase(today, lowest)} : dès demain, on saura si c'est ton normal ou un mauvais matin.`
-      : "Premier repère posé : dès demain, on saura si ce matin est ton normal.";
+      ? T(`${lowPhrase(today, lowest)} : dès demain, on saura si c'est ton normal ou un mauvais matin.`, { kind: "dim", key: lowest, positive: false })
+      : T("Premier repère posé : dès demain, on saura si ce matin est ton normal.", { kind: "none" });
 
     // 2. Le score s'écarte du ressenti à cause de la charge : on le dit, sinon les deux se contredisent.
     if (form != null) {
       const order = AGG_BANDS.recup.map(x => x.label);
       const feelIdx = order.indexOf(bandFor("recup", Math.max(0, Math.min(1, feel / 100))).label), aggIdx = order.indexOf(agg.band.label);
-      if (feelIdx > aggIdx) return "Tu te sens bien, mais ta charge récente pèse : ton score reste plus bas que ton ressenti.";
-      if (feelIdx < aggIdx) return "Ta charge récente est légère et remonte ton score, mais ton ressenti reste bas.";
+      if (feelIdx > aggIdx) return T("Tu te sens bien, mais ta charge récente pèse : ton score reste plus bas que ton ressenti.", { kind: "load" });
+      if (feelIdx < aggIdx) return T("Ta charge récente est légère et remonte ton score, mais ton ressenti reste bas.", { kind: "dim", key: lowest, positive: false });
     }
 
     // 3. Série de matins sous la norme (dates consécutives).
@@ -151,7 +158,7 @@ export function checkinResult(today: CheckinRow, history: CheckinRow[], sessions
         if (bz == null || bz > -Z_SWC) break;
         streak++;
       }
-      if (streak >= 3) return `${streak}e matin de suite sous ta norme : la fatigue s'installe. Alléger aujourd'hui, c'est garder la suite.`;
+      if (streak >= 3) return T(`${streak}e matin de suite sous ta norme : la fatigue s'installe. Alléger aujourd'hui, c'est garder la suite.`, { kind: "dim", key: lowest, positive: false });
     }
 
     // 3. Comportement d'hier qui, chez lui, pèse sur la récupération du lendemain.
@@ -164,9 +171,9 @@ export function checkinResult(today: CheckinRow, history: CheckinRow[], sessions
         .sort((a, c) => a.impact - c.impact)[0];
       if (hit) {
         const dim = hit.dominantDimension;
-        return dim && dim.impact < 0
+        return T(dim && dim.impact < 0
           ? `${hit.label} hier : chez toi, ça pèse surtout sur ${POSSESSIVE[dim.key]}.`
-          : `${hit.label} hier : chez toi, la récupération du lendemain en pâtit nettement.`;
+          : `${hit.label} hier : chez toi, la récupération du lendemain en pâtit nettement.`, { kind: "behavior", key: hit.key });
       }
     }
 
@@ -175,18 +182,18 @@ export function checkinResult(today: CheckinRow, history: CheckinRow[], sessions
     const hardYesterday = sessions.some(s => s.date === yesterday && s.done && (s.rpe ?? 0) >= 8);
     const recZ = b.dimensions.recovery.z;
     if (hardYesterday && (recZ != null ? recZ <= -Z_MODERATE : today.recovery <= 5)) {
-      return "État physique en baisse après ta séance très dure d'hier : c'est attendu, ton corps encaisse.";
+      return T("État physique en baisse après ta séance très dure d'hier : c'est attendu, ton corps encaisse.", { kind: "load" });
     }
 
     // 5. Écart avec hier, sur la question qui a le plus bougé.
     const yRow = prior.find(h => h.date === yesterday);
     if (yRow) {
       const moved = DIMENSION_KEYS.map(k => ({ k, d: oriented(today, k) - oriented(yRow, k) })).sort((a, c) => Math.abs(c.d) - Math.abs(a.d))[0];
-      if (Math.abs(moved.d) >= 2) return moved.d > 0 ? `Mieux qu'hier, surtout grâce à ${POSSESSIVE[moved.k]}.` : `Moins bien qu'hier, surtout à cause de ${POSSESSIVE[moved.k]}.`;
+      if (Math.abs(moved.d) >= 2) return T(moved.d > 0 ? `Mieux qu'hier, surtout grâce à ${POSSESSIVE[moved.k]}.` : `Moins bien qu'hier, surtout à cause de ${POSSESSIVE[moved.k]}.`, { kind: "dim", key: moved.k, positive: moved.d > 0 });
     }
 
     // 6. Séance dure demain et matin bas.
-    if ((tomorrowDifficulty ?? 0) >= 8 && low) return "Séance très dure demain : avec ce matin, couche-toi tôt ce soir.";
+    if ((tomorrowDifficulty ?? 0) >= 8 && low) return T("Séance très dure demain : avec ce matin, couche-toi tôt ce soir.", { kind: "load" });
 
     // 7. Avec une norme : la question la plus loin de la norme.
     if (relative) {
@@ -195,18 +202,18 @@ export function checkinResult(today: CheckinRow, history: CheckinRow[], sessions
       if (Math.abs(dom.z) >= Z_MODERATE) {
         const bad = dom.z < 0;
         const side = dom.k === "stress" ? (bad ? "au-dessus" : "en dessous") : (bad ? "en dessous" : "au-dessus");
-        return `${DIMENSION_LABELS[dom.k]} nettement ${side} de ta norme : c'est ce qui ${bad ? "tire" : "porte"} ton score.`;
+        return T(`${DIMENSION_LABELS[dom.k]} nettement ${side} de ta norme : c'est ce qui ${bad ? "tire" : "porte"} ton score.`, { kind: "dim", key: dom.k, positive: !bad });
       }
-      return "Un matin normal pour toi : tes réponses sont dans ta norme.";
+      return T("Un matin normal pour toi : tes réponses sont dans ta norme.", { kind: "none" });
     }
 
     // 8. Sans norme : le point bas du matin, en mots.
     return oriented(today, lowest) <= 5
-      ? `${lowPhrase(today, lowest)} : c'est ce qui pèse le plus sur ta récup ce matin.`
-      : "Un matin plutôt bon : rien ne te tire vers le bas.";
+      ? T(`${lowPhrase(today, lowest)} : c'est ce qui pèse le plus sur ta récup ce matin.`, { kind: "dim", key: lowest, positive: false })
+      : T("Un matin plutôt bon : rien ne te tire vers le bas.", { kind: "none" });
   })();
 
-  return { score: agg.score, zone, relative, day: count <= NORM_DAYS ? count : null, insight, advice: dailyAdvice(today, lowest, restDay) };
+  return { score: agg.score, zone, relative, day: count <= NORM_DAYS ? count : null, insight: insight.text, theme: insight.theme, advice: dailyAdvice(today, lowest, restDay) };
 }
 
 /* Jauge ouverte du score de récup : la même que l'onglet Récupération (AggregateGauge, mêmes bandes). */

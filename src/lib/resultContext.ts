@@ -17,7 +17,9 @@ function shiftDate(date: string, days: number) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export async function loadCheckinContext(userId: string, date: string): Promise<{ today: CheckinRow | null; history: CheckinRow[]; sessions: DoneSession[]; tomorrowDifficulty: number | null; form: number | null; restDay: boolean }> {
+/* Séance du jour avec la reco figée après le point forme (autoregProposalServer). */
+export type TodaySession = { id: string; name: string | null; target_difficulty: number | null; done: boolean; autoreg_proposal: AutoregProposal | null };
+export async function loadCheckinContext(userId: string, date: string): Promise<{ today: CheckinRow | null; history: CheckinRow[]; sessions: DoneSession[]; tomorrowDifficulty: number | null; form: number | null; restDay: boolean; todaySession: TodaySession | null }> {
   const supabase = createClient();
   const since = shiftDate(date, -HISTORY_DAYS), tomorrow = shiftDate(date, 1);
   const [w, s, t, d] = await Promise.all([
@@ -28,7 +30,7 @@ export async function loadCheckinContext(userId: string, date: string): Promise<
     supabase.from("sessions").select("date, rpe, duration, done").eq("user_id", userId).eq("done", true).gte("date", shiftDate(date, -120)).lte("date", date),
     supabase.from("sessions").select("target_difficulty").eq("user_id", userId).eq("date", tomorrow).eq("done", false),
     // Séance prévue ou faite ce jour-là : sans elle, le conseil ne parle pas de « ta séance du jour ».
-    supabase.from("sessions").select("id").eq("user_id", userId).eq("date", date).limit(1),
+    supabase.from("sessions").select("id, name, target_difficulty, done, autoreg_proposal").eq("user_id", userId).eq("date", date),
   ]);
   [w, s, t, d].forEach(r => { if (r.error) console.error("[résultat point forme] lecture:", r.error.message); });
   const rows = (w.data ?? []) as CheckinRow[];
@@ -42,15 +44,17 @@ export async function loadCheckinContext(userId: string, date: string): Promise<
     tomorrowDifficulty,
     // Lecture en échec : on garde le conseil séance plutôt que d'annoncer un repos à tort.
     restDay: !d.error && (d.data ?? []).length === 0,
+    // Mini bilan (2026-11-04) : la séance du jour à ajuster (la plus dure pas encore faite, comme /today).
+    todaySession: ([...((d.data ?? []) as TodaySession[])].filter(x => !x.done).sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0]) ?? null,
   };
 }
 
-export async function loadSessionContext(userId: string, sessionId: string): Promise<{ session: ResultSession | null; week: WeekSession[] }> {
+export async function loadSessionContext(userId: string, sessionId: string): Promise<{ session: ResultSession | null; week: WeekSession[]; before: WeekSession[] }> {
   const supabase = createClient();
   const one = await supabase.from("sessions").select("id, date, rpe, duration, target_difficulty, name, notes, autoreg_decision, autoreg_proposal, autoreg_followed").eq("id", sessionId).maybeSingle();
   if (one.error) console.error("[résultat séance] lecture:", one.error.message);
   const row = one.data as ResultSession | null;
-  if (!row) return { session: null, week: [] };
+  if (!row) return { session: null, week: [], before: [] };
   /* Séance sans reco enregistrée (faite avant le 2026-10-23, ou point forme fait après la séance) : le
      calcul du matin rejoué ce jour-là côté serveur, avec les réglages personnels, pour que le verdict
      existe aussi en relecture. Rien n'est écrit en base. */
@@ -60,9 +64,11 @@ export async function loadSessionContext(userId: string, sessionId: string): Pro
   }
   const d = new Date(`${row.date}T12:00:00`);
   const monday = shiftDate(row.date, -((d.getDay() + 6) % 7));
-  const wk = await supabase.from("sessions").select("id, date, rpe, duration, done").eq("user_id", userId).gte("date", monday).lte("date", shiftDate(monday, 6));
+  // + les 4 semaines d'avant : la séance moyenne de référence des barres de la semaine (sessionReference).
+  const wk = await supabase.from("sessions").select("id, date, rpe, duration, done").eq("user_id", userId).gte("date", shiftDate(monday, -28)).lte("date", shiftDate(monday, 6));
   if (wk.error) console.error("[résultat séance] lecture:", wk.error.message);
-  return { session: row.rpe != null ? row : null, week: (wk.data ?? []) as WeekSession[] };
+  const all = (wk.data ?? []) as WeekSession[];
+  return { session: row.rpe != null ? row : null, week: all.filter(x => x.date >= monday), before: all.filter(x => x.date < monday) };
 }
 
 async function replayProposal(_userId: string, row: ResultSession): Promise<AutoregProposal | null> {

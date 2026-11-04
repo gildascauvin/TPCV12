@@ -7,12 +7,13 @@
    Les cartes sont les vrais écrans du bilan (SlideBody de BilanCarousel), dans un cadre réduit. */
 
 import { useEffect, useRef, useState } from "react";
-import { SlideBody, KICKER, KICKER_COACH, PhotoBanner, photoFor, sportPhotoFor, ExampleCtx, ExamplePromise, EXAMPLE_N } from "@/components/bilan/BilanCarousel";
+import { SlideBody, Hero, KICKER, KICKER_COACH, PhotoBanner, photoFor, sportPhotoFor, ExampleCtx, ExamplePromise, EXAMPLE_N } from "@/components/bilan/BilanCarousel";
 import { SCALE_WORDS, type ScaleKey } from "@/lib/wellnessWords";
 import type { Bilan, BilanSlide } from "@/lib/bilan";
 import { catalogEntry, findCatalogEntry } from "@/lib/sportCatalog";
 import { workoutLabel } from "@/lib/healthWorkouts";
 import { replayDownCount, replayUpCount, type Replay } from "@/lib/healthReplay";
+import type { MiniSlide } from "@/components/physio/MiniBilan";
 
 const MONO: React.CSSProperties = { fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase" };
 const BOX: React.CSSProperties = { background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16 };
@@ -238,7 +239,7 @@ function SlideFrame({ slide, name }: { slide: BilanSlide; name?: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ ...MONO, fontSize: 11, color: "rgba(255,255,255,.85)", textShadow: "0 1px 6px rgba(0,0,0,.6)" }}>Bilan · {(name && KICKER_COACH[slide.kind]) || KICKER[slide.kind]}</div>
-      <div aria-hidden="true" style={{ height: 56 }} />
+      <div aria-hidden="true" style={{ height: "clamp(0px, calc(14vh - 64px), 56px)" }} />
       <ExampleCtx.Provider value={true}>
         <SlideBody s={slide} bilan={BILAN} onShare={() => {}} shared={false} recal={RECAL} n={EXAMPLE_N} />
       </ExampleCtx.Provider>
@@ -247,37 +248,53 @@ function SlideFrame({ slide, name }: { slide: BilanSlide; name?: string }) {
   );
 }
 
-export function InsightStepBody({ answers, name, sport = "", onIndex }: { answers: Answers; name?: string; sport?: string; onIndex?: (i: number) => void }) {
-  const slides = deckFor(answers, sport);
+/* `real` (2026-11-04) : ses vraies données (mini bilan du point forme) en tête, puis les exemples ; le
+   carrousel garde 5 écrans en tout. */
+export function InsightStepBody({ answers, name, sport = "", onIndex, real = [] }: { answers: Answers; name?: string; sport?: string; onIndex?: (i: number) => void; real?: MiniSlide[] }) {
+  const deck = deckFor(answers, sport).slice(0, Math.max(2, 5 - real.length));
+  const items: ({ key: string; real: MiniSlide } | { key: string; card: (typeof deck)[number] })[] = [...real.map(r => ({ key: `r_${r.key}`, real: r })), ...deck.map(c => ({ key: c.key, card: c }))];
   const [idx, setIdx] = useState(0);
   // Retour sur l'étape : le carrousel repart de la 1re carte, le titre de l'étape aussi.
   useEffect(() => { onIndex?.(0); }, [onIndex]);
   const track = useRef<HTMLDivElement>(null);
   const go = (i: number) => track.current?.scrollTo({ left: i * (track.current.clientWidth + 16), behavior: "smooth" });
-  const cur = slides[Math.min(idx, slides.length - 1)]?.slide;
-  const photo = cur ? photoFor(cur) : null;
+  const curItem = items[Math.min(idx, items.length - 1)];
+  const bg = !curItem ? null : "real" in curItem ? { photo: curItem.real.photo, sportPhoto: curItem.real.sportPhoto ?? null } : { photo: photoFor(curItem.card.slide), sportPhoto: sportPhotoFor(curItem.card.slide, sport) };
   return (
     <div>
       {/* Photo du thème de la carte visible, derrière tout l'écran (fixed, sous le contenu de QuestionShell). */}
-      {cur && photo && (
+      {bg && (
         <div aria-hidden="true" style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 600, height: "min(52vh, 440px)", zIndex: -1, pointerEvents: "none" }}>
-          <PhotoBanner photo={photo} height="100%" sportPhoto={sportPhotoFor(cur, sport)} />
+          <PhotoBanner photo={bg.photo} height="100%" sportPhoto={bg.sportPhoto} />
         </div>
       )}
       <div ref={track} onScroll={e => { const el = e.currentTarget; const i = Math.round(el.scrollLeft / (el.clientWidth + 16)); setIdx(i); onIndex?.(i); }}
         style={{ display: "flex", overflowX: "auto", scrollSnapType: "x mandatory", scrollbarWidth: "none", gap: 16, alignItems: "flex-start" }}>
-        {slides.map(c => (
-          <div key={c.key} style={{ flex: "0 0 100%", scrollSnapAlign: "start" }}>
-            <SlideFrame slide={c.slide} name={name} />
+        {items.map(it => (
+          <div key={it.key} style={{ flex: "0 0 100%", scrollSnapAlign: "start" }}>
+            {"real" in it ? <RealFrame s={it.real} name={name} /> : <SlideFrame slide={it.card.slide} name={name} />}
           </div>
         ))}
       </div>
       <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 14 }} role="tablist" aria-label="Écrans du bilan">
-        {slides.map((c, i) => (
+        {items.map((c, i) => (
           <button key={c.key} type="button" onClick={() => go(i)} aria-label={`Écran ${i + 1}`} aria-selected={i === idx}
             style={{ width: i === idx ? 22 : 8, height: 8, borderRadius: 999, border: 0, padding: 0, cursor: "pointer", background: i === idx ? "#ff8a55" : "rgba(255,255,255,.25)", transition: "width .2s" }} />
         ))}
       </div>
+    </div>
+  );
+}
+
+/* Écran à ses vraies données : même mise en page que les exemples, sans « Chez un sportif ThePerfClub ». */
+function RealFrame({ s, name }: { s: MiniSlide; name?: string }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ ...MONO, fontSize: 11, color: "rgba(255,255,255,.85)", textShadow: "0 1px 6px rgba(0,0,0,.6)" }}>{name ? `Point forme de ${name}` : "Ton point forme"} · {s.kicker}</div>
+      <div aria-hidden="true" style={{ height: "clamp(0px, calc(14vh - 64px), 56px)" }} />
+      <Hero big={s.hero.big} unit={s.hero.unit} cap={s.hero.cap} color={s.hero.color} />
+      {s.sub && <div style={{ fontSize: 15, lineHeight: 1.5, color: "rgba(255,255,255,0.78)" }}>{s.sub}</div>}
+      {s.body}
     </div>
   );
 }

@@ -10,7 +10,7 @@ import { sleepMinutesScore, rhrComponent, hrvComponent, deviceInputsFor as _devi
 
 /* ── 1. Séance vs cœur ─────────────────────────────────────────────────────────────── */
 
-export type PhysioWorkout = { date: string; start_at: string; duration_min: number; workout_type: string; trimp: number | null };
+export type PhysioWorkout = { date: string; start_at: string; duration_min: number; workout_type: string; trimp: number | null; avg_hr?: number | null; max_hr?: number | null };
 export type PhysioSession = { id: string; date: string; duration: number | null; rpe: number | null; done: boolean; name?: string | null };
 
 /* Familles : la FC reflète mal l'effort en force/haltéro (efforts courts, neuromusculaires), donc une

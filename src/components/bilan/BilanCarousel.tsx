@@ -82,14 +82,14 @@ const round = (x: number) => Math.round(x);
 /* Piste A + photo (2026-11-03, POC GSXeRzonoyn2UdnD46L9ML v3) : une photo par thème en haut d'écran,
    en bichromie à la couleur du thème et fondue dans le noir, et un grand chiffre à la place du titre.
    Photos dans public/bilan/<thème>.webp. */
-const DIM_PHOTO: Record<PersonalDim, string> = { stress: "stress", sleep: "sommeil", recovery: "recup", motivation: "envie" };
-const LEVER_PHOTO: Record<string, string> = { screen_late: "ecran", caffeine_late: "cafeine", heavy_meal: "repas", tobacco: "tabac", travel: "voyage", late_sleep: "sommeil", stretching: "stretch", walk: "marche", reading: "lecture", meditation: "meditation", cold_shower: "douche", hydration: "hydratation" };
+export const DIM_PHOTO: Record<PersonalDim, string> = { stress: "stress", sleep: "sommeil", recovery: "recup", motivation: "envie" };
+export const LEVER_PHOTO: Record<string, string> = { screen_late: "ecran", caffeine_late: "cafeine", heavy_meal: "repas", tobacco: "tabac", travel: "voyage", late_sleep: "sommeil", stretching: "stretch", walk: "marche", reading: "lecture", meditation: "meditation", cold_shower: "douche", hydration: "hydratation" };
 const BLUE = "#9fd0ff", GREEN = "#9ff0ad";
 export const PHOTO_ACCENT: Record<string, string> = {
   raison: "#f3e2bb", stress: "#ffb08a", sommeil: "#b3c6ff", soiree: "#d8b4ff", envie: "#ffd27a", recup: "#9be8f0",
   regularite: "#ffb08a", charge: "#a0ebcd", ressenti: BLUE, biais: "#ffd27a", tendance: BLUE, tests: "#ffb08a", suivre: "#d8b4ff", prochaine: "#a0ebcd",
   groupe_decroche: "#ffb08a", groupe_seances: "#ffd27a", groupe_conseils: "#f3e2bb",
-  ecran: BLUE, cafeine: BLUE, repas: BLUE, tabac: "#d2d2d7", voyage: "#d2d2d7", stretch: GREEN, marche: GREEN, lecture: GREEN, meditation: GREEN, douche: GREEN, hydratation: GREEN,
+  ecran: BLUE, cafeine: BLUE, repas: BLUE, tabac: "#d2d2d7", voyage: "#d2d2d7", stretch: GREEN, marche: GREEN, lecture: GREEN, meditation: GREEN, douche: GREEN, hydratation: GREEN, reveil: GREEN,
 };
 /* Une photo pour chaque écran (2026-11-03, Gildas : « une image pour absolument toutes les slides »). */
 export function photoFor(s: AnySlide): string {
@@ -113,7 +113,7 @@ export function photoFor(s: AnySlide): string {
 /* Régularité et Charge (2026-11-03, Gildas) : la photo du sport du sportif (même image que son
    onboarding), passée en bichromie en CSS : gris × couleur claire (multiply), puis éclairci vers la
    couleur sombre (lighten). */
-const SPORT_TINT: Partial<Record<AnySlide["kind"], [string, string]>> = { regularite: ["#280c02", "#ffa578"], charge: ["#041c16", "#a0ebcd"], tests: ["#280c02", "#ffa578"] };
+export const SPORT_TINT: Partial<Record<AnySlide["kind"], [string, string]>> = { regularite: ["#280c02", "#ffa578"], charge: ["#041c16", "#a0ebcd"], tests: ["#280c02", "#ffa578"] };
 /* Tests : la photo suit le test affiché (2026-11-03, Gildas : « Épaulé-jeté +13 % avec un sprinter derrière »). */
 const TEST_ILLU: [RegExp, string][] = [
   [/2 000 m|aviron/, "aviron"], [/vitesse|sprint|\d+\s?m\b/, "sprint"], [/d[ée]tente|saut|cmj|m[ée]decine|lancer/, "pliometrie"], [/vma|l[ée]ger|cooper/, "course"],
@@ -148,7 +148,9 @@ export function sportPhotoFor(s: AnySlide, sport: string | null | undefined): { 
 }
 /* Deux photos par thème (2026-11-03, Gildas) : le bilan du mois prend l'autre photo, pour que les bilans
    ne se ressemblent pas d'une période à l'autre (public/bilan/<thème>-2.webp). */
-export function PhotoBanner({ photo, height, sportPhoto, period }: { photo: string; height: string | number; sportPhoto?: { src: string; tint: [string, string] } | null; period?: BilanPeriodKind }) {
+/* `alt` (mini bilans du point forme et de fin de séance, 2026-11-04) : la photo 2 un jour sur deux, pour ne
+   pas revoir le même écran chaque matin. */
+export function PhotoBanner({ photo, height, sportPhoto, period, alt }: { photo: string; height: string | number; sportPhoto?: { src: string; tint: [string, string] } | null; period?: BilanPeriodKind; alt?: boolean }) {
   return (
     <div aria-hidden="true" style={{ position: "absolute", top: 0, left: 0, right: 0, height, pointerEvents: "none", overflow: "hidden", isolation: "isolate" }}>
       {sportPhoto
@@ -156,7 +158,7 @@ export function PhotoBanner({ photo, height, sportPhoto, period }: { photo: stri
             <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${sportPhoto.src})`, backgroundSize: "cover", backgroundPosition: illuPos(sportPhoto.src), filter: "grayscale(1) contrast(1.3) brightness(1.2)", mixBlendMode: "multiply" }} />
             <div style={{ position: "absolute", inset: 0, background: sportPhoto.tint[0], mixBlendMode: "lighten" }} />
           </div>
-        : <div style={{ position: "absolute", inset: 0, backgroundImage: `url(/bilan/${photo}${period === "month" ? "-2" : ""}.webp)`, backgroundSize: "cover", backgroundPosition: "center" }} />}
+        : <div style={{ position: "absolute", inset: 0, backgroundImage: `url(/bilan/${photo}${period === "month" || alt ? "-2" : ""}.webp)`, backgroundSize: "cover", backgroundPosition: "center" }} />}
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(7,10,13,.5) 0%, rgba(7,10,13,.05) 30%, rgba(7,10,13,.55) 64%, #070a0d 100%)" }} />
     </div>
   );
@@ -171,12 +173,12 @@ export function ExamplePromise({ n }: { n?: string }) {
   return <div style={{ fontSize: 13.5, fontWeight: 700, color: "rgba(255,255,255,0.8)" }}>{n ? `Le bilan de ${n} mesurera le sien.` : "Ton bilan mesurera le tien."}</div>;
 }
 /* Le grand chiffre et sa phrase forment le titre de l'écran (h2). */
-function Hero({ big, unit, cap, color }: { big: string | number; unit?: string; cap: string; color: string }) {
+export function Hero({ big, unit, cap, color }: { big: string | number; unit?: string; cap: string; color: string }) {
   const example = useContext(ExampleCtx);
   return (
     <h2 style={{ margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
       {example && <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.75)", textShadow: "0 1px 6px rgba(0,0,0,.6)" }}>Chez un sportif ThePerfClub</span>}
-      <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 80, lineHeight: 0.92, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", color, textShadow: "0 2px 18px rgba(0,0,0,.45)" }}>{big}{unit && <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: 0, opacity: 0.85 }}> {unit}</span>}</span>
+      <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(56px, 9.4vh, 80px)", lineHeight: 0.92, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", color, textShadow: "0 2px 18px rgba(0,0,0,.45)" }}>{big}{unit && <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: 0, opacity: 0.85 }}> {unit}</span>}</span>
       <span style={{ fontSize: 19, fontWeight: 700, lineHeight: 1.3, color: "#fff", textWrap: "balance" } as React.CSSProperties}>{cap.replace(/ ([:;!?])/g, "\u00a0$1")}</span>
     </h2>
   );
@@ -792,7 +794,8 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
           {!bilan && !failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "On rassemble les données du groupe…" : n ? "On rassemble ses données…" : "On rassemble tes données…"}</div>}
           {failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "Impossible de charger le bilan du groupe." : n ? `Impossible de charger le bilan de ${n}.` : "Impossible de charger ton bilan."} Réessaie dans un instant.</div>}
           {bilan && !slides.length && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "Pas encore assez de données pour ce bilan. Il se construit tout seul quand tes sportifs remplissent leur point forme et notent leurs séances." : n ? `Pas encore assez de données pour ce bilan. Il se construit tout seul quand ${n} remplit son point forme et note ses séances.` : "Pas encore assez de données pour ce bilan. Remplis ton point forme et note tes séances quelques jours : il se construit tout seul."}</div>}
-          {photo && slide && <div aria-hidden="true" style={{ flex: "0 0 auto", height: "min(14vh, 112px)" }} />}
+          {/* Hauteur en vh (2026-11-04, Gildas : « sur desktop il faut trop scroller ») : 112 px sur un téléphone, moins sur une fenêtre basse. */}
+          {photo && slide && <div aria-hidden="true" style={{ flex: "0 0 auto", height: "clamp(0px, calc(28vh - 120px), 112px)" }} />}
           {slide && slideNode && (locked && !OPEN_SLIDES.has(slide.kind) ? lockSlide(slideNode, `bilan_${slide.kind}`, !!n || group, unlock) : slideNode)}
         </div>
 

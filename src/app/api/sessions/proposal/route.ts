@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     const r = await freezeMorningProposal(admin, target, date);
     if (!r) return Response.json({ ok: true, proposal: null });
     const sent = r.frozen ? await notifyCoachesIfLighten(admin, target, date, r) : 0;
-    return Response.json({ ok: true, sessionId: r.sessionId, proposal: r.proposal, frozen: r.frozen, sent });
+    return Response.json({ ok: true, sessionId: r.sessionId, proposal: r.proposal, frozen: r.frozen, name: r.name ?? null, sent });
   } catch (e) {
     console.error("[reco du matin]", e);
     return Response.json({ error: e instanceof Error ? e.message : "Erreur" }, { status: 500 });

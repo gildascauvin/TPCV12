@@ -1,5 +1,6 @@
 "use client";
 
+import { HARDER, EASIER, NEUTRAL, LESS, MORE, MID, diffColor } from "@/lib/physioColors";
 import { useState } from "react";
 import type { ExtraIndexCard } from "@/components/conseils/IndexCards";
 import MetricChart from "@/components/conseils/MetricChart";
@@ -14,8 +15,6 @@ import { isAndroidApp } from "@/lib/native";
    chart (MetricChart) une fois dépliées. Absentes sans données physiologiques. Sportif uniquement
    (le coach ne lit pas health_* : RLS). */
 
-const HARDER = "#ff8a55", EASIER = "#6ede8a", NEUTRAL = "#fff";
-const LESS = "#ffb35c", MORE = "#6da7ec", MID = "rgba(255,255,255,.55)";
 const fmtGap = (x: number) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x).toFixed(1).replace(".", ",")}`;
 
 type Ok = Extract<HeartResult, { kind: "ok" }>;
@@ -151,7 +150,6 @@ export function heartFamilyCards(physio: PhysioData | null | undefined, referenc
 }
 
 const diffWord = (d: number) => (d >= 7.5 ? "très dure" : d >= 4.5 ? "dure" : d >= 2.5 ? "modérée" : "légère"); // mots de Foster, voir qualitativeDifficulty
-const diffColor = (d: number) => (d >= 7.5 ? "#ff8a55" : d >= 4.5 ? "#ffd27a" : "#6ede8a");
 
 function HeartPairChart({ dates, byDate }: { dates: string[]; byDate: Map<string, { id: string; name: string | null; r: HeartResult; rpe: number }> }) {
   const [picked, setPicked] = useState<number | null>(() => {

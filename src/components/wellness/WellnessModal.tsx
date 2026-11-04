@@ -1,5 +1,7 @@
 "use client";
 
+import { requestCoachCheckinResult } from "@/components/coach/CoachResultHost";
+import type { AutoregProposal } from "@/lib/autoregPersonal";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { hapticTick } from "@/lib/native";
 import { useEffect, useRef, useState } from "react";
@@ -369,7 +371,14 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     /* Reco du matin figée côté serveur (2026-10-23) ; le coach lié est prévenu depuis elle si elle dit
        d'alléger. Remplace /api/push/event, qui recalculait la reco avec le moteur générique. */
     if (!offline) fetch("/api/sessions/proposal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subject ? { date, athleteUserId: subject.userId } : { date }) })
-      .then(r => { if (!r.ok) console.error("[reco du matin]", r.status); })
+      .then(async r => {
+        if (!r.ok) { console.error("[reco du matin]", r.status); return; }
+        /* Point forme saisi par le coach (2026-11-04) : la slide « Sa séance du jour », depuis la reco figée. */
+        const j = await r.json().catch(() => null) as { sessionId?: string; name?: string | null; proposal?: AutoregProposal | null } | null;
+        if (subject && !skipResult && j?.proposal && j.sessionId) {
+          requestCoachCheckinResult({ subject: subject.name, athleteId: subject.athleteId, date, session: { id: j.sessionId, name: j.name ?? null, target_difficulty: j.proposal.original_difficulty, done: false, autoreg_proposal: j.proposal } });
+        }
+      })
       .catch(e => console.error("[reco du matin]", e));
     setSaving(false);
     // Écran de résultat pour tous (2026-10-22) : score, insight, norme ; la comparaison à la nuit s'y ajoute si la montre l'a.
