@@ -7,6 +7,9 @@ import EmptyDayCard from "@/components/sessions/EmptyDayCard";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import { RestDecisionRing, DoneDecisionRing } from "@/components/sessions/DecisionRing";
+import SportBanner from "@/components/today/SportBanner";
+import { sportIllustration } from "@/lib/sportPhoto";
+import { breathForDir, SPORT_PHOTO_BEHIND_RING } from "@/lib/ringAmbience";
 import { validDecision } from "@/lib/autoregDecisionRecord";
 import LockedBlur from "@/components/paywall/LockedBlur";
 import AlertBox from "@/components/calendar/AlertBox";
@@ -339,6 +342,11 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      carte Coach Control reste calme ; l'AlertBox interne (decision.text) et la section "À décider
      maintenant" suffisent déjà à signaler l'attention requise, pas besoin d'un 2e repère visuel). */
   const badgeColor = decisionCardColor(decision.icon);
+  /* Ambiance (2026-11-04, POC « L'anneau, niveau 4 ») : photo du sport du sportif teintée par la décision,
+     halo renforcé, souffle selon la reco ; même anneau que l'Accueil du sportif. */
+  const ringAmbient = SPORT_PHOTO_BEHIND_RING && !!sportIllustration(athlete.sport);
+  const ringBreath = breathForDir(decision.suggestion?.dir);
+  const doneGap = topSession && topSession.rpe != null && topSession.target_difficulty != null ? topSession.rpe - topSession.target_difficulty : 0;
 
   /* Surface translucide "élevée" plutôt que DARK_CARD_BG (2026-09-26) : la page coach porte
      désormais elle-même DARK_CARD_BG (CoachPageBg.tsx, demande de Gildas "le même BG que le
@@ -347,8 +355,8 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      sa taille). Un voile blanc translucide la fait au contraire lire comme un panneau posé
      au-dessus, quel que soit le fond sombre derrière (dashboard coach ET aperçus onboarding). */
   return (
-    <div data-tour={tourId} style={page ? { position: "relative", minWidth: 0, color: "#fff" } : {
-      position: "relative", overflow: "hidden", minWidth: 0,
+    <div data-tour={tourId} style={page ? { position: "relative", minWidth: 0, color: "#fff", isolation: "isolate" } : {
+      position: "relative", overflow: "hidden", minWidth: 0, isolation: "isolate",
       background: "rgba(255,255,255,.055)",
       border: showReviewed ? "1.5px solid rgba(47,158,68,.30)" : "1px solid rgba(255,255,255,.10)",
       borderRadius: 24, padding: 18,
@@ -356,6 +364,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       transition: "border 0.3s ease, box-shadow 0.3s ease",
       color: "#fff",
     }}>
+      {ringAmbient && <SportBanner sport={athlete.sport} color={badgeColor} height={page ? 440 : 330} radius={page ? 0 : 24} zIndex={-1} maxWidth={page ? 1000 : undefined} />}
       {!page && <div style={{ position: "absolute", top: 12, right: 14, zIndex: 2 }} onClick={e => e.stopPropagation()}>
         <ShareButton
           resourceType="coach_athlete"
@@ -412,13 +421,15 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
                 ringSize={ringSz}
                 ringFluid
                 ringGlow={badgeColor}
+                ringBreath={ringBreath}
+                ringAmbient={ringAmbient}
                 onSetDifficulty={async d => { await onSetDifficulty?.(topSession!, d); }}
                 isActive
               />
             </div>
           )
-            : todaySessions.length === 0 || !topSession ? <RestDecisionRing size={ringSz} hideHint fluid glow={badgeColor} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked />
-            : <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} hideZone hideHint fluid glow={badgeColor} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked />}
+            : todaySessions.length === 0 || !topSession ? <RestDecisionRing size={ringSz} hideHint fluid glow={badgeColor} ambient={ringAmbient} breath="flat" centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked />
+            : <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} hideZone hideHint fluid glow={badgeColor} ambient={ringAmbient} breath={doneGap >= 2 ? "low" : "flat"} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked />}
         </div>
       )}
       <LockedBlur locked={!!locked} bare={lockedBare} surface="coach_card" onUnlock={() => onUnlock?.()} title="Décision prête" sub="Vois quoi faire de cette séance." cta="Activer le Coach Control" radius={24}>
@@ -445,6 +456,8 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
                 ringSize={ringSz}
                 ringFluid
                 ringGlow={badgeColor}
+                ringBreath={ringBreath}
+                ringAmbient={ringAmbient}
                 onHint={setRingHint}
                 actionsSlot={actionsSlot}
                 severityColor={decision.suggestion ? badgeColor : undefined}
@@ -466,9 +479,11 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               />
             </div>
           ) : todaySessions.length === 0 || !topSession ? (
-            <RestDecisionRing size={ringSz} hideHint fluid glow={badgeColor} centerTitle={decision.title ?? decision.text.split("\n")[0]} />
+            <RestDecisionRing size={ringSz} hideHint fluid glow={badgeColor} ambient={ringAmbient} breath="flat" centerTitle={decision.title ?? decision.text.split("\n")[0]} />
           ) : (
-            <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} zone={decision.doneZone} hideHint fluid glow={badgeColor} centerTitle={decision.title ?? decision.text.split("\n")[0]} />
+            <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} zone={decision.doneZone} hideHint fluid glow={badgeColor} ambient={ringAmbient} breath={doneGap >= 2 ? "low" : "flat"}
+              zoneLabel={decision.doneZone ? "Conseillé" : undefined} introFrom={decision.doneZone ? (decision.doneZone.low + decision.doneZone.high) / 2 : undefined}
+              centerTitle={decision.title ?? decision.text.split("\n")[0]} />
           )}
         </div>}
         {(!!athlete.invite_email || showBadge || showReviewed) && (

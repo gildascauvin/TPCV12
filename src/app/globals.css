@@ -401,3 +401,14 @@ html.native input, html.native textarea, html.native [contenteditable="true"] { 
 /* Carte de séance → tiroir (lib/morph.ts) : un peu plus lent que la navigation, la carte doit se lire. */
 ::view-transition-group(tpc-session) { animation-duration: .32s; animation-timing-function: cubic-bezier(.2,0,0,1); }
 ::view-transition-old(tpc-session), ::view-transition-new(tpc-session) { animation-duration: .32s; height: 100%; object-fit: cover; }
+
+/* Souffle de l'anneau de décision (2026-11-04, DecisionRing `breath`) : deux rythmes décalés (--p1, --p2)
+   qui ne se recalent jamais, d'où un mouvement organique. Seuls la taille (±1,5 % max) et le halo bougent ;
+   la zone et le curseur restent à leur place relative. Coupé si l'appareil demande moins d'animations. */
+@keyframes tpcBreath1 { 0%, 100% { transform: scale(1); } 42% { transform: scale(calc(1 + var(--amp, .008))); } }
+@keyframes tpcBreath2 { 0%, 100% { transform: translateY(0) rotate(0deg); } 38% { transform: translateY(var(--dy, 0px)) rotate(var(--rot, 0deg)); } 70% { transform: translateY(calc(var(--dy, 0px) * -.4)) rotate(calc(var(--rot, 0deg) * -.6)); } }
+@keyframes tpcBreathGlow { 0%, 100% { opacity: var(--g0, .5); transform: translate(-50%, -50%) scale(.95); } 42% { opacity: 1; transform: translate(-50%, -50%) scale(1.06); } }
+.tpc-breath1 { animation: tpcBreath1 var(--p1, 6s) ease-in-out infinite; }
+.tpc-breath2 { animation: tpcBreath2 var(--p2, 9s) ease-in-out infinite; }
+.tpc-breath-glow { animation: tpcBreathGlow var(--p1, 6s) ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .tpc-breath1, .tpc-breath2, .tpc-breath-glow { animation: none !important; } }

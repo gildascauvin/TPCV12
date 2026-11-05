@@ -8,6 +8,7 @@ import InviteHost from "@/components/coach/InviteHost";
 import PhysioRevealHost from "@/components/physio/PhysioRevealHost";
 import CoachResultHost from "@/components/coach/CoachResultHost";
 import ToastHost from "@/components/layout/ToastHost";
+import PointFormeGate from "@/components/layout/PointFormeGate";
 
 /* Verrouillage de page entière (.locked, coin cadenas sur les CTA premium) retiré le 2026-08-19
    (chantier "gating save") : un compte gratuit navigue et interagit librement partout désormais,
@@ -43,6 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {role === "coach" && <InviteHost />}
       {role === "coach" && <CoachResultHost />}
       {role === "athlete" && <PhysioRevealHost userId={user.id} />}
+      {role === "athlete" && <PointFormeGate userId={user.id} />}
       {role === "athlete" && <LiveSessionHost userId={user.id} userName={(profile as { name?: string | null } | null)?.name ?? "Toi"} />}
     </div>
   );

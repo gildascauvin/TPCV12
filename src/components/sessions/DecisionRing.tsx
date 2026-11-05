@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { hapticTick } from "@/lib/native";
 import { type AutoregDir, zoneRange, pctToPoints } from "@/lib/autoregulation";
+import { BREATH_VARS, type RingBreath } from "@/lib/ringAmbience";
 
 /* Jauge de décision en ANNEAU (2026-09-30, variante R2 du POC "Onglet Charge, version retenue" :
    https://claude.ai/artifact/McRwVAu86X9vArN2JRHBGF). Même contrat que DecisionGauge.tsx (la barre
@@ -149,7 +150,16 @@ export function decisionRingCenterY(size = 188) {
    La carte décision disparaît : conseil, CTA et Phase sont posés sous l'anneau par l'appelant. */
 /* introFrom (2026-10-29) : l'animation d'arrivée part de cette valeur au lieu du bas de l'échelle —
    l'anneau remonté après une décision (ou son annulation) glisse d'où il était vers sa destination. */
-type BigRingProps = { fluid?: boolean; centerTitle?: string; titleLocked?: boolean; glow?: string; introFrom?: number };
+/* Ambiance (2026-11-04, POC « L'anneau, niveau 4 ») :
+   - `breath` : l'anneau respire (taille ±1,5 % et halo), rythme selon la reco ; arrêté pendant le glisser ;
+   - `ambient` : halo plus fort, éclairci par-dessus la photo de sport (SportBanner) ;
+   - `zoneLabel` : étiquette posée sur la zone (« Conseillé » sur une séance faite) ;
+   - `kicker` : petit texte au-dessus du titre (repère, ex. « Charge de la semaine ») ;
+   - `axis` : la valeur est une position 0..1 sur un autre axe (score de charge un jour de repos), zone et
+     couleurs fournies ; même grammaire curseur + zone que l'échelle de difficulté. */
+type BigRingProps = { fluid?: boolean; centerTitle?: string; titleLocked?: boolean; glow?: string; introFrom?: number;
+  breath?: RingBreath; ambient?: boolean; zoneLabel?: string; kicker?: string;
+  axis?: { zone: [number, number]; colors: [string, string] } };
 
 export function RestDecisionRing({ size, light, hideHint, ...big }: { size?: number; light?: boolean; hideHint?: boolean } & BigRingProps) {
   return (
@@ -188,7 +198,7 @@ export function DoneDecisionRing({ rpe, planned, size, light, hideZone = false, 
 
 export default function DecisionRing({
   zoneLow, zoneHigh, recoDir, value, onChange, readOnly, plannedMarker, hint: hintOverride, size: sizeProp = 188, light, centerLabel, hideZone = false, hideHint = false, onHint,
-  fluid = false, centerTitle, titleLocked = false, glow, introFrom,
+  fluid = false, centerTitle, titleLocked = false, glow, introFrom, breath, ambient = false, zoneLabel, kicker, axis,
 }: BigRingProps & {
   /* Texte sous l'anneau masqué (2026-10-12, Gildas) : il devient le titre de la carte décision
      (Premium, /today + Coach Control), remonté par `onHint`. Le gratuit le garde sous l'anneau. */
@@ -249,7 +259,7 @@ export default function DecisionRing({
     return () => cancelAnimationFrame(raf);
   }, []);
   const introRunning = intro < 1;
-  const introStart = introFrom ?? MIN;
+  const introStart = introFrom ?? (axis ? 0 : MIN);
   const drawValue = introRunning ? introStart + (value - introStart) * (1 - Math.pow(1 - intro, 3)) : value;
 
   const r = Math.round(size * 0.36), sw = Math.round(size * (fluid ? 0.055 : 0.085));
@@ -260,7 +270,9 @@ export default function DecisionRing({
   const knob = fluid ? Math.max(1, sw / 16) : 1;
 
   const roundedValue = Math.round(value);
-  const inZone = !hideZone && roundedValue >= zoneLow && roundedValue <= zoneHigh;
+  const inZone = axis ? value >= axis.zone[0] && value <= axis.zone[1] : !hideZone && roundedValue >= zoneLow && roundedValue <= zoneHigh;
+  const toAng = axis ? (v: number) => A0 + Math.max(0, Math.min(1, v)) * (A1 - A0) : ang;
+  const floor = axis ? 0 : MIN;
 
   /* Angle du pointeur -> RPE entier. Dans l'ouverture du bas (|angle| > 120°), on colle à
      l'extrémité la plus proche plutôt que de sauter d'un bout à l'autre. */
@@ -301,23 +313,24 @@ export default function DecisionRing({
 
   // Même marge visuelle que la barre (±0,35) : le curseur est centré sur l'entier, une plage qui
   // s'arrêtait pile à l'entier le couperait en deux sur les bornes.
-  const zoneA0 = ang(Math.max(MIN, zoneLow - 0.35));
-  const zoneA1 = ang(Math.min(MAX, zoneHigh + 0.35));
+  const zoneA0 = axis ? toAng(axis.zone[0]) : ang(Math.max(MIN, zoneLow - 0.35));
+  const zoneA1 = axis ? toAng(axis.zone[1]) : ang(Math.min(MAX, zoneHigh + 0.35));
 
   /* Le dégradé suit l'arc : découpé en petits segments dont la couleur est interpolée (un
      linearGradient SVG suivrait la corde, pas la courbe). */
-  const [c0, c1] = DIFF_STOPS[roundedValue >= 8 ? "hard" : roundedValue >= 5 ? "moderate" : "easy"];
-  const fillEnd = ang(drawValue);
+  const [c0, c1] = axis ? axis.colors : DIFF_STOPS[roundedValue >= 8 ? "hard" : roundedValue >= 5 ? "moderate" : "easy"];
+  const fillEnd = toAng(drawValue);
   const SEGS = 28;
-  const fills = drawValue > MIN ? Array.from({ length: SEGS }, (_, i) => ({
+  const fills = drawValue > floor ? Array.from({ length: SEGS }, (_, i) => ({
     d: arcPath(cx, cy, r, A0 + ((fillEnd - A0) * i) / SEGS, A0 + ((fillEnd - A0) * (i + 1.02)) / SEGS),
     color: mixHex(c0, c1, (i + 0.5) / SEGS),
   })) : [];
-  const [mx, my] = polar(cx, cy, r, ang(drawValue));
+  const [mx, my] = polar(cx, cy, r, toAng(drawValue));
   const showMarker = plannedMarker != null && Math.round(plannedMarker) !== roundedValue;
 
   const k = recoDir ?? "flat";
-  const zonePos = roundedValue < zoneLow ? "Sous la zone" : roundedValue > zoneHigh ? "Au-dessus de la zone" : "Dans la zone";
+  const zonePos = axis ? (value < axis.zone[0] ? "Sous la zone" : value > axis.zone[1] ? "Au-dessus de la zone" : "Dans la zone")
+    : roundedValue < zoneLow ? "Sous la zone" : roundedValue > zoneHigh ? "Au-dessus de la zone" : "Dans la zone";
   const hintText = hintOverride ?? zonePos;
   const fitKey = fluid ? `${size}|${centerTitle ?? hintText}` : "";
   useIsoLayoutEffect(() => { setTitleShrink(0); }, [fitKey]);
@@ -334,7 +347,13 @@ export default function DecisionRing({
   return (
     <div ref={wrapRef} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: fluid ? "100%" : undefined }}>
       <div style={{ position: "relative", width: size, height: h }}>
-        {fluid && glow && <div aria-hidden style={{ position: "absolute", left: "50%", top: cy, width: size * 1.15, height: size * 1.15, transform: "translate(-50%, -50%)", borderRadius: "50%", background: `radial-gradient(circle, ${glow}38 0%, ${glow}12 45%, transparent 70%)`, pointerEvents: "none" }} />}
+        {fluid && glow && <div aria-hidden className={breath && !dragging ? "tpc-breath-glow" : undefined} style={{ position: "absolute", left: "50%", top: cy, width: size * 1.15, height: size * 1.15, transform: "translate(-50%, -50%)", borderRadius: "50%", pointerEvents: "none",
+          ...(breath ? BREATH_VARS[breath] : {}),
+          /* Sur la photo de sport, le halo d'avant (22 %) disparaissait : plus fort et éclairci par-dessus. */
+          background: ambient ? `radial-gradient(circle, ${glow}a0 0%, ${glow}40 38%, transparent 66%)` : `radial-gradient(circle, ${glow}38 0%, ${glow}12 45%, transparent 70%)`,
+          mixBlendMode: ambient ? "screen" : undefined } as React.CSSProperties} />}
+        <div className={breath && !dragging ? "tpc-breath1" : undefined} style={breath ? (BREATH_VARS[breath] as React.CSSProperties) : undefined}>
+        <div className={breath && !dragging ? "tpc-breath2" : undefined} style={breath ? (BREATH_VARS[breath] as React.CSSProperties) : undefined}>
         <svg
           ref={svgRef}
           width={size} height={h} viewBox={`0 0 ${size} ${h}`}
@@ -361,8 +380,8 @@ export default function DecisionRing({
               curseur, qui démarre sur le prévu ; il apparaît dès qu'on déplace le curseur, et reste
               en mode décidé pour montrer d'où on est parti. */}
           {showMarker && (() => {
-            const [ax, ay] = polar(cx, cy, r - sw * 0.8, ang(plannedMarker!));
-            const [bx, by] = polar(cx, cy, r + sw * 0.8, ang(plannedMarker!));
+            const [ax, ay] = polar(cx, cy, r - sw * 0.8, toAng(plannedMarker!));
+            const [bx, by] = polar(cx, cy, r + sw * 0.8, toAng(plannedMarker!));
             return <line x1={ax} y1={ay} x2={bx} y2={by} stroke="#fff" strokeWidth={3} strokeLinecap="round" />;
           })()}
           {!hideZone && <path d={sectorPath(cx, cy, rIn, rOut, zoneA0, zoneA1)} fill="none" stroke={light ? "rgba(0,0,0,.55)" : "rgba(255,255,255,.75)"} strokeWidth={2} strokeDasharray="3 3" />}
@@ -377,8 +396,14 @@ export default function DecisionRing({
           {/* Zone de saisie, au-dessus de tout : seul l'anneau bloque le défilement au toucher. */}
           {!readOnly && <path d={arcPath(cx, cy, r, A0, A1)} fill="none" stroke="transparent" strokeWidth={sw * 3.2} strokeLinecap="round" style={{ touchAction: "none" }} />}
         </svg>
+        </div>
+        </div>
         {/* Arc ouvert en bas : le centre du cercle n'est pas celui de la boîte, on ancre sur cy.
             Mêmes tailles relatives qu'AggregateGauge (.215 valeur, .063 libellé). */}
+        {zoneLabel && !hideZone && (() => {
+          const [tx, ty] = polar(cx, cy, rOut + 13, (zoneA0 + zoneA1) / 2);
+          return <span aria-hidden style={{ position: "absolute", left: tx, top: ty, transform: "translate(-50%, -50%)", fontFamily: "var(--font-mono), monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: light ? "rgba(23,27,31,.7)" : "rgba(255,255,255,.78)", whiteSpace: "nowrap", pointerEvents: "none" }}>{zoneLabel}</span>;
+        })()}
         {fluid ? (() => {
           const t = centerTitle ?? hintText;
           const titleFont = Math.round(size * (t.length > 16 ? 0.1 : 0.12)) - titleShrink;
@@ -388,6 +413,11 @@ export default function DecisionRing({
               display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", pointerEvents: "none",
             }}>
               {/* Gratuit : le chiffre + son mot restent lisibles, le titre (la décision) est flouté. */}
+              {kicker && !(titleLocked && centerLabel) && (
+                <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: light ? "rgba(23,27,31,.7)" : "rgba(255,255,255,.75)", marginBottom: 6, maxWidth: Math.round(rIn * 1.7), textAlign: "center", lineHeight: 1.3 }}>
+                  {kicker}
+                </span>
+              )}
               {titleLocked && centerLabel && (
                 <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, fontSize: 12, letterSpacing: "0.09em", textTransform: "uppercase", color: light ? "rgba(23,27,31,.75)" : "rgba(255,255,255,.78)", marginBottom: 8 }}>
                   {centerLabel.arrow} · {centerLabel.verb}

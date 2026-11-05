@@ -177,9 +177,11 @@ interface Props {
   subject?: { athleteId: string; userId: string; name: string; /** Libellé gardé entier (« ton sportif »), pas réduit au prénom. */ label?: boolean; /** En-tête à la place de « Point forme de X ». */ heading?: string };
   /** Check-in imaginé (onboarding coach, 2026-10-29) : aucun appel serveur, ni historique ni reco du matin. */
   offline?: boolean;
+  /* Point forme obligatoire (2026-11-04) : pas de « Plus tard », pas de fermeture au clic à côté. */
+  required?: boolean;
 }
 
-export default function WellnessModal({ date, onSave, onClose, wizardHero, cancelLabel = "Annuler", onBack, wellnessHistory, askPlan = false, skipResult = false, embedded = false, scoreSlot, scoreSize = 200, footerOffset = 0, subject, offline = false }: Props) {
+export default function WellnessModal({ date, onSave, onClose, wizardHero, cancelLabel = "Annuler", onBack, wellnessHistory, askPlan = false, skipResult = false, embedded = false, scoreSlot, scoreSize = 200, footerOffset = 0, subject, offline = false, required = false }: Props) {
   const who = subject ? (subject.label ? subject.name : subject.name.split(" ")[0]) : null;
   // En début de phrase : « Ton sportif a envie… ».
   const Who = who ? who.charAt(0).toUpperCase() + who.slice(1) : null;
@@ -455,10 +457,10 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
               style={{ width: 34, height: 34, borderRadius: "50%", border: "1px solid rgba(0,0,0,0.10)", background: "#fff", color: "#172018", cursor: "pointer", fontSize: 16, flexShrink: 0, display: "grid", placeItems: "center", marginLeft: -2 }}>←</button>
           )}
           {who && <div style={{ fontSize: 13, fontWeight: 700, color: "#172018", minWidth: 0 }}>{subject?.heading ?? `Point forme de ${who}`}</div>}
-          <button onClick={closeAnimated}
+          {!required && <button onClick={closeAnimated}
             style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "#7b7f82", fontSize: 14, fontWeight: 700, padding: "6px 2px", fontFamily: "inherit" }}>
             {cancelLabel}
-          </button>
+          </button>}
         </div>
 
         {/* Progress dots */}
@@ -642,11 +644,11 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         zIndex: 2147483100, overflow: "hidden",
       }}
       className={exitClass}
-      onClick={(e) => { if (e.target === e.currentTarget) closeAnimated(); }}
+      onClick={(e) => { if (!required && e.target === e.currentTarget) closeAnimated(); }}
     >
       {isMd && !wizardHero && (
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 48, background: DARK_CARD_BG }}
-          onClick={closeAnimated}>
+          onClick={required ? undefined : closeAnimated}>
           <div onClick={e => e.stopPropagation()}>{renderBuildingScore(260)}</div>
         </div>
       )}

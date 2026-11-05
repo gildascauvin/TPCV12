@@ -66,6 +66,14 @@ Modèle diagonal en vigueur depuis le 05/10 (remplace les grilles z/Hopkins et l
   - `glow` = halo de la couleur de sévérité ; `titleLocked` en gratuit (« 7 · Modérée » lisible, titre flouté) ;
   - plus de carte décision : `AlertBox variant="bare"` (`components/calendar/AlertBox.tsx`) affiche conseil + CTA + Phase sous l'anneau, sans la 1re ligne (déjà au centre) ;
   - variantes `RestDecisionRing`, `DoneDecisionRing`, `DecisionRingMini` + `decisionRingState()` (miniature de l'onglet Aujourd'hui, radar coach). Vaut pour /today et `CoachCard` ; la vue Groupe du Coach Control garde les miniatures.
+- Anneau, état du 05/11 (POC « L'anneau, niveau 4 », https://claude.ai/artifact/U7Qu1ECY9o3LdvgTyY7vdP) :
+  - `breath` (`lib/ringAmbience.ts`, animations `tpcBreath*` de globals.css) : l'anneau respire, lent si la reco allège, vif si elle pousse, calme sinon ; taille ±1,5 % max et halo, zone et curseur immobiles ; coupé pendant le glisser et en mouvement réduit ;
+  - `zoneLabel` (« Conseillé » posé sur la zone d'une séance faite) + `introFrom` = milieu de la zone conseillée : le curseur glisse du conseillé jusqu'au ressenti (/today et carte coach) ;
+  - `axis` + `kicker` : jour de repos = score de l'onglet Charge (`chargeAggregatePos`, zone `AGG_BANDS.charge` « Optimal »), kicker = titre récup, titre « Semaine dans / sous / au-dessus de la zone » ; gratuit ou historique insuffisant : ancien `RestDecisionRing` ;
+  - photo du sport derrière l'anneau (`components/today/SportBanner.tsx`, bichromie teintée par `decisionCardColor`, halo `ambient`) : prête mais COUPÉE (`SPORT_PHOTO_BEHIND_RING = false`), photos de 480 px trop petites sur ordinateur ;
+  - sous l'anneau, `components/today/FlipBlock.tsx` : conseil + CTA devant, Phase au dos, indice « Phase · <titre> ↻ ».
+- Point forme obligatoire (05/11) : `WellnessModal required` (ni « Plus tard » ni fermeture à côté) tant que celui du jour manque sur /today ; `components/layout/PointFormeGate.tsx` (layout sportif) renvoie Planning / Analyses / Programmes vers /today ; pas de garde hors ligne ni côté coach.
+- Photo de sport : `lib/sportPhoto.ts` (`SPORT_ILLU`, `ILLU_Y`, `sportIllustration`), partagé par les bilans et l'anneau.
 - `AutoregButtons.tsx` :
   - états `active` / `decided` ; le verbe du CTA suit la position réelle du curseur ; jamais de % sur un bouton ; clic hors zone = saute dans la zone ET applique ;
   - CTA rendus par portail dans `actionsSlot` (`.autoreg-slot`, masqué vide par globals.css) ;

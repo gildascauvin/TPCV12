@@ -21,6 +21,7 @@ import LockedBlur from "@/components/paywall/LockedBlur";
 import { previewSlides } from "@/components/onboarding/InsightSteps";
 import { fr1 } from "@/components/physio/PhysioRevealHost";
 import { sportCover } from "@/lib/programCovers";
+import { illuPos, sportIllustration } from "@/lib/sportPhoto";
 import { computeGroupBilan, type GroupAthlete, type GroupBilan, type GroupSlide, type DayMark } from "@/lib/groupBilan";
 
 type Props = {
@@ -122,28 +123,7 @@ const TEST_ILLU: [RegExp, string][] = [
 ];
 /* Photo du sport prise dans la bibliothèque d'illustrations de l'app (2026-11-03, Gildas : « je fais du
    sprint et j'ai un mec qui fait un footing »), sinon la couverture de programme de son sport. */
-const SPORT_ILLU: [RegExp, string][] = [
-  [/vitesse|sprint/, "sprint"], [/saut|pliom|puissance|explosiv/, "pliometrie"], [/halt|power|muscu|crossfit|fitness/, "crossfit"],
-  [/calisth|gymnast/, "gym"], [/hyrox|perte de poids|police|gendarm|pompier|gign|arm[ée]e/, "circuit"], [/trail/, "trail"],
-  [/\bv[ée]lo\b|cyclis|bmx/, "velo"], [/natation/, "natation"], [/aviron/, "aviron"], [/ski/, "ski"], [/hockey/, "hockey"],
-  [/martia|combat|\bmma\b/, "mma"], [/boxe/, "boxe"], [/judo/, "judo"],
-  /* Sport tapé dans la recherche IA (« Autre - X ») ou famille large (2026-11-04) : chaque sport collectif a sa
-     photo (un handballeur voyait du foot), tennis/padel/surf ont la leur, la prépa physique générale va au cross-training. */
-  [/tennis/, "tennis"], [/padel/, "padel"], [/surf/, "surf"],
-  [/pr[ée]paration physique|polyvalent|cross-training|hybrid|d[ée]velopp[ée]/, "crossfit"],
-  [/escalade/, "escalade"], [/golf/, "golf"], [/voile/, "voile"], [/[ée]quitation/, "equitation"],
-  [/hand/, "handball"], [/basket/, "basket"], [/rugby/, "rugby"], [/volley/, "volley"],
-  [/collectif|baseball|foot/, "collectif"], [/pr[ée]vention|r[ée][ée]ducation|mobilit/, "mobilite"], [/endurance|triathlon|course/, "course"],
-];
-/* Cadrage vertical des illustrations en portrait (2026-11-03) : le bandeau est large, il faut viser le
-   sportif, pas le haut de l'image (le filet au-dessus de l'athlète de crossfit). */
-const ILLU_Y: Record<string, string> = { crossfit: "62%", sprint: "48%", pliometrie: "58%", course: "42%", velo: "68%", circuit: "60%", collectif: "45%", mobilite: "45%", escalade: "40%", equitation: "30%" };
-export const illuPos = (src: string) => { const k = src.match(/illustrations\/([a-z]+)\.jpg/)?.[1]; return `center ${(k && ILLU_Y[k]) || "35%"}`; };
-export function sportIllustration(sport: string | null | undefined): string | null {
-  const v = (sport ?? "").toLowerCase();
-  const hit = v ? SPORT_ILLU.find(([re]) => re.test(v)) : undefined;
-  return hit ? `/illustrations/${hit[1]}.jpg` : null;
-}
+export { illuPos, sportIllustration };
 export function sportPhotoFor(s: AnySlide, sport: string | null | undefined): { src: string; tint: [string, string] } | null {
   if (s.kind === "tests") {
     const hit = TEST_ILLU.find(([re]) => re.test(s.main.name.toLowerCase()));
