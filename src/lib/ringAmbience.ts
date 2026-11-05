@@ -1,24 +1,10 @@
 import type { AutoregDir } from "@/lib/autoregulation";
 
-/* Ambiance de l'anneau de décision (2026-11-04, POC « L'anneau, niveau 4 ») : la photo du sport prend la
-   couleur de la décision (bichromie sombre → claire) et l'anneau respire à un rythme qui suit la reco.
-   La couleur reste toujours doublée par le titre et la flèche des boutons (jamais seule). */
+/* Ambiance de l'anneau de décision (2026-11-04, POC « L'anneau, niveau 4 ») : l'anneau respire à un rythme
+   qui suit la reco, avec un halo renforcé. Photo de sport derrière l'anneau essayée puis abandonnée (05/11,
+   Gildas) : l'ambiance vient de l'état (couleur + souffle), pas d'une image. */
 
 export type RingBreath = "wait" | "low" | "flat" | "high";
-
-/* Photo du sport derrière l'anneau (SportBanner) : prête mais coupée en prod le 2026-11-05 (Gildas hésite,
-   photos de 480 px trop petites sur ordinateur). Repasser à true pour la rallumer sur /today et la carte coach ;
-   le halo renforcé (`ambient`) suit la photo. */
-export const SPORT_PHOTO_BEHIND_RING = false;
-
-/* [couleur sombre, couleur claire] de la bichromie, à partir de la couleur de décision (decisionCardColor). */
-export function ringTint(color: string | null | undefined): [string, string] {
-  const c = (color ?? "").toLowerCase();
-  if (c === "#d44000" || c === "#dc2626") return ["#2b0e02", "#ff9a5c"];
-  if (c === "#f28a00") return ["#2a1800", "#ffc56b"];
-  if (c === "#2f9e44") return ["#04170b", "#7bd897"];
-  return ["#14181b", "#8d969e"];
-}
 
 /* Rythme : lent et lourd quand il faut alléger, vif quand on peut pousser, calme sinon. */
 export function breathForDir(dir: AutoregDir | null | undefined): RingBreath {

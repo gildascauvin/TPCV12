@@ -70,8 +70,9 @@ Modèle diagonal en vigueur depuis le 05/10 (remplace les grilles z/Hopkins et l
   - `breath` (`lib/ringAmbience.ts`, animations `tpcBreath*` de globals.css) : l'anneau respire, lent si la reco allège, vif si elle pousse, calme sinon ; taille ±1,5 % max et halo, zone et curseur immobiles ; coupé pendant le glisser et en mouvement réduit ;
   - `zoneLabel` (« Conseillé » posé sur la zone d'une séance faite) + `introFrom` = milieu de la zone conseillée : le curseur glisse du conseillé jusqu'au ressenti (/today et carte coach) ;
   - `axis` + `kicker` : jour de repos = score de l'onglet Charge (`chargeAggregatePos`, zone `AGG_BANDS.charge` « Optimal »), kicker = titre récup, titre « Semaine dans / sous / au-dessus de la zone » ; gratuit ou historique insuffisant : ancien `RestDecisionRing` ;
-  - photo du sport derrière l'anneau (`components/today/SportBanner.tsx`, bichromie teintée par `decisionCardColor`, halo `ambient`) : prête mais COUPÉE (`SPORT_PHOTO_BEHIND_RING = false`), photos de 480 px trop petites sur ordinateur ;
+  - `ambient` = halo renforcé (/today et carte coach) ; photo du sport derrière l'anneau essayée puis ABANDONNÉE le 05/11 (dilue la primitive, aucune app de la catégorie ne le fait) : l'ambiance vient de l'état (couleur + souffle) ;
   - sous l'anneau, `components/today/FlipBlock.tsx` : conseil + CTA devant, Phase au dos, indice « Phase · <titre> ↻ ».
+  - « ▶ Démarrer la séance » sous le conseil (/today, `startFromRing`) une fois la décision prise (titre « … appliquée » / « Difficulté maintenue ») ou s'il n'y a rien à décider ; pas en gratuit ni avant le point forme.
 - Point forme obligatoire (05/11) : `WellnessModal required` (ni « Plus tard » ni fermeture à côté) tant que celui du jour manque sur /today ; `components/layout/PointFormeGate.tsx` (layout sportif) renvoie Planning / Analyses / Programmes vers /today ; pas de garde hors ligne ni côté coach.
 - Photo de sport : `lib/sportPhoto.ts` (`SPORT_ILLU`, `ILLU_Y`, `sportIllustration`), partagé par les bilans et l'anneau.
 - `AutoregButtons.tsx` :

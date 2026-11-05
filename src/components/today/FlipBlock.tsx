@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 /* Bloc qui pivote sous l'anneau (2026-11-04, POC « L'anneau, niveau 4 ») : moins de texte à l'écran sans
    perdre d'info. Devant : le conseil du jour et le bouton ; au dos : la Phase. L'indice donne le nom de la
@@ -13,7 +13,9 @@ export default function FlipBlock({ front, back, backLabel }: {
   backLabel?: string | null;
 }) {
   const [flipped, setFlipped] = useState(false);
-  const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  /* Lu après le montage : calculé pendant le rendu, il différait entre serveur et navigateur (hydratation). */
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => { setReduce(!!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches); }, []);
   if (!back) return <>{front}</>;
   const toggle = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("button, a, input, [role='button']:not([data-flip])")) return;

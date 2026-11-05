@@ -7,9 +7,7 @@ import EmptyDayCard from "@/components/sessions/EmptyDayCard";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import { RestDecisionRing, DoneDecisionRing } from "@/components/sessions/DecisionRing";
-import SportBanner from "@/components/today/SportBanner";
-import { sportIllustration } from "@/lib/sportPhoto";
-import { breathForDir, SPORT_PHOTO_BEHIND_RING } from "@/lib/ringAmbience";
+import { breathForDir } from "@/lib/ringAmbience";
 import { validDecision } from "@/lib/autoregDecisionRecord";
 import LockedBlur from "@/components/paywall/LockedBlur";
 import AlertBox from "@/components/calendar/AlertBox";
@@ -342,9 +340,8 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      carte Coach Control reste calme ; l'AlertBox interne (decision.text) et la section "À décider
      maintenant" suffisent déjà à signaler l'attention requise, pas besoin d'un 2e repère visuel). */
   const badgeColor = decisionCardColor(decision.icon);
-  /* Ambiance (2026-11-04, POC « L'anneau, niveau 4 ») : photo du sport du sportif teintée par la décision,
-     halo renforcé, souffle selon la reco ; même anneau que l'Accueil du sportif. */
-  const ringAmbient = SPORT_PHOTO_BEHIND_RING && !!sportIllustration(athlete.sport);
+  /* Ambiance (2026-11-05) : halo renforcé et souffle selon la reco, même anneau que l'Accueil du sportif. */
+  const ringAmbient = true;
   const ringBreath = breathForDir(decision.suggestion?.dir);
   const doneGap = topSession && topSession.rpe != null && topSession.target_difficulty != null ? topSession.rpe - topSession.target_difficulty : 0;
 
@@ -355,8 +352,8 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      sa taille). Un voile blanc translucide la fait au contraire lire comme un panneau posé
      au-dessus, quel que soit le fond sombre derrière (dashboard coach ET aperçus onboarding). */
   return (
-    <div data-tour={tourId} style={page ? { position: "relative", minWidth: 0, color: "#fff", isolation: "isolate" } : {
-      position: "relative", overflow: "hidden", minWidth: 0, isolation: "isolate",
+    <div data-tour={tourId} style={page ? { position: "relative", minWidth: 0, color: "#fff" } : {
+      position: "relative", overflow: "hidden", minWidth: 0,
       background: "rgba(255,255,255,.055)",
       border: showReviewed ? "1.5px solid rgba(47,158,68,.30)" : "1px solid rgba(255,255,255,.10)",
       borderRadius: 24, padding: 18,
@@ -364,7 +361,6 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       transition: "border 0.3s ease, box-shadow 0.3s ease",
       color: "#fff",
     }}>
-      {ringAmbient && <SportBanner sport={athlete.sport} color={badgeColor} height={page ? 440 : 330} radius={page ? 0 : 24} zIndex={-1} maxWidth={page ? 1000 : undefined} />}
       {!page && <div style={{ position: "absolute", top: 12, right: 14, zIndex: 2 }} onClick={e => e.stopPropagation()}>
         <ShareButton
           resourceType="coach_athlete"

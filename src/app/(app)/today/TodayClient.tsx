@@ -39,10 +39,8 @@ import { revealLabel } from "@/lib/programReveal";
 import { ACTIVITY_LABEL_CHANGED } from "@/components/layout/ActivityPill";
 import { programSportEmoji } from "@/lib/sportCategories";
 import DecisionRing, { RestDecisionRing, DoneDecisionRing, decisionRingState } from "@/components/sessions/DecisionRing";
-import SportBanner from "@/components/today/SportBanner";
 import FlipBlock from "@/components/today/FlipBlock";
-import { sportIllustration } from "@/lib/sportPhoto";
-import { breathForDir, SPORT_PHOTO_BEHIND_RING } from "@/lib/ringAmbience";
+import { breathForDir } from "@/lib/ringAmbience";
 import { computeWellnessBaselineAt, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import AlertBox from "@/components/calendar/AlertBox";
 import { parseAndApply } from "@/lib/loadAdjust";
@@ -520,9 +518,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
      Reste propre à /today : Coach Control et Planning gardent la jauge dans leur carte séance. */
   // Montée dès qu'il y a une séance à ajuster, suggestion système ou non (2026-09-25, retour de
   // Gildas — "même quand ya pas de reco, je veux pouvoir bouger la jauge et avoir le range") :
-  /* Ambiance de l'anneau (2026-11-04, POC « L'anneau, niveau 4 ») : photo du sport teintée par la décision,
-     halo renforcé dessus, souffle selon la reco. Sans sport reconnu : fond actuel, halo d'avant. */
-  const ringAmbient = SPORT_PHOTO_BEHIND_RING && !!sportIllustration(profile.sport);
+  /* Ambiance de l'anneau (2026-11-05) : halo renforcé et souffle selon la reco (la photo du sport a été abandonnée). */
+  const ringAmbient = true;
   /* Jour de repos (2026-11-04, option D2) : l'anneau lit le score de l'onglet Charge (même zone
      « optimal » que l'onglet, mêmes couleurs) au lieu d'un curseur posé au plancher de la difficulté. */
   const restCharge = !decisionLocked && analyticsData && chargeReady ? aggregateFor("charge", analyticsData) : null;
@@ -901,6 +898,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   /* Point forme obligatoire (2026-11-04) : tant que celui du jour n'est pas fait, il s'ouvre sans « Plus
      tard » (ni séance ni Planning avant ; PointFormeGate renvoie ici depuis les autres pages). */
   const pointFormeRequired = !sandboxMode && selectedDate === initialDate && !wellnessFilledToday;
+  /* « Démarrer la séance » sous le conseil : séance du jour à faire, décision prise (titre « … appliquée » /
+     « Difficulté maintenue ») ou rien à décider. Pas en gratuit (bloc flouté), ni avant le point forme. */
+  const startFromRing = !sandboxMode && !decisionLocked && wellnessFilledToday && selectedDate === initialDate
+    && !!autoregTargetTop && !autoregTargetTop.done
+    && (!decision.suggestion || ["Allègement appliqué", "Surcharge appliquée", "Difficulté maintenue"].includes(ringHint ?? ""));
   const embeddedCheckin = !isMd && !sandboxMode && selectedDate === initialDate
     && (showWellness || !wellnessFilledToday);
   const checkinTopSession = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
@@ -1006,13 +1008,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         // apparaître nue.
         // Juste de quoi voir le dernier bouton au-dessus de la navigation (2026-10-04).
         marginBottom: -132, paddingBottom: sheetMode ? (sheetVisibleH ?? sheetH) + 24 : 100,
-        // Contexte d'empilement : la photo de sport (z -1) passe sous le contenu mais au-dessus du fond.
-        position: "relative", isolation: "isolate",
         // Hauteur mini padding compris (2026-10-04) : sans ça, 100vh + 132px de marge faisaient
         // défiler une page même courte, avec un grand vide en bas.
         boxSizing: "border-box",
       }}>
-      {homeTab === "today" && ringAmbient && <SportBanner sport={profile.sport} color={decisionColor} zIndex={-1} maxWidth={isMd ? (isLg ? 1000 : 720) : undefined} />}
       <CalendarHeader
         /* Pleine largeur comme le Planning (2026-10-04) : même grille d'en-tête et de bandeau. */
         mode="day" seamless
@@ -1134,14 +1133,25 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 {/* Bloc qui pivote (2026-11-04) : conseil + CTA devant, Phase au dos (« Phase · Accumulation ↻ »). */}
                 <FlipBlock
                   backLabel={decision.phase && analyticsData && chargeReady && recupReady ? decision.phase.title : null}
-                  front={
+                  front={<>
                     <AlertBox
                       variant="bare"
                       alert={{ border: `${decisionColor}66`, glow: decisionColor, text: withTitle(decision.text, autoregTargetTop ? ringHint : decision.title, autoregTargetTop ? undefined : decision.titleDetail) }}
                       /* CTA d'ajustement juste sous le texte de la reco (2026-09-30). */
                       actions={autoregTargetTop ? <div ref={setAutoregActionsSlot} className="autoreg-slot" /> : undefined}
                     />
-                  }
+                    {/* Démarrer juste sous le conseil (2026-11-05, POC) : une fois la décision prise (ou s'il n'y a
+                       rien à décider), la suite logique est de lancer la séance, sans descendre jusqu'à sa carte. */}
+                    {startFromRing && autoregTargetTop && (
+                      <div style={{ display: "flex", justifyContent: "center", marginTop: 14 }}>
+                        <button onClick={() => gateInput(() => handleStart(autoregTargetTop))}
+                          style={{ width: "100%", maxWidth: 320, height: 46, borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: "pointer", border: "none", fontFamily: "inherit",
+                            background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}>
+                          {isLive(autoregTargetTop) ? "Reprendre la séance" : "▶ Démarrer la séance"}
+                        </button>
+                      </div>
+                    )}
+                  </>}
                   back={!decision.phase ? undefined : analyticsData && (!chargeReady || !recupReady) ? (
                     /* Pas assez d'historique : phase d'exemple derrière le flou (gratuit), ou
                        collecte (Premium / jour 1). Jamais de mention « Exemple ». */

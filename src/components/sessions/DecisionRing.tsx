@@ -152,7 +152,7 @@ export function decisionRingCenterY(size = 188) {
    l'anneau remonté après une décision (ou son annulation) glisse d'où il était vers sa destination. */
 /* Ambiance (2026-11-04, POC « L'anneau, niveau 4 ») :
    - `breath` : l'anneau respire (taille ±1,5 % et halo), rythme selon la reco ; arrêté pendant le glisser ;
-   - `ambient` : halo plus fort, éclairci par-dessus la photo de sport (SportBanner) ;
+   - `ambient` : halo renforcé (celui d'avant, à 22 %, ne se voyait pas assez pour porter le souffle) ;
    - `zoneLabel` : étiquette posée sur la zone (« Conseillé » sur une séance faite) ;
    - `kicker` : petit texte au-dessus du titre (repère, ex. « Charge de la semaine ») ;
    - `axis` : la valeur est une position 0..1 sur un autre axe (score de charge un jour de repos), zone et
@@ -349,9 +349,8 @@ export default function DecisionRing({
       <div style={{ position: "relative", width: size, height: h }}>
         {fluid && glow && <div aria-hidden className={breath && !dragging ? "tpc-breath-glow" : undefined} style={{ position: "absolute", left: "50%", top: cy, width: size * 1.15, height: size * 1.15, transform: "translate(-50%, -50%)", borderRadius: "50%", pointerEvents: "none",
           ...(breath ? BREATH_VARS[breath] : {}),
-          /* Sur la photo de sport, le halo d'avant (22 %) disparaissait : plus fort et éclairci par-dessus. */
-          background: ambient ? `radial-gradient(circle, ${glow}a0 0%, ${glow}40 38%, transparent 66%)` : `radial-gradient(circle, ${glow}38 0%, ${glow}12 45%, transparent 70%)`,
-          mixBlendMode: ambient ? "screen" : undefined } as React.CSSProperties} />}
+          background: ambient ? `radial-gradient(circle, ${glow}70 0%, ${glow}28 40%, transparent 68%)` : `radial-gradient(circle, ${glow}38 0%, ${glow}12 45%, transparent 70%)`,
+          } as React.CSSProperties} />}
         <div className={breath && !dragging ? "tpc-breath1" : undefined} style={breath ? (BREATH_VARS[breath] as React.CSSProperties) : undefined}>
         <div className={breath && !dragging ? "tpc-breath2" : undefined} style={breath ? (BREATH_VARS[breath] as React.CSSProperties) : undefined}>
         <svg
