@@ -2231,7 +2231,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
               ? { label: "Remplir son point forme", onClick: () => setObCheckinOpen(true), busy: !ready }
               : next === "ob_health"
               ? { label: "Continuer", onClick: () => obAdvance(), busy: !ready }
-              : { label: "Faire mon point forme", onClick: () => setObCheckinOpen(true), busy: !ready || obCheckinBusy }}>
+              : { label: "Continuer avec ce programme", onClick: () => setObCheckinOpen(true), busy: !ready || obCheckinBusy }}>
             {!ready ? <div style={{ minHeight: 320 }} />
               : plan ? <PlannedWeekBody sessions={weekRows} program={{ ...plan, name: shortName(plan.name) }} today={today} />
               : <SessionTemplateCard session={ringSession()} cardStyle={{ cursor: "default" }} />}
