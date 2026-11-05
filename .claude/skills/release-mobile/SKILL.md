@@ -45,7 +45,7 @@ Identifiants non secrets : bundle/package `com.theperfclub.app`, Team Apple `B4A
 
 ## 4. Sortir une version iOS
 
-État au 03/11 : 1.2 (build 13) publiée (rejeu Santé, demande de note, abonnements « départ ») ; 1.2.1 (build 14, même code) en revue pour l ASO : nom « ThePerfClub: Coach sportif », sous-titre « Entraînement adapté à ta forme », mots-clés renouvelés, publication automatique. Les deux occurrences (Debug/Release) sont dans `ios/App/App.xcodeproj/project.pbxproj`.
+État au 05/11 : 1.2.1 (build 14) publiée (ASO). 1.2.2 (build 15, même code natif) envoyée en revue le 05/11 pour les nouvelles captures (galerie V4) avec la page produit personnalisée « Page coach » (ppid 7b7b4b0a-b012-4a28-93ab-0487ab69861f, liée depuis la landing coach) ; publication automatique.
 
 1. **Version** : `MARKETING_VERSION` (ex. 1.1 → 1.2) si nouvelle version store ; **toujours** incrémenter `CURRENT_PROJECT_VERSION` (12 → 13). Vérifier : `grep -n "CURRENT_PROJECT_VERSION\|MARKETING_VERSION" ios/App/App.xcodeproj/project.pbxproj`.
 2. **Sync** (obligatoire, même sans nouveau plugin : `ios/App/App/capacitor.config.json` est gitignoré) :
@@ -65,7 +65,7 @@ Identifiants non secrets : bundle/package `com.theperfclub.app`, Team Apple `B4A
 
 ## 5. Sortir une version Android
 
-État au 03/11 : 1.2 (versionCode 3) publiée en production France (1re publication publique le 02/11 en 1.1). Publication gérée activée : après validation Google, Gildas clique « Publier » dans Vue d'ensemble de la publication.
+État au 03/11 : 1.2 (versionCode 3) publiée en production France (1re publication publique le 02/11 en 1.1). Publication gérée DÉSACTIVÉE le 03/11 (choix de Gildas) : tout ce que Google valide sort automatiquement. La réactiver (pastille en haut de Vue d ensemble de la publication) avant un envoi dont on veut choisir la date de sortie.
 
 1. **Version** : dans `android/app/build.gradle`, **monter `versionCode`** (2 → 3) à chaque envoi, et `versionName` si nouvelle version.
 2. **Sync** : `PATH=~/.nvm/versions/node/v22.23.3/bin:$PATH npx cap sync android`. Vérifier que `android/app/google-services.json` est présent.
@@ -115,6 +115,7 @@ Identifiants non secrets : bundle/package `com.theperfclub.app`, Team Apple `B4A
 - **Reste à faire** : révoquer la clé Firebase en doublon (`~/.config/theperfclub/fcm-service-account-doublon.json`) dans GCP (Gildas).
 - **Demande de note** (02/11) : `@capacitor-community/in-app-review`, `src/lib/storeReview.ts`, marqueur UA `TPCReview` (iOS build 13+, Android versionCode 3+), déclenchée une fois par appareil sur « C'est parti » d'`ob_week`.
 - **Health Connect, sommeil** : une nuit = un échantillon de toute la session avec les phases dans `stages` ; `healthSync.ts` additionne les phases hors éveil (avant le 02/11 la nuit entière était comptée).
+- **Captures App Store** : changer les captures = nouvelle version + nouveau build. Les captures 1320×2868 vont dans un jeu `APP_IPHONE_67` (6,9") ; dans `APP_IPHONE_65` elles sont refusées (`SPEC_MISMATCH`). La clé API d'équipe n'a pas les droits sur les fiches (403) : passer par l'API interne `/iris/v1/...` en `fetch` depuis une page App Store Connect connectée (création de version, `appScreenshots` + upload, pages produit personnalisées).
 - **Ne jamais lancer `next build` dans le repo pendant que le serveur de dev tourne** : pas de `distDir` configuré, le build écrase `.next` et le serveur local renvoie des 500.
 
 Détails et raisons : grep `historique.md` de ce dossier.
