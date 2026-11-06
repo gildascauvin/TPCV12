@@ -16,7 +16,7 @@ export function sheetBounds(vh: number) {
   return { min: MIN_H, mid: Math.round(Math.min(max, Math.max(MIN_H + 80, vh * 0.52))), max };
 }
 
-export default function HomeSheet({ height, onHeightChange, onVisibleHeight, children, header, dragArea, overNav = false, contentKey, bottom }: {
+export default function HomeSheet({ height, onHeightChange, onVisibleHeight, children, dragArea, contentKey, bottom }: {
   /** Posée au-dessus d'une barre fixe (bouton de l'onboarding) au lieu du bas de l'écran ; pas de place réservée à la navigation. */
   bottom?: string;
   /** Hauteur visible de la feuille en px (navigation comprise). */
@@ -24,17 +24,13 @@ export default function HomeSheet({ height, onHeightChange, onVisibleHeight, chi
   onHeightChange: (h: number) => void;
   onVisibleHeight?: (h: number) => void;
   children: React.ReactNode;
-  /** Ligne toujours visible sous la poignée (ex. nom de la séance), elle se saisit aussi. */
-  header?: React.ReactNode;
   /** Zone de la page dont le défilement pilote la feuille : faire défiler l'Accueil vers le bas la fait
       monter en suivant le doigt, remonter (en haut de page) la fait redescendre. */
   dragArea?: HTMLElement | null;
-  /** Passe par-dessus la navigation (point forme : ses boutons restent en bas de l'écran). */
-  overNav?: boolean;
   /** Change quand le contenu est remplacé (point forme → séance) : le contenu repart en haut. */
   contentKey?: string;
 }) {
-  const navClear = overNav || bottom ? 0 : NAV_CLEAR;
+  const navClear = bottom ? 0 : NAV_CLEAR;
   const [vh, setVh] = useState(() => (typeof window === "undefined" ? 800 : window.innerHeight));
   useEffect(() => {
     const on = () => setVh(window.innerHeight);
@@ -243,7 +239,7 @@ export default function HomeSheet({ height, onHeightChange, onVisibleHeight, chi
   const grab = { onPointerDown: down, onPointerMove: move, onPointerUp: up, onPointerCancel: up };
   return (
     <div style={{
-      position: "fixed", left: 0, right: 0, bottom: bottom ?? 0, height: h, zIndex: overNav ? 2147483050 : 40,
+      position: "fixed", left: 0, right: 0, bottom: bottom ?? 0, height: h, zIndex: 40,
       background: "#f1f0ee", color: "#171b1f", borderRadius: "24px 24px 0 0",
       boxShadow: "0 -18px 44px rgba(0,0,0,.45)", display: "flex", flexDirection: "column", overflow: "hidden",
       transition: dragging ? "none" : "height .32s cubic-bezier(.22,1,.36,1)",
@@ -253,7 +249,7 @@ export default function HomeSheet({ height, onHeightChange, onVisibleHeight, chi
         style={{ flexShrink: 0, height: 28, display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none", cursor: "grab" }}>
         <span style={{ width: 42, height: 5, borderRadius: 999, background: "rgba(0,0,0,.18)" }} />
       </div>
-      <div ref={headRef} {...grab} style={{ flexShrink: 0, touchAction: "none", cursor: "grab" }}>{header}</div>
+      <div ref={headRef} {...grab} style={{ flexShrink: 0, touchAction: "none", cursor: "grab" }} />
       <div ref={scrollRef}
         style={{ flex: 1, minHeight: 0, overflowY: atMax ? "auto" : "hidden", padding: `0 14px ${navClear}px`, overscrollBehavior: "contain" }}>
         <div ref={bodyRef}>{children}</div>

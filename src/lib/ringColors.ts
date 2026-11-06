@@ -48,23 +48,3 @@ export function braiseColor(u: number, zoneLow: number, zoneHigh: number) {
    `f` 0..1 = position le long de l'arc ou de la barre. */
 export const recupColor = (f: number) => mixLab("#d2e6ea", "#2f6d8f", f);
 export const chargeColor = (f: number) => mixLab("#f7d9c6", "#d44000", f);
-/* Dégradé CSS d'une barre de difficulté : à venir = orange de charge ; faite (`planned` connu) = Braise de
-   l'effort face au prévu, le long de la barre. */
-export function difficultyGradient(value: number, planned?: number | null): string {
-  const n = 12;
-  const stops = Array.from({ length: n + 1 }, (_, i) => {
-    const u = 1 + ((value - 1) * i) / n;
-    const c = planned != null ? braiseColor(u, planned, planned) : chargeColor(0.18 + (0.82 * (u - 1)) / 9);
-    return `${c} ${Math.round((i / n) * 100)}%`;
-  });
-  return `linear-gradient(90deg,${stops.join(",")})`;
-}
-/* Barre de décision avec zone : Braise le long de la barre, par rapport à la zone conseillée. */
-export function difficultyGradientZone(value: number, zoneLow: number, zoneHigh: number): string {
-  const n = 12;
-  const stops = Array.from({ length: n + 1 }, (_, i) => {
-    const u = 1 + ((value - 1) * i) / n;
-    return `${braiseColor(u, zoneLow, zoneHigh)} ${Math.round((i / n) * 100)}%`;
-  });
-  return `linear-gradient(90deg,${stops.join(",")})`;
-}

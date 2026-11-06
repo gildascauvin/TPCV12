@@ -40,7 +40,7 @@ import { findProgramForWeek, programWeekTag } from "@/lib/programAssignment";
 import { revealLabel } from "@/lib/programReveal";
 import { ACTIVITY_LABEL_CHANGED } from "@/components/layout/ActivityPill";
 import { programSportEmoji } from "@/lib/sportCategories";
-import DecisionRing, { RestDecisionRing, DoneDecisionRing, decisionRingState, type RingLegend } from "@/components/sessions/DecisionRing";
+import DecisionRing, { RestDecisionRing, DoneDecisionRing, type RingLegend } from "@/components/sessions/DecisionRing";
 import FlipBlock from "@/components/today/FlipBlock";
 import { breathForDir } from "@/lib/ringAmbience";
 import { computeWellnessBaselineAt, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
@@ -61,7 +61,6 @@ import { PLANNED_RPE, PLANNED_LABEL, plannedPlaceholderLine, type PlannedIntensi
 import { isLive, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from "@/lib/liveSession";
 import { isOffline, isNetworkFailure, notifyQueued, updateOwnSession } from "@/lib/offlineSessions";
 import { enqueueOfflineAction, readOfflineQueue } from "@/lib/offlineStore";
-import { computeWellnessScore } from "@/lib/wellness";
 import { localWellness } from "@/lib/offlineWellness";
 import { usePhysioData, physioDecisionInputs, requestPhysioReplay } from "@/lib/physioData";
 import { withWatchEstimates } from "@/lib/watchEstimates";
@@ -272,11 +271,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
      sa hauteur suit le bas du bloc décision, tant que le sportif ne l'a pas réglée lui-même. */
   const decisionEndRef = useRef<HTMLDivElement>(null);
   const sheetTouched = useRef(false);
-  const [liveScoreSlot, setLiveScoreSlot] = useState<HTMLDivElement | null>(null);
   const [pageArea, setPageArea] = useState<HTMLDivElement | null>(null);
-  /* Haut du score du point forme dans la page : la feuille s'ouvre juste en dessous de l'arc, pour que le
-     score qui se construit reste visible (en-tête et onglets prennent déjà ~250 px). */
-  const [liveSlotTop, setLiveSlotTop] = useState<number | null>(null);
   const [sheetVisibleH, setSheetVisibleH] = useState<number | null>(null);
   // Un point forme demandé (séance à démarrer, ?checkin=1, Modifier mon ressenti…) remonte la feuille sur l'onglet Aujourd'hui.
   useEffect(() => {
@@ -957,24 +952,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const startFromRing = !sandboxMode && !decisionLocked && wellnessFilledToday && selectedDate === initialDate
     && !!autoregTargetTop && !autoregTargetTop.done
     && (!decision.suggestion || ["Allègement appliqué", "Surcharge appliquée", "Difficulté maintenue"].includes(ringHint ?? ""));
-  /* Point forme à l'anneau (2026-11-06) : plein écran sombre partout, plus intégré à la feuille de l'Accueil. */
-  const embeddedCheckin = false as boolean;
-  const checkinTopSession = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
-  // Score du point forme : aussi grand que la place laissée au-dessus de la feuille.
-  const liveScoreSize = Math.max(110, Math.min(230, viewportH - (sheetVisibleH ?? sheetH) - (liveSlotTop ?? 250) - 75));
-  // Point forme fini (ou rangé) : la séance revient repliée.
-  const wasEmbedded = useRef(embeddedCheckin);
-  useEffect(() => {
-    if (wasEmbedded.current && !embeddedCheckin) setSheetH(0);
-    wasEmbedded.current = embeddedCheckin;
-  }, [embeddedCheckin]);
-  useEffect(() => {
-    if (!embeddedCheckin || !sheetMode || !liveScoreSlot) return;
-    const top = liveScoreSlot.getBoundingClientRect().top + window.scrollY;
-    setLiveSlotTop(top);
-    // Point forme ouvert en grand par défaut (2026-10-23, Gildas) ; replier la feuille découvre le score.
-    setSheetH(9999);
-  }, [embeddedCheckin, sheetMode, liveScoreSlot, viewportH]);
 
   const sessionsBlock = (
               <div id="day-sessions-container">
@@ -1129,12 +1106,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
              éviter un long scroll sur desktop — plus nécessaire depuis que le ring a disparu : la
              colonne de gauche ne contient plus qu'une ligne de ressenti, la jauge et l'insight. */}
           <div style={{ position: "relative", zIndex: 2 }}>
-            {sheetMode && embeddedCheckin && (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "6px 0 4px" }}>
-                <div ref={setLiveScoreSlot} />
-              </div>
-            )}
-            <div style={{ display: sheetMode && embeddedCheckin ? "none" : undefined }}>
+            <div>
               {/* Ring de fraîcheur retirée (2026-09-30) : le score est aperçu dans la miniature
                  de l'onglet Récupération, son détail vit dans cet onglet-là. La ligne "Ressenti du
                  jour ✎ + comportements" qui l'avait remplacée un temps est retirée aussi — la jauge
@@ -1257,26 +1229,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       </div>
 
       {sheetMode && (
-        <HomeSheet height={sheetH} onHeightChange={h => { sheetTouched.current = true; setSheetH(h); }} onVisibleHeight={setSheetVisibleH} contentKey={embeddedCheckin ? "checkin" : "sessions"} dragArea={pageArea} overNav={embeddedCheckin}
-          header={embeddedCheckin && checkinTopSession ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "0 14px 10px", padding: "9px 12px", borderRadius: 12, background: "#fff" }}>
-              <span style={{ fontSize: 13.5, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{checkinTopSession.name}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#d44000", flexShrink: 0, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: ".06em" }}>Plan à confirmer</span>
-            </div>
-          ) : undefined}>
-          {embeddedCheckin ? (
-            <WellnessModal key={`checkin-${selectedDate}`} embedded scoreSlot={liveScoreSlot} scoreSize={liveScoreSize} footerOffset={0}
-              date={selectedDate} askPlan={todaySessions.length === 0} cancelLabel="Plus tard"
-              onSave={data => gateInput(() => saveWellness(data))}
-              required={pointFormeRequired}
-              onClose={() => { setShowWellness(false); setPendingCompleteSession(null); setPendingStartSession(null); }} />
-          ) : sessionsBlock}
+        <HomeSheet height={sheetH} onHeightChange={h => { sheetTouched.current = true; setSheetH(h); }} onVisibleHeight={setSheetVisibleH} contentKey="sessions" dragArea={pageArea}>
+          {sessionsBlock}
         </HomeSheet>
       )}
 
       {/* Modals — ouverture et enregistrement libres depuis le freemium (2026-09-30) : ce sont des
           entrées. gateInput() ne bloque plus que la sandbox (visiteur sans compte). */}
-      {(showWellness || pointFormeRequired) && !embeddedCheckin && (
+      {(showWellness || pointFormeRequired) && (
         <WellnessModal date={selectedDate} askPlan={selectedDate === initialDate && todaySessions.length === 0} required={pointFormeRequired} onSave={data => gateInput(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); setPendingStartSession(null); }} />
       )}
       {showAddSession && (
