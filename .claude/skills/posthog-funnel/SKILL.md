@@ -43,7 +43,7 @@ Règles :
 
 ## 4. Insights de référence (projet 187815, EU)
 
-- Dashboard **706709**. Depuis le 30/10 : funnel sportif `6JLNeyfb`, funnel coach `M71wHM4I`, « Questions post-signup » `SUb8KXZy` / `HLxOiBpE`. Référence de l'ancien parcours (19 → 30/10) : 27 comptes, 0 essai.
+- Dashboard **706709**. Funnel sportif `6JLNeyfb`, funnel coach `M71wHM4I` : depuis le 07/11/2026 (`date_from`), ordre point forme → Bilan (`ob_insight`) → « Tu fais quoi ? » (`ob_decide`) → Jauge (`ob_week`), version 30/10 → 06/11 avec la question avant le bilan ; « Questions post-signup » `SUb8KXZy` / `HLxOiBpE`. Référence de l'ancien parcours (19 → 30/10) : 27 comptes, 0 essai.
 - Antérieurs : `Idd8I8sh` / `nBeaNBuY` (sportif/coach, breakdown `onboarding_source`), User Path `S3Tznl9b`, `/p/* → register` 4607763.
 - Lecture : les étapes « écran vu » sont strictes (« Passer » mène toujours à l'écran suivant), seules les étapes qui comptent une **action** sont facultatives (point forme fait/imaginé, offre de sortie). Les `exit_offer_*` partent aussi des paywalls de l'app.
 - **Toujours lire la définition exacte de l'insight officiel** (étapes, filtres, `date_from`) avant de reconstruire un chiffre maison. Gildas maintient ces insights : leur `date_from` fait foi.
