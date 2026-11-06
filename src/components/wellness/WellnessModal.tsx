@@ -343,10 +343,10 @@ export default function WellnessModal({ date, onSave, onClose, cancelLabel = "An
     const w = SCALE_WORDS[key];
     return (
       <div key={key} style={{ animation: "modalIn 0.25s cubic-bezier(0.2,0,0,1)" }}>
-        <div style={darkTitle}>{title}</div>
-        <div style={darkSub}>{sub}</div>
-        <div style={{ marginTop: 18 }}>
-          <PointFormeRing value={value} labels={w.labels} kicker={RING_KICKER[key]} placeholder="Touche ou glisse sur l'anneau"
+        {/* Question et sous-titre dans la feuille blanche du bas (06/11, POC) ; l'anneau seul en haut. */}
+        <div style={{ marginTop: 4 }}>
+          <PointFormeRing value={value} labels={w.labels} kicker={RING_KICKER[key]} placeholder="Touche ou glisse sur l'anneau" sheet="seg"
+            sheetTitle={title} sheetSub={sub} centerScore={{ label: who ? "Sa forme" : "Ta forme", value: ringScore }}
             score={ringScore} pulse={ringPulse}
             better={n => (w.inverted ? 11 - n : n)}
             onChange={n => { if (advanceTimer.current) { window.clearTimeout(advanceTimer.current); advanceTimer.current = null; } onPick(n); }}
@@ -443,7 +443,7 @@ export default function WellnessModal({ date, onSave, onClose, cancelLabel = "An
     }
     return (
       <div className={exitClass} style={{ position: "fixed", inset: 0, zIndex: 2147483100, background: DARK_CARD_BG, color: "#fff", overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
-        <div style={{ maxWidth: 440, margin: "0 auto", minHeight: "100%", display: "flex", flexDirection: "column", padding: "max(14px, env(safe-area-inset-top)) 20px max(18px, env(safe-area-inset-bottom))", boxSizing: "border-box" }}>
+        <div style={{ maxWidth: 440, margin: "0 auto", minHeight: "100%", display: "flex", flexDirection: "column", padding: "max(14px, env(safe-area-inset-top)) 20px calc(var(--answer-sheet-h, 0px) + max(18px, env(safe-area-inset-bottom)))", boxSizing: "border-box" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12, minHeight: 34 }}>
             {(step > 0 || onBack) && (
               <button onClick={step > 0 ? goBack : onBack} aria-label="Retour"

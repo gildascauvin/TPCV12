@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { hapticTick } from "@/lib/native";
 import { gaugeLock, gaugeTick } from "@/lib/gaugeSound";
-import { mixLab } from "@/lib/ringColors";
+import { mixLab, recupColor, chargeColor } from "@/lib/ringColors";
+import { flyToken } from "@/lib/flyToken";
 export { mixLab };
 
 /* Point forme, version B (2026-11-06, POC https://claude.ai/artifact/736H2ey2Cr6YHaRcnpeSjZ, section 0 ter) :
@@ -156,9 +158,20 @@ type Props = {
   /* Incrémenté à chaque réponse validée : petite impulsion de l'essaim. */
   pulse?: number;
   width?: number;
+  /* Noter sur une feuille blanche en bas de l'écran (06/11, Gildas : le doigt cachait l'anneau) : l'anneau
+     devient un aperçu qu'on ne touche plus ; « seg » = dix crans à toucher ou balayer, « slider » = réglette. */
+  sheet?: "seg" | "slider";
+  /* Contenu sous la commande, dans la feuille (ex. « Valider 52 min »). */
+  sheetFooter?: React.ReactNode;
+  /* En tête de la feuille, comme le POC : la question et son sous-titre. */
+  sheetTitle?: string;
+  sheetSub?: string;
+  /* Point forme (06/11, Gildas) : le centre montre le score de forme qui se construit, pas la réponse
+     déjà écrite dans la feuille. */
+  centerScore?: { label: string; value: number | null };
 };
 
-export default function PointFormeRing({ value, min = MIN, max = MAX, ticks = 10, wordOf, ends, tickEvery = 1, palette = "recup", labels, kicker, placeholder, score, better = n => n, onChange, onRelease, final = false, pulse = 0, width = ringWidth() }: Props) {
+export default function PointFormeRing({ value, min = MIN, max = MAX, ticks = 10, wordOf, ends, tickEvery = 1, palette = "recup", labels, kicker, placeholder, score, better = n => n, onChange, onRelease, final = false, pulse = 0, width = ringWidth(), sheet, sheetFooter, sheetTitle, sheetSub, centerScore }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const cvRef = useRef<HTMLCanvasElement>(null);
   const [drag, setDrag] = useState<number | null>(null);
@@ -166,6 +179,11 @@ export default function PointFormeRing({ value, min = MIN, max = MAX, ticks = 10
   const cur = useRef(value);
   cur.current = value;
   const live = useRef<Live>({ score, kick: 0, palette });
+  /* Jeton du tap (06/11, POC) : à chaque réponse, l'écart part du cran et rejoint le centre de l'anneau. */
+  const centerRef = useRef<HTMLDivElement>(null);
+  const startScore = useRef(centerScore?.value ?? null);
+  const scoreNow = useRef(centerScore?.value ?? null);
+  scoreNow.current = centerScore?.value ?? null;
 
   // Impulsion de l'essaim quand une réponse est validée.
   useEffect(() => { live.current.kick = pulse ? 1 : 0; }, [pulse]);
@@ -183,7 +201,8 @@ export default function PointFormeRing({ value, min = MIN, max = MAX, ticks = 10
 
   useSwarm(cvRef, live);
 
-  const interactive = (!!labels || !!wordOf) && !final && !!onChange;
+  const canAnswer = (!!labels || !!wordOf) && !final && !!onChange;
+  const interactive = canAnswer && !sheet;
   const shown = drag ?? (value != null ? value : null);
   const f = shown == null ? null : (shown - min) / (max - min);
   const snapped = shown == null ? null : Math.round(shown);
@@ -207,7 +226,25 @@ export default function PointFormeRing({ value, min = MIN, max = MAX, ticks = 10
   function release() {
     if (drag == null) return;
     setDrag(null);
-    if (cur.current != null) { gaugeLock(); onRelease?.(cur.current); }
+    if (cur.current == null) return;
+    gaugeLock();
+    if (sheet && centerRef.current) {
+      const from = document.querySelector("[data-answer-sel]");
+      if (from) {
+        if (centerScore) {
+          /* Score lu un instant après : le parent l'a recalculé avec la réponse. */
+          window.setTimeout(() => {
+            const s0 = startScore.current, s1 = scoreNow.current;
+            const txt = s1 == null ? "" : s0 == null ? `${Math.round(s1)}` : Math.round(s1 - s0) === 0 ? "=" : `${s1 > s0 ? "+" : "−"}${Math.abs(Math.round(s1 - s0))}`;
+            if (txt && centerRef.current) flyToken(from, centerRef.current, txt, palette === "charge" ? "#d44000" : "#3f7f9a", "center");
+          }, 30);
+        } else {
+          const txt = wordOf ? wordOf(cur.current) : labels?.[cur.current];
+          if (txt) flyToken(from, centerRef.current, txt, palette === "charge" ? "#d44000" : "#3f7f9a", "center");
+        }
+      }
+    }
+    onRelease?.(cur.current);
   }
   function onKey(e: React.KeyboardEvent) {
     if (!interactive) return;
@@ -218,6 +255,7 @@ export default function PointFormeRing({ value, min = MIN, max = MAX, ticks = 10
   }
 
   const centerY = (CY / H) * 100;
+  const sheetOn = !!sheet && canAnswer;
   const word = final ? null : snapped == null ? null : wordOf ? wordOf(snapped) : labels ? labels[snapped] : null;
   const endTexts: [string, string] | null = ends ?? (labels ? [labels[min], labels[max]] : null);
 
@@ -241,23 +279,111 @@ export default function PointFormeRing({ value, min = MIN, max = MAX, ticks = 10
       >
         <canvas ref={cvRef} aria-hidden style={{ position: "absolute", left: "-12%", top: "-12%", width: "124%", height: "124%", pointerEvents: "none", zIndex: 2 }} />
         <div style={{ position: "relative", zIndex: 1 }} dangerouslySetInnerHTML={{ __html: ringSvg(f, score, fin, !labels && !wordOf && !final, palette, ticks) }} />
-        <div style={{ position: "absolute", left: 0, right: 0, top: `${centerY}%`, transform: "translateY(-50%)", zIndex: 3, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", pointerEvents: "none" }}>
-          <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 4, maxWidth: "60%" }}>{kicker}</span>
-          {final ? (
+        <div ref={centerRef} style={{ position: "absolute", left: 0, right: 0, top: `${centerY}%`, transform: "translateY(-50%)", zIndex: 3, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", pointerEvents: "none" }}>
+          <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 4, maxWidth: "60%" }}>{centerScore && !final ? centerScore.label : kicker}</span>
+          {centerScore && !final ? (
+            <strong style={{ fontFamily: "var(--font-mono), monospace", fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1, color: "#fff" }}>{centerScore.value == null ? "–" : Math.round(centerScore.value)}</strong>
+          ) : final ? (
             <strong style={{ fontSize: 26, fontWeight: 900, letterSpacing: "-0.02em", lineHeight: 1.05 }}>{placeholder}</strong>
           ) : word ? (
             <strong style={{ fontSize: 26, fontWeight: 900, letterSpacing: "-0.02em", lineHeight: 1.05, maxWidth: "64%", textWrap: "balance" } as React.CSSProperties}>{word}</strong>
           ) : (
-            <span style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,.55)", maxWidth: "60%" }}>{placeholder}</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,.55)", maxWidth: "60%" }}>{sheetOn ? "–" : placeholder}</span>
           )}
         </div>
       </div>
-      {endTexts && !final && (
+      {endTexts && !final && !sheetOn && (
         <div style={{ display: "flex", justifyContent: "space-between", margin: "2px 10px 0", fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "rgba(255,255,255,.5)" }}>
           <span>{endTexts[0]}</span><span>{endTexts[1]}</span>
         </div>
       )}
+      {sheetOn && (
+        <AnswerSheet kind={sheet!} value={shown} min={min} max={max} palette={palette} ends={endTexts} label={kicker}
+          valueText={value != null ? (wordOf ? wordOf(value) : labels?.[value]) : undefined}
+          word={word} title={sheetTitle} sub={sheetSub}
+          onMove={set} onEnd={release} footer={sheetFooter} />
+      )}
     </div>
+  );
+}
+
+/* Feuille blanche de notation (06/11, POC section 0 ter) : juste la hauteur de la commande, l'anneau reste
+   visible au-dessus. Le geste passe par les mêmes set / release que l'anneau (sons, vibrations, onChange). */
+function AnswerSheet({ kind, value, min, max, palette, ends, label, valueText, word, title, sub, onMove, onEnd, footer }: {
+  kind: "seg" | "slider"; value: number | null; min: number; max: number; palette: RingPalette;
+  ends: [string, string] | null; label: string; valueText?: string; word: string | null;
+  title?: string; sub?: string;
+  onMove: (v: number) => void; onEnd: () => void; footer?: React.ReactNode;
+}) {
+  const ctlRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [, setH] = useState(150);
+  const down = useRef(false);
+  useEffect(() => {
+    const el = boxRef.current; if (!el) return;
+    /* Hauteur publiée en variable CSS : l'écran qui accueille la feuille réserve cette place en bas. */
+    const root = document.documentElement;
+    const put = () => { setH(el.offsetHeight); root.style.setProperty("--answer-sheet-h", `${el.offsetHeight}px`); };
+    const ro = new ResizeObserver(put);
+    ro.observe(el); put();
+    return () => { ro.disconnect(); root.style.removeProperty("--answer-sheet-h"); };
+  }, []);
+  const col = (f: number) => (palette === "charge" ? chargeColor(0.15 + 0.85 * f) : recupColor(0.15 + 0.85 * f));
+  const n = max - min + 1;
+  const at = (e: React.PointerEvent) => {
+    const r = ctlRef.current!.getBoundingClientRect(), u = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    return kind === "seg" ? min + Math.min(n - 1, Math.floor(u * n)) : min + u * (max - min);
+  };
+  const f = value == null ? null : (value - min) / (max - min);
+  const handlers = {
+    onPointerDown: (e: React.PointerEvent) => { down.current = true; try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ } onMove(at(e)); },
+    onPointerMove: (e: React.PointerEvent) => { if (down.current) onMove(at(e)); },
+    onPointerUp: () => { if (!down.current) return; down.current = false; onEnd(); },
+    onPointerCancel: () => { if (!down.current) return; down.current = false; onEnd(); },
+  };
+  const sel = value == null ? null : Math.round(value);
+  return (
+    <>
+      {/* Portail : une animation (transform) d'un parent décalerait une feuille en position fixe. */}
+      {typeof document !== "undefined" && createPortal(
+      <div ref={boxRef} style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 2147483101, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
+        <div style={{ width: "100%", maxWidth: 440, background: "#fff", color: "#171b1f", borderRadius: "22px 22px 0 0", padding: "12px 20px max(16px, env(safe-area-inset-bottom))", boxShadow: "0 -10px 30px rgba(0,0,0,.35)", pointerEvents: "auto", boxSizing: "border-box" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 9, background: "rgba(0,0,0,.14)", margin: "0 auto 10px" }} />
+          {title && <div style={{ fontSize: 25, fontWeight: 900, lineHeight: 1.12, letterSpacing: "-0.02em", textWrap: "balance" } as React.CSSProperties}>{title}</div>}
+          {sub && <div style={{ fontSize: 15, lineHeight: 1.4, color: "#6b7076", marginTop: 4 }}>{sub}</div>}
+          {/* Le mot de la réponse, qui change pendant le geste. */}
+          <div style={{ textAlign: "center", marginTop: 16 }}>
+            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#8a8f94" }}>{label}</div>
+            {word
+              ? <div style={{ fontSize: 32, fontWeight: 900, letterSpacing: "-0.02em", lineHeight: 1.1, minHeight: 38 }}>{word}</div>
+              : <div style={{ fontSize: 17, fontWeight: 600, color: "#9a9ea3", minHeight: 38, paddingTop: 10, boxSizing: "border-box" }}>Touche ou glisse</div>}
+          </div>
+          <div ref={ctlRef} role="slider" aria-label={label} aria-valuemin={min} aria-valuemax={max} aria-valuenow={sel ?? undefined} aria-valuetext={valueText}
+            {...handlers}
+            style={{ touchAction: "none", cursor: "pointer", userSelect: "none", WebkitUserSelect: "none", padding: kind === "slider" ? "14px 0" : "4px 0", marginTop: 10 }}>
+            {kind === "seg" ? (
+              <div style={{ display: "flex", gap: 5, height: 48 }}>
+                {Array.from({ length: n }, (_, i) => {
+                  const v = min + i, on = sel != null && v <= sel;
+                  return <span key={v} data-answer-sel={v === sel ? "" : undefined} style={{ flex: 1, borderRadius: 8, background: on ? col(i / (n - 1)) : "#ebe9e4", boxShadow: v === sel ? "0 0 0 2px #171b1f" : undefined, transform: v === sel ? "scaleY(1.08)" : undefined, transition: "background .15s, transform .15s" }} />;
+                })}
+              </div>
+            ) : (
+              <div style={{ position: "relative", height: 12, borderRadius: 7, background: "#ebe9e4" }}>
+                <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(f ?? 0) * 100}%`, borderRadius: 7, background: `linear-gradient(90deg, ${col(0)}, ${col(1)})`, backgroundSize: `${100 / Math.max(f ?? 0, 0.02)}% 100%`, backgroundRepeat: "no-repeat" }} />
+                {f != null && <span style={{ position: "absolute", top: "50%", left: `${f * 100}%`, width: 26, height: 26, margin: "-13px 0 0 -13px", borderRadius: "50%", background: "#171b1f", boxShadow: "0 0 0 2px #fff, 0 2px 8px rgba(0,0,0,.25)" }} />}
+              </div>
+            )}
+          </div>
+          {ends && (
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontFamily: "var(--font-mono), monospace", fontSize: 11.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "#8a8f94" }}>
+              <span>{ends[0]}</span><span>{ends[1]}</span>
+            </div>
+          )}
+          {footer && <div style={{ marginTop: 12 }}>{footer}</div>}
+        </div>
+      </div>, document.body)}
+    </>
   );
 }
 
@@ -305,4 +431,39 @@ export function ScoreRing({ fill, big, unit, cap, cap2, palette = "recup", width
 }
 export function RecupRing({ score, cap, width, norm }: { score: number; cap?: string; width?: number; norm?: number }) {
   return <ScoreRing fill={score} big={score} unit="/100" cap={cap} width={width} norm={norm} />;
+}
+
+
+/* Difficulté prévue dans l'éditeur de séance (06/11, Gildas : « remettre le curseur au même endroit
+   qu'avant ») : les mêmes dix crans que la feuille de notation, en ligne, sons et vibrations compris. */
+export function DifficultyCrans({ value, onChange, labels }: { value: number; onChange: (n: number) => void; labels: Record<number, string> }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const down = useRef(false);
+  const cur = useRef(value);
+  cur.current = value;
+  const at = (e: React.PointerEvent) => { const r = ref.current!.getBoundingClientRect(); return 1 + Math.min(9, Math.floor(Math.max(0, Math.min(0.9999, (e.clientX - r.left) / r.width)) * 10)); };
+  const move = (e: React.PointerEvent) => { const n = at(e); if (n !== cur.current) { hapticTick(cur.current, n); gaugeTick(n); cur.current = n; onChange(n); } };
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#8a8f94" }}>Difficulté prévue</span>
+        <span style={{ fontSize: 15, fontWeight: 900, color: "#171b1f" }}>{labels[value]}</span>
+      </div>
+      <div ref={ref} role="slider" aria-label="Difficulté prévue" aria-valuemin={1} aria-valuemax={10} aria-valuenow={value} aria-valuetext={labels[value]} tabIndex={0}
+        onKeyDown={e => { const n = e.key === "ArrowRight" ? Math.min(10, value + 1) : e.key === "ArrowLeft" ? Math.max(1, value - 1) : null; if (n != null) { e.preventDefault(); gaugeTick(n); onChange(n); } }}
+        onPointerDown={e => { down.current = true; try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ } move(e); }}
+        onPointerMove={e => { if (down.current) move(e); }}
+        onPointerUp={() => { if (down.current) { down.current = false; gaugeLock(); } }}
+        onPointerCancel={() => { down.current = false; }}
+        style={{ display: "flex", gap: 5, height: 40, touchAction: "none", cursor: "pointer", userSelect: "none", WebkitUserSelect: "none", outline: "none" }}>
+        {Array.from({ length: 10 }, (_, i) => {
+          const v = i + 1, on = v <= value;
+          return <span key={v} style={{ flex: 1, borderRadius: 8, background: on ? chargeColor(0.15 + 0.85 * (i / 9)) : "#ebe9e4", boxShadow: v === value ? "0 0 0 2px #171b1f" : undefined, transition: "background .15s" }} />;
+        })}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "#8a8f94" }}>
+        <span>{labels[1]}</span><span>{labels[10]}</span>
+      </div>
+    </div>
+  );
 }

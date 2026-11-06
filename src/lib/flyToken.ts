@@ -1,6 +1,6 @@
 /* Jeton qui part d'un élément et vole jusqu'à un autre (2026-11-06, célébration de la décision) :
    l'écart part du curseur de l'anneau et se pose sur la ligne de la séance qu'il a changée. */
-export function flyToken(from: Element, to: Element, text: string, color = "#d44000") {
+export function flyToken(from: Element, to: Element, text: string, color = "#d44000", land: "right" | "center" = "right") {
   if (typeof window === "undefined" || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
   const a = from.getBoundingClientRect(), b = to.getBoundingClientRect();
   const tok = document.createElement("span");
@@ -13,7 +13,7 @@ export function flyToken(from: Element, to: Element, text: string, color = "#d44
   document.body.appendChild(tok);
   const w = tok.offsetWidth, h = tok.offsetHeight;
   const x0 = a.left + a.width / 2 - w / 2, y0 = a.top + a.height / 2 - h / 2;
-  const x1 = b.right - w - 12, y1 = b.top + b.height / 2 - h / 2;
+  const x1 = land === "center" ? b.left + b.width / 2 - w / 2 : b.right - w - 12, y1 = b.top + b.height / 2 - h / 2;
   tok.style.transition = "none";
   tok.style.transform = `translate(${x0}px, ${y0}px) scale(.6)`;
   void tok.offsetWidth;

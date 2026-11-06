@@ -1,6 +1,7 @@
 "use client";
 
 import DifficultyRingInput from "@/components/sessions/DifficultyRingInput";
+import { DifficultyCrans } from "@/components/wellness/PointFormeRing";
 import { CR10_LABELS } from "@/components/ui/ScaleBars";
 
 import { useState, useEffect, useRef } from "react";
@@ -388,6 +389,9 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
           );
         })()}
 
+
+        {/* Le curseur de difficulté revient à sa place d'avant (06/11), en crans ; l'anneau en haut reste l'aperçu. */}
+        <DifficultyCrans value={difficulty} onChange={setDifficulty} labels={CR10_LABELS} />
 
         {/* Séance vide : raccourcis Modèle / Importer / Générer (2026-10-02). Sport du sportif ciblé
             présélectionné seulement s'il est renseigné et reconnu ; sinon tout est proposé. */}

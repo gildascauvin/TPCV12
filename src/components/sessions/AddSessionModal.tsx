@@ -1,6 +1,7 @@
 "use client";
 
 import DifficultyRingInput from "@/components/sessions/DifficultyRingInput";
+import { DifficultyCrans } from "@/components/wellness/PointFormeRing";
 import { CR10_LABELS } from "@/components/ui/ScaleBars";
 
 import { useState, useEffect, useRef } from "react";
@@ -250,6 +251,8 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
             </div>
           )}
           {isEdit && <div style={{ marginBottom: 16 }} />}
+          {/* Le curseur de difficulté revient à sa place d'avant (06/11), en crans ; l'anneau en haut reste l'aperçu. */}
+          <DifficultyCrans value={targetDiff} onChange={setTargetDiff} labels={CR10_LABELS} />
 
 
           {/* Séance vide : raccourcis modèle / import / générer au-dessus de l'éditeur, repliés dès qu'un
