@@ -1,21 +1,29 @@
 "use client";
 
+import TodaySessionCard from "@/components/sessions/TodaySessionCard";
+import DayColumn, { WeekSessionCard } from "@/components/calendar/DayColumn";
+import type { SessionRingState } from "@/components/calendar/SessionRing";
+import type { DayAlert } from "@/lib/alerts";
 import { PLAY_STORE_URL } from "@/lib/storeLinks";
 import { healthAppName, isAndroidApp } from "@/lib/native";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
+import HomeSheet from "@/components/today/HomeSheet";
+import { createPortal } from "react-dom";
+import { flyToken } from "@/lib/flyToken";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import { SessionTemplateCard } from "@/components/programs/SessionTemplateCard";
-import { computeAutoregSuggestion, zoneRange, suggestionSeverityColor, autoregHeadline, autoregAdvice, applyAutoregDifficulty, formatAutoregPoints } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, zoneRange, suggestionSeverityColor, autoregHeadline, autoregAdvice, applyAutoregDifficulty } from "@/lib/autoregulation";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import AlertBox from "@/components/calendar/AlertBox";
-import DecisionGauge from "@/components/sessions/DecisionGauge";
+import FlipBlock from "@/components/today/FlipBlock";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import { relativeZoneLabel } from "@/lib/wellnessBaseline";
 import { WELLNESS_RAMP } from "@/lib/wellness";
 import { DARK_CARD_BG } from "@/lib/theme";
 import { parseAndApply } from "@/lib/loadAdjust";
-import type { Program, ProgramTemplate, SessionTemplate } from "@/types";
+import type { Program, ProgramTemplate, SessionTemplate, Session } from "@/types";
 
 /* Écrans du parcours post-signup Elite (2026-10-17, POC https://claude.ai/artifact/HopwXw7gFnAdRLpB496JvE).
    Contenu seulement : le cadre (QuestionShell), l'état et les écritures vivent dans OnboardingFlow. */
@@ -74,6 +82,21 @@ function dayLabel(date: string, today: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/* Un jour de l'aperçu = une colonne du Planning (06/11, Gildas : mêmes composants que le Planning, la date,
+   l'anneau, le titre de séance, les exercices). En-tête DayColumnHeader + carte WeekSessionCard, lecture seule. */
+function PlanningDayPreview({ s, today, planned, ring, alert, adjustPct }: {
+  s: WeekSession; today: string; planned: number; ring?: SessionRingState | null; alert?: DayAlert; adjustPct?: number | null;
+}) {
+  const session = { id: s.id, date: s.date, name: s.name, notes: s.notes, duration: null, rpe: null, done: false, target_difficulty: planned };
+  return (
+    <DayColumn date={new Date(`${s.date}T12:00:00`)} sessions={[session]} todayStr={today} wellness={null} hideAddSession
+      ringState={ring} alert={alert}
+      onAddSession={() => {}} onComplete={() => {}} onEdit={() => {}} onWellness={() => {}}
+      columnStyle={{ color: "#171b1f" }}
+      renderSession={c => <WeekSessionCard key={c.id} session={c} hideActions adjustPct={adjustPct ?? null} onComplete={() => {}} onEdit={() => {}} cardStyle={{ cursor: "default" }} />} />
+  );
+}
+
 /* POC 2026-10-28 : son programme tel qu'il est, avant le check-in. Séances de la 1re semaine, sans aucun
    ajustement : le titre de l'écran dit qu'il ne sait pas encore comment il se sent. */
 export function PlannedWeekBody({ sessions, program, today }: {
@@ -92,8 +115,7 @@ export function PlannedWeekBody({ sessions, program, today }: {
       </div>
       {week.map(s => (
         <div key={s.id} style={{ marginBottom: 12 }}>
-          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 6 }}>{dayLabel(s.date, today)}</div>
-          <SessionTemplateCard session={{ name: s.name, notes: s.notes, target_difficulty: s.target_difficulty ?? 5, load: 2, type: "volume" } as unknown as SessionTemplate} cardStyle={{ cursor: "default" }} />
+          <PlanningDayPreview s={s} today={today} planned={s.target_difficulty ?? 5} />
         </div>
       ))}
     </div>
@@ -129,6 +151,27 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
      difficulté. La jauge reçoit cette difficulté, c'est donc le curseur qui rejoint la zone. */
   const [cur, setCur] = useState<{ notes: string | null; target_difficulty: number } | null>(null);
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
+  /* Célébration comme /today (2026-11-06) : la séance montre l'avant/après quelques secondes et l'écart
+     part du curseur de l'anneau jusqu'à elle. */
+  const [flash, setFlash] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  /* Mobile : la séance dans la feuille du bas, comme l'Accueil (06/11, Gildas) ; elle monte à la décision. */
+  const { isMd } = useBreakpoint();
+  const [sheetH, setSheetH] = useState(0);
+  const headRef = useRef<HTMLDivElement>(null);
+  const sheetTouched = useRef(false);
+  /* Feuille ouverte par défaut autant que possible sans recouvrir l'anneau ni le conseil (06/11, Gildas). */
+  useEffect(() => {
+    if (isMd) return;
+    const fit = () => {
+      const el = headRef.current; if (!el || sheetTouched.current) return;
+      const bottomBar = 84 + (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sab")) || 0);
+      setSheetH(Math.max(0, Math.round(window.innerHeight - bottomBar - el.getBoundingClientRect().bottom - 12)));
+    };
+    const t = window.setTimeout(fit, 700);
+    const ro = new ResizeObserver(fit); if (headRef.current) ro.observe(headRef.current);
+    return () => { window.clearTimeout(t); ro.disconnect(); };
+  }, [isMd]);
   const base = syntheticBaselineFor(sim);
   // Les 7 prochains jours : sa première semaine.
   const end = new Date(`${today}T12:00:00`); end.setDate(end.getDate() + 6);
@@ -156,13 +199,18 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
         const { s, planned, sug } = head;
         const color = sug ? suggestionSeverityColor(sug) : null;
         const shown = cur ?? { notes: s.notes, target_difficulty: planned };
-        const tpl = { name: s.name, notes: shown.notes, target_difficulty: shown.target_difficulty, load: 2, type: "volume" } as unknown as SessionTemplate;
+        const todayCard = (
+          <TodaySessionCard hideGauge authorName="Toi" onEdit={() => {}}
+            session={{ id: s.id, user_id: "", date: s.date, name: s.name, notes: shown.notes, target_difficulty: shown.target_difficulty, duration: null, rpe: null, done: false, created_at: "" } as unknown as Session}
+            previewPct={applied != null ? null : preview || null}
+            flashOriginal={flash && applied ? s.notes : null} />
+        );
         return (
           <div style={{ marginBottom: 22 }}>
             {/* Plus de ligne « Aujourd'hui · Ta forme ce matin » : le texte sous l'anneau la dit déjà. */}
             {/* La jauge toujours là, comme /today : avec une reco (Alléger / Surcharger), sinon en mode
                 libre (forme dans la zone, ou point forme passé) où il peut quand même la bouger. */}
-            <div style={{ display: "grid", gap: 12 }}>
+            <div ref={headRef} style={{ display: "grid", gap: 12 }}>
               <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
                 <AutoregButtons demo notes={shown.notes} sessionId={`ob-week-${s.id}`} advice="" sessionLabel={s.name}
                   dir={sug?.dir} reco={sug?.reco}
@@ -171,23 +219,56 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
                   onApply={async pct => {
                     // Même réécriture que /today (TodayClient, onApply).
                     setApplied(pct);
+                    if (pct) {
+                      setFlash(true);
+                      if (!isMd) setSheetH(Math.round(window.innerHeight * 0.55));
+                      /* Un jeton par ligne changée, comme /today. */
+                      window.setTimeout(() => {
+                        const k = document.querySelector("[data-ring-knob]"), lines = cardRef.current ? Array.from(cardRef.current.querySelectorAll("[data-ex-line='changed']")) : [];
+                        if (!k) return;
+                        (lines.length ? lines : cardRef.current ? [cardRef.current] : []).forEach((el, n) => window.setTimeout(() => flyToken(k, el, `${pct < 0 ? "−" : "+"}${Math.abs(Math.round(pct))} %`, pct < 0 ? "#d44000" : "#2f9e44"), n * 380));
+                      }, 650);
+                      window.setTimeout(() => setFlash(false), 6000);
+                    }
                     setCur({ notes: s.notes ? s.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : s.notes, target_difficulty: applyAutoregDifficulty(planned, pct) });
                     return { notes: s.notes ?? "", target_difficulty: planned };
                   }}
-                  onUndo={async () => { setApplied(null); setCur(null); }}
+                  onUndo={async () => { setApplied(null); setCur(null); setFlash(false); }}
                   onMaintenir={() => setApplied(0)} />
               </div>
               {/* Comme /today depuis le 2026-10-28 : anneau en grand, titre au centre, plus d'encart. */}
-              <AlertBox variant="bare"
-                alert={{ border: `${color ?? "#ffffff"}66`, glow: color ?? "#ffffff", text: sug
-                  ? `${autoregHeadline(sug.dir)}\n${reliefLine(sug.dir, subject)}`
-                  : subject ? `Dans sa zone\nLa forme de ${subject} ce matin colle à la séance prévue : garde-la telle quelle.` : "Dans ta zone\nTa forme de ce matin colle à la séance prévue : garde-la telle quelle." }}
-                actions={<div ref={setSlot} className="autoreg-slot" />} />
+              {/* Même carte que /today (06/11) : surface légère, étiquette, boutons sous le conseil. Pas de dos : rien ne pivote. */}
+              <FlipBlock
+                frontLabel={subject ? `Conseil pour ${subject}` : "Conseil du jour"}
+                front={<AlertBox variant="bare"
+                  alert={{ border: `${color ?? "#ffffff"}66`, glow: color ?? "#ffffff", text: sug
+                    ? `${autoregHeadline(sug.dir)}\n${reliefLine(sug.dir, subject)}`
+                    : subject ? `Dans sa zone\nLa forme de ${subject} ce matin colle à la séance prévue : garde-la telle quelle.` : "Dans ta zone\nTa forme de ce matin colle à la séance prévue : garde-la telle quelle." }} />}
+                actions={<div ref={setSlot} className="autoreg-slot" style={{ marginTop: 4 }} />} />
             </div>
-            <div style={{ marginTop: 12 }}>
-              {/* Comme /today : barré tant qu'il n'a pas validé, puis la séance réécrite telle quelle. */}
-              <SessionTemplateCard session={tpl} adjustPct={applied != null ? null : preview || null} cardStyle={{ cursor: "default" }} />
+            {isMd ? (
+            <div ref={cardRef} className={flash ? "tpc-line-flash" : undefined} style={{ marginTop: isMd ? 12 : 0, borderRadius: 18 }}>
+              {/* Comme /today : barré tant qu'il n'a pas validé, puis la séance réécrite telle quelle (avant/après
+                  visible quelques secondes juste après la décision). */}
+              {/* Même carte que /today (06/11, Gildas) : TodaySessionCard sans jauge, la décision est dans l'anneau. */}
+              {todayCard}
             </div>
+            ) : (
+              <>
+              {/* Place pour la feuille repliée : le conseil et ses boutons ne passent jamais dessous. */}
+              <div aria-hidden style={{ height: 120 }} />
+              {typeof document !== "undefined" && createPortal(<HomeSheet height={sheetH} onHeightChange={h => { sheetTouched.current = true; setSheetH(h); }} bottom="calc(84px + env(safe-area-inset-bottom, 0px))" contentKey={flash ? "flash" : "card"}>
+                <div style={{ padding: "0 14px 14px" }}>
+            <div ref={cardRef} className={flash ? "tpc-line-flash" : undefined} style={{ marginTop: isMd ? 12 : 0, borderRadius: 18 }}>
+              {/* Comme /today : barré tant qu'il n'a pas validé, puis la séance réécrite telle quelle (avant/après
+                  visible quelques secondes juste après la décision). */}
+              {/* Même carte que /today (06/11, Gildas) : TodaySessionCard sans jauge, la décision est dans l'anneau. */}
+              {todayCard}
+            </div>
+                </div>
+              </HomeSheet>, document.body)}
+              </>
+            )}
           </div>
         );
       })()}
@@ -224,23 +305,13 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
       {rest.length > 0 && <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 8 }}>{decide ? `La suite de ${subject ? "sa" : "ta"} semaine` : "Ta première semaine"}</div>}
       {rest.map(({ s, planned, sug }) => {
         const color = sug ? suggestionSeverityColor(sug) : null;
-        const tpl = { name: s.name, notes: s.notes, target_difficulty: planned, load: 2, type: "volume" } as unknown as SessionTemplate;
         const adjusted = sug ? applyAutoregDifficulty(planned, sug.reco) : planned;
         return (
           <div key={s.id} style={{ marginBottom: 16 }}>
-            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 6 }}>{dayLabel(s.date, today)}</div>
-            {sug && color && (
-              <div style={{ marginBottom: 8 }}>
-                <AlertBox variant="darkColor" alert={{ border: `${color}66`, glow: color, text: `${autoregHeadline(sug.dir)}\n${autoregAdvice(sug.dir, planned, subject)}` }} />
-              </div>
-            )}
-            <SessionTemplateCard session={tpl} cardStyle={{ cursor: "default" }}
-              gaugeOverride={sug ? adjusted : undefined}
-              gaugeSlot={sug ? (() => {
-                const { zoneLow, zoneHigh } = zoneRange(adjusted, sug.dir);
-                return <DecisionGauge light readOnly dir={sug.dir} zoneLow={zoneLow} zoneHigh={zoneHigh} value={planned} onChange={() => {}} />;
-              })() : undefined}
-              badgeOverride={sug && color ? { label: formatAutoregPoints(sug.reco), bg: `${color}22`, color } : undefined}
+            {/* Jour conseillé : l'anneau prend la zone conseillée, comme le Planning le jour même. */}
+            <PlanningDayPreview s={s} today={today} planned={planned}
+              ring={sug ? (({ zoneLow, zoneHigh }) => ({ value: planned, zone: { low: zoneLow, high: zoneHigh } }))(zoneRange(adjusted, sug.dir)) : undefined}
+              alert={sug && color ? { border: `${color}66`, glow: color, text: `${autoregHeadline(sug.dir)}\n${autoregAdvice(sug.dir, planned, subject)}` } : undefined}
               adjustPct={sug ? sug.reco : null} />
           </div>
         );

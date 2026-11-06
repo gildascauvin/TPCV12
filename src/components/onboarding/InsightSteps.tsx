@@ -6,7 +6,7 @@
    plus basse (« Nos données indiquent qu'un sportif stressé… »).
    Les cartes sont les vrais écrans du bilan (SlideBody de BilanCarousel), dans un cadre réduit. */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SlideBody, Hero, KICKER, KICKER_COACH, PhotoBanner, photoFor, sportPhotoFor, ExampleCtx, ExamplePromise, EXAMPLE_N } from "@/components/bilan/BilanCarousel";
 import { SCALE_WORDS, type ScaleKey } from "@/lib/wellnessWords";
 import type { Bilan, BilanSlide } from "@/lib/bilan";
@@ -46,26 +46,24 @@ export function lowWords(a: Answers): string {
 /* ── Titres (écran insight et paywall), par réponse la plus basse ── */
 /* sessionName : la séance de sa jauge, pour que le titre reprenne celle qu'il vient de voir. */
 export function payHeadline(a: Answers, replayDown: number, sport = "", sessionName?: string): string {
-  const ses = sessionName ? `séance « ${sessionName} »` : FAM[sportFamily(sport)].ses;
   // Rejeu de la montre (2026-11-02) : le vrai nombre de séances faites un jour à alléger.
   if (replayDown >= 2) return `Ce mois-ci, ${replayDown} jours à alléger sont passés inaperçus. Le prochain, ThePerfClub le voit avant ta séance.`;
   if (replayDown === 1) return "Ce mois-ci, un jour à alléger est passé inaperçu. Le prochain, ThePerfClub le voit avant ta séance.";
   const k = lowestAnswer(a);
   return {
     sleep: "Ta prochaine nuit courte ne te coûtera plus ta séance.",
-    stress: `Ta prochaine journée de stress ne te coûtera plus ta ${ses}.`,
+    stress: "Ta prochaine journée de stress ne te coûtera plus ta séance.",
     recovery: "Tes jambes lourdes auront une explication. Et ta séance, le bon dosage.",
     motivation: "Quand l'envie baisse, ta charge se recale avant que tu décroches.",
   }[k as ScaleKey] ?? "Les bons jours, tu pousses. Les autres, ta séance s'allège avant de se rater.";
 }
 export function payHeadlineCoach(a: Answers, name: string, sport = "", sessionName?: string): string {
-  const ses = sessionName ? `séance « ${sessionName} »` : FAM[sportFamily(sport)].ses;
   const k = lowestAnswer(a);
   return {
     sleep: `La prochaine nuit courte de ${name} ne lui coûtera plus sa séance.`,
-    stress: `La prochaine journée de stress de ${name} ne lui coûtera plus sa ${ses}.`,
+    stress: `La prochaine journée de stress de ${name} ne lui coûtera plus sa séance.`,
     recovery: `Les jambes lourdes de ${name} auront une explication. Et sa séance, le bon dosage.`,
-    motivation: `Quand l'envie de ${name} baisse, sa charge se recale avant qu'il décroche.`,
+    motivation: `Quand l'envie de ${name} baisse, sa charge se recale avant le décrochage.`,
   }[k as ScaleKey] ?? `Les bons jours, ${name} pousse. Les autres, tu allèges avant la séance.`;
 }
 
@@ -257,11 +255,24 @@ export function InsightStepBody({ answers, name, sport = "", onIndex, real = [] 
   // Retour sur l'étape : le carrousel repart de la 1re carte, le titre de l'étape aussi.
   useEffect(() => { onIndex?.(0); }, [onIndex]);
   const track = useRef<HTMLDivElement>(null);
+  /* Hauteur du carrousel = celle de la carte visible (06/11, Gildas) : sinon la carte la plus haute
+     laissait un grand vide au-dessus des points sous une carte courte. */
+  const [trackH, setTrackH] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = track.current?.children[idx] as HTMLElement | undefined;
+    if (!el) return;
+    const fit = () => setTrackH(el.offsetHeight);
+    fit();
+    const ro = new ResizeObserver(fit); ro.observe(el);
+    return () => ro.disconnect();
+  }, [idx, items.length]);
   const go = (i: number) => track.current?.scrollTo({ left: i * (track.current.clientWidth + 16), behavior: "smooth" });
   const curItem = items[Math.min(idx, items.length - 1)];
   const bg = !curItem ? null : "real" in curItem ? { photo: curItem.real.photo, sportPhoto: curItem.real.sportPhoto ?? null } : { photo: photoFor(curItem.card.slide), sportPhoto: sportPhotoFor(curItem.card.slide, sport) };
+  /* Points collés en bas, contenu posé juste au-dessus (06/11, Gildas) : jamais de vide entre les deux,
+     l'espace libre passe en haut (la photo du thème s'y voit). Hauteur = écran moins l'en-tête et le bouton. */
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", minHeight: "calc(100dvh - 236px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))" }}>
       {/* Photo du thème de la carte visible, derrière tout l'écran (fixed, sous le contenu de QuestionShell). */}
       {bg && (
         <div aria-hidden="true" style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 600, height: "min(52vh, 440px)", zIndex: -1, pointerEvents: "none" }}>
@@ -269,7 +280,7 @@ export function InsightStepBody({ answers, name, sport = "", onIndex, real = [] 
         </div>
       )}
       <div ref={track} onScroll={e => { const el = e.currentTarget; const i = Math.round(el.scrollLeft / (el.clientWidth + 16)); setIdx(i); onIndex?.(i); }}
-        style={{ display: "flex", overflowX: "auto", scrollSnapType: "x mandatory", scrollbarWidth: "none", gap: 16, alignItems: "flex-start" }}>
+        style={{ display: "flex", overflowX: "auto", overflowY: "hidden", scrollSnapType: "x mandatory", scrollbarWidth: "none", gap: 16, alignItems: "flex-start", height: trackH ?? undefined, transition: "height .25s cubic-bezier(.22,1,.36,1)" }}>
         {items.map(it => (
           <div key={it.key} style={{ flex: "0 0 100%", scrollSnapAlign: "start" }}>
             {"real" in it ? <RealFrame s={it.real} name={name} /> : <SlideFrame slide={it.card.slide} name={name} />}
@@ -290,9 +301,9 @@ export function InsightStepBody({ answers, name, sport = "", onIndex, real = [] 
 function RealFrame({ s, name }: { s: MiniSlide; name?: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ ...MONO, fontSize: 11, color: "rgba(255,255,255,.85)", textShadow: "0 1px 6px rgba(0,0,0,.6)" }}>{name ? `Point forme de ${name}` : "Ton point forme"} · {s.kicker}</div>
-      <div aria-hidden="true" style={{ height: "clamp(0px, calc(14vh - 64px), 56px)" }} />
-      <Hero big={s.hero.big} unit={s.hero.unit} cap={s.hero.cap} color={s.hero.color} />
+      <div style={{ ...MONO, fontSize: 11, color: "rgba(255,255,255,.85)", textShadow: "0 1px 6px rgba(0,0,0,.6)" }}>{name ? `Point forme de ${name}` : s.kicker || "Ton point forme"}</div>
+      {!s.heroNode && <div aria-hidden="true" style={{ height: "clamp(0px, calc(14vh - 64px), 56px)" }} />}
+      {s.heroNode ?? <Hero big={s.hero.big} unit={s.hero.unit} cap={s.hero.cap} color={s.hero.color} />}
       {s.sub && <div style={{ fontSize: 15, lineHeight: 1.5, color: "rgba(255,255,255,0.78)" }}>{s.sub}</div>}
       {s.body}
     </div>
@@ -400,8 +411,8 @@ export function contrastTitle(pick: Pick | null, sug: { dir: "low" | "high"; rec
   /* Question passée (31/10) : pas de « ton ressenti avait raison » pour une réponse jamais donnée. */
   if (!pick) return !sug ? "Ta forme colle à ta séance\u00a0: on la garde comme prévu." : sug.dir === "low" ? "Ta forme est en dessous\u00a0: ThePerfClub allège ta séance, série par série." : "Ta forme le permet\u00a0: ThePerfClub pousse ta séance, série par série.";
   const p = pick;
-  if (!sug) return { force: "Ton ressenti avait raison\u00a0: on la garde comme prévu.", feeling: "Tu aurais allégé au ressenti. Ton état permet de la garder telle quelle.", saute: "Tu l'aurais sautée. Ton état permet de la faire, telle quelle.", pousse: "Tu aurais poussé. Ton état dit de la garder comme prévu." }[p];
-  if (sug.dir === "low") return { force: "Tu l'aurais faite comme prévu. ThePerfClub l'allège, série par série.", feeling: "Tu aurais allégé au ressenti. ThePerfClub te dit de combien, série par série.", saute: "Tu l'aurais sautée. ThePerfClub la garde, allégée série par série.", pousse: "Tu aurais poussé. ThePerfClub l'allège, série par série." }[p];
+  if (!sug) return { force: "Ton ressenti avait raison\u00a0: on la garde comme prévu.", feeling: "Tu aurais allégé. Ton état permet de la garder telle quelle.", saute: "Tu l'aurais sautée. Ton état permet de la faire, telle quelle.", pousse: "Tu aurais poussé. Ton état dit de la garder comme prévu." }[p];
+  if (sug.dir === "low") return { force: "Tu l'aurais faite comme prévu. ThePerfClub l'allège, série par série.", feeling: "Tu aurais allégé. ThePerfClub te dit de combien, série par série.", saute: "Tu l'aurais sautée. ThePerfClub la garde, allégée série par série.", pousse: "Tu aurais poussé. ThePerfClub l'allège, série par série." }[p];
   return { force: "Tu l'aurais faite comme prévu. Ton état permet de pousser, série par série.", pousse: "Ton ressenti avait raison. ThePerfClub te dit de combien pousser, série par série.", feeling: "Tu aurais allégé. Ton état permet de pousser, série par série.", saute: "Tu l'aurais sautée. Ton état permet même de pousser." }[p];
 }
 export const pickWords: Record<Pick, string> = { force: "Tu fais la séance quand même.", feeling: "Tu allèges au ressenti.", saute: "Tu sautes la séance.", pousse: "Tu pousses au ressenti." };

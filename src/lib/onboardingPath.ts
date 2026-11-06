@@ -5,8 +5,8 @@
    interrupteur (readEliteFlag) : désactivé, le parcours est exactement celui d'avant.
    Argumentaire avant paywall (2026-10-29, POC https://claude.ai/artifact/Ma3E6NB8dAAhd7HwjjuVF7) :
      Sportif direct  : value_intro → decision_2a → account → questions programme → ob_plan (son
-                       programme tel quel, ouvre le check-in) → ob_health (app iOS) → ob_decide
-                       (« Tu fais quoi ? ») → ob_insight (ce que disent nos données) → ob_week (la
+                       programme tel quel, ouvre le check-in) → ob_health (app iOS) → ob_insight
+                       (le bilan de son point forme) → ob_decide (« Tu fais quoi ? ») → ob_week (la
                        jauge de décision) → ob_notif (notifs possibles) → ob_pay
      Programme claimé : mêmes écrans sans les questions de programme.
      Sans programme (« plus tard », génération ou import raté) : mêmes écrans, une séance type de son
@@ -15,7 +15,7 @@
                        coach gratuit : le paywall arrive par le gating de l'app).
      Coach : value_intro → decision_2b → account → ob_sport → ob_count → questions programme →
                        ob_plan (son programme tel quel, puis le prénom d'un de ses sportifs et son point
-                       forme imaginé) → ob_decide → ob_insight → ob_week (la séance de ce sportif) →
+                       forme imaginé) → ob_insight → ob_decide → ob_week (la séance de ce sportif) →
                        ob_invite → ob_notif → ob_pay (claimé : ob_count seul). */
 
 export type Role = "athlete" | "coach";
@@ -43,7 +43,7 @@ export const INVITE_ATHLETE_PATH: StepId[] = ["value_intro", "account"];
 
 /* Écrans propres au parcours Elite, dans l'ordre. On ne revient jamais d'un de ces écrans vers les
    questions de programme : le programme est déjà en cours de création à partir de ob_when. */
-export const ELITE_STEPS: StepId[] = ["ob_plan", "ob_health", "ob_decide", "ob_insight", "ob_week", "ob_invite", "ob_notif", "ob_pay"];
+export const ELITE_STEPS: StepId[] = ["ob_plan", "ob_health", "ob_insight", "ob_decide", "ob_week", "ob_invite", "ob_notif", "ob_pay"];
 /* Questions qui construisent le programme : un écran Elite n'y revient jamais en arrière. */
 export const PROGRAM_QUESTION_STEPS: StepId[] = ["ob_sport", "ob_program", "ob_import", "ob_goal", "ob_weak", "ob_days"];
 
@@ -95,7 +95,7 @@ export function buildOnboardingPath(o: PathOptions): StepId[] {
       if (o.has === "import") post.push("ob_import");
       else if (o.has !== "later") post.push("ob_goal", "ob_weak", "ob_days");
     }
-    post.push("ob_plan", "ob_decide", "ob_insight", "ob_week", "ob_invite");
+    post.push("ob_plan", "ob_insight", "ob_decide", "ob_week", "ob_invite");
     if (o.pushAvailable) post.push("ob_notif");
     post.push("ob_pay");
     return [...base, ...post];
@@ -112,7 +112,7 @@ export function buildOnboardingPath(o: PathOptions): StepId[] {
   // Sans programme exploitable, ob_plan et ob_week prennent une séance type de son sport : toujours là.
   post.push("ob_plan");
   if (o.healthAvailable) post.push("ob_health");
-  post.push("ob_decide", "ob_insight", "ob_week");
+  post.push("ob_insight", "ob_decide", "ob_week");
   if (o.pushAvailable) post.push("ob_notif");
   post.push("ob_pay");
   return [...base, ...post];

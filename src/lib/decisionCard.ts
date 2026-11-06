@@ -158,7 +158,10 @@ export function withTitle(text: string, title: string | null | undefined, detail
    (on ne parle alors pas de demain). */
 export type DecisionDay =
   | { kind: "planned"; tomorrowDifficulty?: number | null }
-  | { kind: "done"; rpe: number | null; planned: number | null; tomorrowDifficulty?: number | null; decision?: AutoregDecisionRecord | null }
+  | { kind: "done"; rpe: number | null; planned: number | null; tomorrowDifficulty?: number | null; decision?: AutoregDecisionRecord | null;
+      /* Reco du matin figée côté serveur (autoreg_proposal du jour de la séance) : prioritaire sur un recalcul,
+         pour que /today, le Planning et le coach lisent la même zone (06/11, Gildas : « cohérent partout »). */
+      proposal?: { proposed: AutoregSuggestion["dir"] | null; zoneLow: number | null; zoneHigh: number | null } | null }
   | { kind: "rest"; tomorrowDifficulty?: number | null };
 
 type Voice = { coach: boolean; subject?: string };
@@ -594,8 +597,9 @@ function withPhase(
         ? ` Demain : séance ${qualitativeDifficulty(tomorrow)}, le bon moment pour pousser.`
         : tomorrowLine)
       : tomorrowLine;
+    /* Plus de « Bonne récup » les jours de repos (06/11, Gildas) : pas de titre quand tout va bien. */
     const restTitle = !params.wellnessFilledToday ? "Récup à confirmer"
-      : ({ bad: "Récup fragile", mid: "Récup stable", good: "Bonne récup" } as const)[feel];
+      : ({ bad: "Récup fragile", mid: "Récup stable", good: undefined } as const)[feel];
     return { suggestion: null, icon: params.wellnessFilledToday ? "🟢" : "⚪", title: restTitle, text: `Jour de repos\n${feelLine}${physioLine}${restNudge}${restTomorrow}`, phase };
   }
   if (day.kind === "done") {
@@ -606,7 +610,12 @@ function withPhase(
     let recoDir: AutoregSuggestion["dir"] | null = rec?.proposed ?? null;
     let zone: { low: number; high: number } | null = rec?.proposed && rec.zoneLow != null && rec.zoneHigh != null
       ? { low: rec.zoneLow, high: rec.zoneHigh } : null;
-    if (!rec && params.wellnessFilledToday && day.planned !== null) {
+    if (!rec && day.proposal) {
+      if (day.proposal.proposed && day.proposal.zoneLow != null && day.proposal.zoneHigh != null) {
+        recoDir = day.proposal.proposed;
+        zone = { low: day.proposal.zoneLow, high: day.proposal.zoneHigh };
+      }
+    } else if (!rec && params.wellnessFilledToday && day.planned !== null) {
       const sug = computeAutoregSuggestion(params.wellnessScore, day.planned, params.baseline, chronicPenalty, shift, shiftHigh);
       if (sug) {
         recoDir = sug.dir;

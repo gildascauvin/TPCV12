@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { hapticTick } from "@/lib/native";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { braiseColor, chargeColor } from "@/lib/ringColors";
+import { ringWidth } from "@/components/wellness/PointFormeRing";
+import { haptic, hapticTick } from "@/lib/native";
 import { type AutoregDir, zoneRange, pctToPoints } from "@/lib/autoregulation";
 import { BREATH_VARS, type RingBreath } from "@/lib/ringAmbience";
 
@@ -107,7 +109,9 @@ export function DecisionRingMini({ state, size = 40, hideZone = false, showValue
   const h = disc ? Math.ceil(cy + rOut + 2) : Math.round(cy + rOut * 0.5 + 2);
   const rounded = Math.round(value);
   const inZone = !hideZone && rounded >= zoneLow && rounded <= zoneHigh;
-  const [c0, c1] = DIFF_STOPS[rounded >= 8 ? "hard" : rounded >= 5 ? "moderate" : "easy"];
+  /* 06/11 : mêmes couleurs que le grand anneau. Avec zone = Braise (écart à la zone) ; sans zone = orange de charge. */
+  const colAt = (u: number) => (hideZone ? chargeColor(0.18 + (0.82 * (u - MIN)) / (MAX - MIN)) : braiseColor(u, zoneLow, zoneHigh));
+  const c0 = colAt(MIN), c1 = colAt(value);
   const end = ang(value);
   const SEGS = 16;
   const [sx, sy] = polar(cx, cy, r, A0), [ex, ey] = polar(cx, cy, r, end);
@@ -117,7 +121,7 @@ export function DecisionRingMini({ state, size = 40, hideZone = false, showValue
       <path d={arcPath(cx, cy, r, A0, A1)} fill="none" stroke="rgba(255,255,255,.08)" strokeWidth={sw} strokeLinecap="round" />
       {value > MIN && Array.from({ length: SEGS }, (_, i) => (
         <path key={i} d={arcPath(cx, cy, r, A0 + ((end - A0) * i) / SEGS, A0 + ((end - A0) * (i + 1.02)) / SEGS)}
-          fill="none" stroke={mixHex(c0, c1, (i + 0.5) / SEGS)} strokeWidth={sw} />
+          fill="none" stroke={colAt(MIN + ((value - MIN) * (i + 0.5)) / SEGS)} strokeWidth={sw} />
       ))}
       <circle cx={sx} cy={sy} r={sw / 2} fill={c0} />
       {value > MIN && <circle cx={ex} cy={ey} r={sw / 2} fill={c1} />}
@@ -159,7 +163,10 @@ export function decisionRingCenterY(size = 188) {
      couleurs fournies ; même grammaire curseur + zone que l'échelle de difficulté. */
 type BigRingProps = { fluid?: boolean; centerTitle?: string; titleLocked?: boolean; glow?: string; introFrom?: number;
   breath?: RingBreath; ambient?: boolean; zoneLabel?: string; kicker?: string;
-  axis?: { zone: [number, number]; colors: [string, string] } };
+  axis?: { zone: [number, number]; colors: [string, string] };
+  /* Lot 4 (2026-11-06) : la légende de l'essaim ouvre le détail de la récup et de la charge (à la place des onglets). */
+  legend?: RingLegend };
+export type RingLegend = { recup: { value: number | null; color?: string; onClick: () => void }; charge: { value: number | null; color?: string; onClick: () => void } };
 
 export function RestDecisionRing({ size, light, hideHint, ...big }: { size?: number; light?: boolean; hideHint?: boolean } & BigRingProps) {
   return (
@@ -196,10 +203,79 @@ export function DoneDecisionRing({ rpe, planned, size, light, hideZone = false, 
   );
 }
 
+const TAU = 2 * Math.PI, ARC_FROM = ((A0 - 90) * Math.PI) / 180, ARC_TO = ((A1 - 90) * Math.PI) / 180;
+type SwarmLive = { v: number; lo: number; hi: number; drag: boolean; r: number; sw: number; cx: number; cy: number; size: number; h: number };
+function useDecisionSwarm(cvRef: React.RefObject<HTMLCanvasElement> | null, live: React.MutableRefObject<SwarmLive>) {
+  useEffect(() => {
+    const cv = cvRef?.current; if (!cv) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const N = 40;
+    const P = Array.from({ length: N }, (_, i) => ({ phi: (i / N) * 2 * Math.PI, ang: (i / N) * 2 * Math.PI, r: 0, sd: Math.random(), cl: Math.floor(Math.random() * 7), ty: i & 1 }));
+    let sg = 0, boost = 1, T = 0, last = performance.now(), raf = 0, visible = true;
+    const born = performance.now();
+    /* Performance (06/11) : rien n'est dessiné hors écran (anneau sous la feuille, page défilée) ni onglet caché. */
+    const io = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(([e]) => { visible = e.isIntersecting; });
+    io?.observe(cv);
+    const frame = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      if (!visible || document.hidden) { raf = requestAnimationFrame(frame); return; }
+      const L = live.current, t = reduce ? 0 : now / 1000, dpr = Math.min(2, window.devicePixelRatio || 1);
+      const w = cv.clientWidth, hh = cv.clientHeight, g = cv.getContext("2d");
+      if (w && g) {
+        if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(hh * dpr); }
+        const m = L.size * 0.12;
+        g.setTransform(dpr, 0, 0, dpr, dpr * m, dpr * m); g.clearRect(-m, -m, w, hh);
+        const lo = L.lo - 0.3, hi = L.hi + 0.3, dist = L.v < lo ? lo - L.v : L.v > hi ? L.v - hi : 0;
+        const target = L.v > hi ? Math.min(1, dist / 3) : L.v < lo ? -Math.min(1, dist / 3) : 0;
+        sg += (target - sg) * Math.min(1, dt * 2.2);
+        const awake = L.drag || now - born < 1800;
+        boost += ((awake ? 1 : 0) - boost) * Math.min(1, dt * 3);
+        const s = sg * (0.3 + 0.7 * boost), hot = Math.max(0, s), cold = Math.max(0, -s), calm = 1 - hot - cold, agit = hot + cold;
+        const br = Math.sin((t * 2 * Math.PI) / 10), Rorb = L.r + L.sw * 1.15, nT = Math.ceil(N / 2), scale = L.size / 300;
+        T += dt * 0.12 * (1 - 0.9 * cold) * (1 + 1.5 * hot);
+        /* Essaim coupé comme la jauge (06/11, Gildas) : il ne vit que sur l'arc de 240°, l'ouverture du bas reste vide. */
+        if (calm > 0.05) { g.beginPath(); g.arc(L.cx, L.cy, Rorb + calm * br * 2 * scale, ARC_FROM, ARC_TO); g.strokeStyle = `rgba(255,255,255,${(calm * (0.1 + 0.06 * br) * 0.6).toFixed(3)})`; g.lineWidth = 1; g.stroke(); }
+        P.forEach((q, i) => {
+          if (!q.r) q.r = Rorb;
+          q.ang += dt * hot * (q.sd - 0.5) * 5 + hot * 0.05 * Math.sin(t * (6 + 5 * q.sd) + 9 * q.sd);
+          const clusterA = (q.cl / 7) * 2 * Math.PI + T + (q.sd - 0.5) * 0.18;
+          const home = q.phi + T, toCl = Math.atan2(Math.sin(clusterA - home), Math.cos(clusterA - home)) * Math.min(1, cold * 1.3);
+          let tg = home + toCl;
+          const k = Math.floor(i / 2), segA = (q.ty ? 0 : Math.PI) + ((k + 0.5) / nT) * Math.PI + T * 0.3, dS = Math.atan2(Math.sin(segA - tg), Math.cos(segA - tg));
+          tg += dS * Math.min(1, agit * 1.4);
+          const tr = Rorb + (hot * 26 * Math.sin(t * (3 + 5 * q.sd) + 10 * q.sd) + cold * (2 + 6 * q.sd) + calm * br * 2) * scale;
+          const dA = Math.atan2(Math.sin(tg - q.ang), Math.cos(tg - q.ang));
+          q.ang += dA * Math.min(1, dt * (2.5 * (1 - hot) + 0.3));
+          q.r += (tr - q.r) * Math.min(1, dt * (4 + hot * 6));
+          /* Angle libre → position sur l'arc : le flux coule du début vers la fin et réapparaît au début, en fondu. */
+          const u = (((q.ang % TAU) + TAU) % TAU) / TAU, da = ARC_FROM + u * (ARC_TO - ARC_FROM), edge = Math.min(1, u / 0.06, (1 - u) / 0.06);
+          const x = L.cx + q.r * Math.cos(da), y = L.cy + q.r * Math.sin(da);
+          const dom = q.ty ? hot - cold : cold - hot;
+          const sz = (1.4 + hot * q.sd * 1.2 + cold * 1.1) * (1 + 0.7 * Math.max(0, dom) - 0.4 * Math.max(0, -dom)) * scale;
+          const al = Math.min(1, (0.5 + 0.35 * q.sd * hot + 0.35 * cold + (0.25 * calm * (br + 1)) / 2) * 0.6 + 0.2) * edge;
+          /* Lueur des points de charge quand ça chauffe : un disque doux dessous (shadowBlur coûte cher sur mobile). */
+          if (hot > 0.3 && q.ty) { g.beginPath(); g.arc(x, y, sz * 2.6, 0, 2 * Math.PI); g.fillStyle = `rgba(255,120,40,${(0.18 * hot).toFixed(3)})`; g.fill(); }
+          g.beginPath(); g.arc(x, y, sz, 0, 2 * Math.PI);
+          g.fillStyle = q.ty ? `rgba(246,128,64,${al.toFixed(2)})` : `rgba(128,184,204,${al.toFixed(2)})`; g.fill();
+        });
+      }
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => { cancelAnimationFrame(raf); io?.disconnect(); };
+  }, [cvRef, live]);
+}
+
 export default function DecisionRing({
   zoneLow, zoneHigh, recoDir, value, onChange, readOnly, plannedMarker, hint: hintOverride, size: sizeProp = 188, light, centerLabel, hideZone = false, hideHint = false, onHint,
-  fluid = false, centerTitle, titleLocked = false, glow, introFrom, breath, ambient = false, zoneLabel, kicker, axis,
+  fluid = false, centerTitle, titleLocked = false, glow, introFrom, breath, ambient = false, zoneLabel, kicker, axis, locked = false, celebrate = false, neutralAt, legend,
 }: BigRingProps & {
+  /* Gratuit (zone masquée) : couleur et essaim lus par rapport à la séance prévue, jamais au conseil. */
+  neutralAt?: number;
+  /* Décision prise : la zone pointillée devient pleine (2026-11-06, lot 3). */
+  locked?: boolean;
+  /* Décision qu'on vient de prendre : onde depuis l'anneau et vibration « succès » à l'arrivée. */
+  celebrate?: boolean;
   /* Texte sous l'anneau masqué (2026-10-12, Gildas) : il devient le titre de la carte décision
      (Premium, /today + Coach Control), remonté par `onHint`. Le gratuit le garde sous l'anneau. */
   hideHint?: boolean;
@@ -223,6 +299,7 @@ export default function DecisionRing({
   centerLabel?: { arrow: string; verb: string };
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const uid = useId().replace(/:/g, "");
   const [dragging, setDragging] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [fluidSize, setFluidSize] = useState<number | null>(null);
@@ -231,7 +308,7 @@ export default function DecisionRing({
     const el = wrapRef.current;
     /* Plafonné aussi par la hauteur d'écran (2026-10-28, Gildas) : sur mobile, la feuille de séance
        du bas recouvre ce qui suit l'anneau, il doit laisser voir conseil + CTA au-dessus d'elle. */
-    const measure = () => setFluidSize(Math.max(210, Math.min(300, Math.round(el.clientWidth), Math.round(window.innerHeight * 0.34))));
+    const measure = () => setFluidSize(Math.min(ringWidth(), Math.round(el.clientWidth)));
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -239,6 +316,8 @@ export default function DecisionRing({
     return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
   }, [fluid]);
   const size = fluid ? (fluidSize ?? 300) : sizeProp;
+  /* « Optimal » le long de la zone sur tout grand anneau (06/11, Gildas : partout où l'anneau est grand). */
+  const zoneText = size >= 160 ? (zoneLabel ?? (fluid ? "Optimal" : undefined)) : undefined;
   /* Titre du centre sur 2 lignes maximum (2026-10-28, Gildas) : la police descend jusqu'à tenir. */
   const titleRef = useRef<HTMLSpanElement>(null);
   const [titleShrink, setTitleShrink] = useState(0);
@@ -259,6 +338,12 @@ export default function DecisionRing({
     return () => cancelAnimationFrame(raf);
   }, []);
   const introRunning = intro < 1;
+  const [sonar, setSonar] = useState(false);
+  useEffect(() => {
+    if (!celebrate) return;
+    const t = window.setTimeout(() => { setSonar(true); haptic("success"); }, 620);
+    return () => window.clearTimeout(t);
+  }, [celebrate]);
   const introStart = introFrom ?? (axis ? 0 : MIN);
   const drawValue = introRunning ? introStart + (value - introStart) * (1 - Math.pow(1 - intro, 3)) : value;
 
@@ -318,15 +403,25 @@ export default function DecisionRing({
 
   /* Le dégradé suit l'arc : découpé en petits segments dont la couleur est interpolée (un
      linearGradient SVG suivrait la corde, pas la courbe). */
-  const [c0, c1] = axis ? axis.colors : DIFF_STOPS[roundedValue >= 8 ? "hard" : roundedValue >= 5 ? "moderate" : "easy"];
+  /* Anneau en grand avec zone (2026-11-06, lot 3) : palette Braise, la couleur dit l'écart à la zone
+     (jade dedans, bleu pétrole en dessous, ocre puis rouille au-dessus) au lieu de la difficulté brute. */
+  const refLo = hideZone ? (neutralAt ?? value) : zoneLow, refHi = hideZone ? (neutralAt ?? value) : zoneHigh;
+  const braise = fluid && (!!axis || !hideZone || neutralAt != null);
+  /* Axe 0..1 (charge de la semaine, jour de repos) ramené sur 1..10 pour la palette, comme l'essaim. */
+  const toScale = (v: number) => (axis ? 1 + 9 * v : v);
+  const bLo = axis ? toScale(axis.zone[0]) : refLo, bHi = axis ? toScale(axis.zone[1]) : refHi;
+  const [c0, c1] = braise ? [braiseColor(MIN, bLo, bHi), braiseColor(toScale(drawValue), bLo, bHi)]
+    : axis ? axis.colors
+    : DIFF_STOPS[roundedValue >= 8 ? "hard" : roundedValue >= 5 ? "moderate" : "easy"];
   const fillEnd = toAng(drawValue);
-  const SEGS = 28;
+  const SEGS = braise ? 64 : 28;
   const fills = drawValue > floor ? Array.from({ length: SEGS }, (_, i) => ({
-    d: arcPath(cx, cy, r, A0 + ((fillEnd - A0) * i) / SEGS, A0 + ((fillEnd - A0) * (i + 1.02)) / SEGS),
-    color: mixHex(c0, c1, (i + 0.5) / SEGS),
+    d: arcPath(cx, cy, r, A0 + ((fillEnd - A0) * i) / SEGS, A0 + ((fillEnd - A0) * (i + 1.04)) / SEGS),
+    color: braise ? braiseColor(MIN + ((toScale(drawValue) - MIN) * (i + 0.5)) / SEGS, bLo, bHi) : mixHex(c0, c1, (i + 0.5) / SEGS),
   })) : [];
   const [mx, my] = polar(cx, cy, r, toAng(drawValue));
-  const showMarker = plannedMarker != null && Math.round(plannedMarker) !== roundedValue;
+  /* Plus de trait « prévu » sur les anneaux (06/11, Gildas : on ne comprend pas). */
+  const showMarker = false as boolean;
 
   const k = recoDir ?? "flat";
   const zonePos = axis ? (value < axis.zone[0] ? "Sous la zone" : value > axis.zone[1] ? "Au-dessus de la zone" : "Dans la zone")
@@ -340,6 +435,18 @@ export default function DecisionRing({
     const font = parseFloat(getComputedStyle(el).fontSize);
     if (el.offsetHeight > font * 1.05 * 2 + 1 && font > 14) setTitleShrink(v => v + 1);
   });
+  /* Essaim F2b sobre (2026-11-06, lot 3) : récup (bleu) et charge (orange) autour de l'anneau. Au-dessus de
+     la zone il chauffe et s'agite (la charge domine), en dessous il refroidit et ralentit (la récup domine),
+     d'autant plus qu'on s'éloigne. Sobre au quotidien (agitation réduite), plein effet en glissant et à l'arrivée. */
+  const swarm = fluid && (!hideZone || neutralAt != null);
+  const cvRef = useRef<HTMLCanvasElement>(null);
+  const swarmLive = useRef({ v: value, lo: zoneLow, hi: zoneHigh, drag: false, r, sw, cx, cy, size, h });
+  /* Échelle « axe » (charge de la semaine un jour de repos) : ramenée sur 1..10 pour l'essaim. */
+  swarmLive.current = axis
+    ? { v: 1 + 9 * drawValue, lo: 1 + 9 * axis.zone[0], hi: 1 + 9 * axis.zone[1], drag: dragging, r, sw, cx, cy, size, h }
+    : { v: drawValue, lo: hideZone ? (neutralAt ?? value) : zoneLow, hi: hideZone ? (neutralAt ?? value) : zoneHigh, drag: dragging, r, sw, cx, cy, size, h };
+  useDecisionSwarm(swarm ? cvRef : null, swarmLive);
+
   const onHintRef = useRef(onHint);
   onHintRef.current = onHint;
   useEffect(() => { onHintRef.current?.(hintText); }, [hintText]);
@@ -351,6 +458,9 @@ export default function DecisionRing({
           ...(breath ? BREATH_VARS[breath] : {}),
           background: ambient ? `radial-gradient(circle, ${glow}70 0%, ${glow}28 40%, transparent 68%)` : `radial-gradient(circle, ${glow}38 0%, ${glow}12 45%, transparent 70%)`,
           } as React.CSSProperties} />}
+        {sonar && glow && <div aria-hidden className="tpc-glow-pulse" style={{ position: "absolute", left: "50%", top: cy, width: size * 1.15, height: size * 1.15, borderRadius: "50%", pointerEvents: "none", background: `radial-gradient(circle, ${glow}80 0%, ${glow}30 40%, transparent 68%)` }} />}
+        {sonar && <div aria-hidden className="tpc-sonar" onAnimationEnd={() => setSonar(false)} style={{ position: "absolute", left: cx, top: cy, width: rOut * 2, height: rOut * 2, borderRadius: "50%", border: "2px solid #5fae7e", pointerEvents: "none", zIndex: 3 }} />}
+        {swarm && <canvas ref={cvRef} aria-hidden style={{ position: "absolute", left: -size * 0.12, top: -size * 0.12, width: size * 1.24, height: h + size * 0.24, pointerEvents: "none", zIndex: 2 }} />}
         <div className={breath && !dragging ? "tpc-breath1" : undefined} style={breath ? (BREATH_VARS[breath] as React.CSSProperties) : undefined}>
         <div className={breath && !dragging ? "tpc-breath2" : undefined} style={breath ? (BREATH_VARS[breath] as React.CSSProperties) : undefined}>
         <svg
@@ -361,7 +471,7 @@ export default function DecisionRing({
           onPointerMove={handlePointerMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
-          style={{ position: "relative", display: "block", cursor: readOnly ? "default" : "pointer", touchAction: readOnly ? "auto" : "pan-y" }}
+          style={{ position: "relative", display: "block", overflow: "visible", cursor: readOnly ? "default" : "pointer", touchAction: readOnly ? "auto" : "pan-y" }}
         >
           <path d={arcPath(cx, cy, r, A0, A1)} fill="none" stroke="#1d2226" strokeWidth={sw} strokeLinecap="round" />
           {fills.map((f, i) => <path key={i} d={f.d} fill="none" stroke={f.color} strokeWidth={sw} strokeLinecap="butt" />)}
@@ -381,13 +491,30 @@ export default function DecisionRing({
           {showMarker && (() => {
             const [ax, ay] = polar(cx, cy, r - sw * 0.8, toAng(plannedMarker!));
             const [bx, by] = polar(cx, cy, r + sw * 0.8, toAng(plannedMarker!));
-            return <line x1={ax} y1={ay} x2={bx} y2={by} stroke="#fff" strokeWidth={3} strokeLinecap="round" />;
+            /* Légende du trait (06/11, Gildas : « on comprend pas ») : « PRÉVU » à l'extérieur de l'arc, sur l'anneau en grand. */
+            const [lx, ly] = polar(cx, cy, r + sw * 0.8 + 11, toAng(plannedMarker!));
+            return <>
+              <line x1={ax} y1={ay} x2={bx} y2={by} stroke={light ? "#171b1f" : "#fff"} strokeWidth={3} strokeLinecap="round" />
+              {fluid && <text x={lx} y={ly + 3} textAnchor="middle" fontFamily="var(--font-mono), monospace" fontSize={9} fontWeight={700} letterSpacing=".06em" fill={light ? "rgba(23,27,31,.7)" : "rgba(255,255,255,.7)"}>PRÉVU</text>}
+            </>;
           })()}
-          {!hideZone && <path d={sectorPath(cx, cy, rIn, rOut, zoneA0, zoneA1)} fill="none" stroke={light ? "rgba(0,0,0,.55)" : "rgba(255,255,255,.75)"} strokeWidth={2} strokeDasharray="3 3" />}
+          {/* Étiquette de zone le long de l'arc, à l'extérieur (06/11, Gildas : « Optimale », parallèle à la courbe). */}
+          {zoneText && !hideZone && (() => {
+            const mid = (zoneA0 + zoneA1) / 2, id = `zl-${uid}`;
+            return <>
+              <path id={id} d={arcPath(cx, cy, rOut + 9, mid - 70, mid + 70)} fill="none" />
+              <text fontFamily="var(--font-mono), monospace" fontSize={9.5} fontWeight={700} letterSpacing="0.12em" fill={light ? "rgba(23,27,31,.75)" : "rgba(255,255,255,.8)"}>
+                <textPath href={`#${id}`} startOffset="50%" textAnchor="middle">{zoneText.toUpperCase()}</textPath>
+              </text>
+            </>;
+          })()}
+          {!hideZone && (locked
+            ? <path d={sectorPath(cx, cy, rIn, rOut, zoneA0, zoneA1)} fill="rgba(95,174,126,.16)" stroke="#5fae7e" strokeWidth={2.5} />
+            : <path d={sectorPath(cx, cy, rIn, rOut, zoneA0, zoneA1)} fill="none" stroke={light ? "rgba(0,0,0,.55)" : "rgba(255,255,255,.75)"} strokeWidth={2} strokeDasharray="3 3" />)}
           {/* Même curseur que la jauge horizontale du Planning (DecisionGauge.tsx) : 19px, sombre,
               vert dans la zone, halo doux et poignée à 3 traits. Liseré blanc sur fond sombre
               seulement, sinon le curseur sombre se perd sur le track sombre. */}
-          <g style={{ transform: `translate(${mx}px, ${my}px)${knob !== 1 ? ` scale(${knob.toFixed(2)})` : ""}`, transition: dragging || introRunning ? "none" : "transform .35s cubic-bezier(.22,1,.36,1)" }}>
+          <g data-ring-knob="" style={{ transform: `translate(${mx}px, ${my}px)${knob !== 1 ? ` scale(${knob.toFixed(2)})` : ""}`, transition: dragging || introRunning ? "none" : "transform .35s cubic-bezier(.22,1,.36,1)" }}>
             <circle r={12.5} fill={inZone ? "rgba(42,128,69,.25)" : (light ? "rgba(24,24,27,.1)" : "rgba(255,255,255,.14)")} />
             <circle r={9.5} fill={inZone ? "#2a8045" : "#18181b"} stroke={light ? "none" : "rgba(255,255,255,.9)"} strokeWidth={1.5} />
             {[-3, 0, 3].map(dy => <line key={dy} x1={-3.5} x2={3.5} y1={dy} y2={dy} stroke="#fff" strokeWidth={2} strokeLinecap="round" />)}
@@ -399,10 +526,6 @@ export default function DecisionRing({
         </div>
         {/* Arc ouvert en bas : le centre du cercle n'est pas celui de la boîte, on ancre sur cy.
             Mêmes tailles relatives qu'AggregateGauge (.215 valeur, .063 libellé). */}
-        {zoneLabel && !hideZone && (() => {
-          const [tx, ty] = polar(cx, cy, rOut + 13, (zoneA0 + zoneA1) / 2);
-          return <span aria-hidden style={{ position: "absolute", left: tx, top: ty, transform: "translate(-50%, -50%)", fontFamily: "var(--font-mono), monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: light ? "rgba(23,27,31,.7)" : "rgba(255,255,255,.78)", whiteSpace: "nowrap", pointerEvents: "none" }}>{zoneLabel}</span>;
-        })()}
         {fluid ? (() => {
           const t = centerTitle ?? hintText;
           const titleFont = Math.round(size * (t.length > 16 ? 0.1 : 0.12)) - titleShrink;
@@ -439,6 +562,22 @@ export default function DecisionRing({
           </span>
         </div>}
       </div>
+      {/* Légende de l'essaim : bleu = récup, orange = charge (couleurs sûres pour les daltoniens, doublées du mot). */}
+      {legend ? (
+        <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 4 }}>
+          {([["recup", "Récup", "#80b8cc"], ["charge", "Charge", "#f6803f"]] as const).map(([k, lab, col]) => (
+            <button key={k} type="button" onClick={legend[k].onClick}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 999, border: "none", cursor: "pointer", fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", background: light ? "rgba(0,0,0,.05)" : "rgba(255,255,255,.07)", boxShadow: light ? "inset 0 0 0 1px rgba(0,0,0,.08)" : "inset 0 0 0 1px rgba(255,255,255,.1)", color: light ? "rgba(23,27,31,.75)" : "rgba(255,255,255,.75)" }}>
+              <i style={{ width: 7, height: 7, borderRadius: "50%", background: col }} />{lab}
+              <b style={{ color: light ? "#171b1f" : "#fff", fontSize: 11 }}>{legend[k].value ?? "–"}</b>
+              <span aria-hidden style={{ opacity: 0.5 }}>›</span>
+            </button>
+          ))}
+        </div>
+      ) : swarm && <div aria-hidden style={{ display: "flex", gap: 14, justifyContent: "center", marginTop: 2, fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: light ? "rgba(23,27,31,.6)" : "rgba(255,255,255,.55)" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><i style={{ width: 7, height: 7, borderRadius: "50%", background: "#80b8cc" }} />Récup</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><i style={{ width: 7, height: 7, borderRadius: "50%", background: "#f6803f" }} />Charge</span>
+      </div>}
       {!hideHint && <div style={{ marginTop: 8, fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: inZone ? (light ? "#2a8045" : "#4ade80") : (light ? "rgba(0,0,0,.5)" : "rgba(255,255,255,.5)") }}>
         {hintText}
       </div>}

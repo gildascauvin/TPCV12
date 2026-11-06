@@ -135,10 +135,8 @@ export function checkinResult(today: CheckinRow, history: CheckinRow[], sessions
   const lowest = [...DIMENSION_KEYS].sort((a, c) => oriented(today, a) - oriented(today, c))[0];
 
   const insight = (() => {
-    // 1. Jour 1 : rien à comparer, on vend demain avec le mot qu'il a choisi.
-    if (count === 1) return oriented(today, lowest) <= 5
-      ? T(`${lowPhrase(today, lowest)} : dès demain, on saura si c'est ton normal ou un mauvais matin.`, { kind: "dim", key: lowest, positive: false })
-      : T("Premier repère posé : dès demain, on saura si ce matin est ton normal.", { kind: "none" });
+    /* Plus d'annonce « dès ton 5e point forme… » (06/11, Gildas : on a déjà quelque chose à dire à J0) :
+       le 1er jour suit les mêmes règles, jusqu'au point bas du matin en mots (8). */
 
     // 2. Le score s'écarte du ressenti à cause de la charge : on le dit, sinon les deux se contredisent.
     if (form != null) {

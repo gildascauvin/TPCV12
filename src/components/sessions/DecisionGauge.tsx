@@ -98,8 +98,9 @@ export default function DecisionGauge({
   /* Position du curseur par rapport à la zone, en 3 états (2026-09-30, Gildas : jamais
      "Zone conseillée : 6-7 / 10") — même wording que la jauge ronde (DecisionRing.tsx). */
   const hint = hintOverride ?? (inZone ? "Dans la zone" : roundedValue < zoneLow ? "Sous la zone" : "Au-dessus de la zone");
-  const markerLeft = plannedMarker != null && Math.round(plannedMarker) !== roundedValue
-    ? diffToLeft(clampDiff(plannedMarker)) : null;
+  /* Plus de repère « prévu » (06/11, Gildas : on ne comprend pas). */
+  const markerLeft = null as number | null;
+  void plannedMarker;
 
   return (
     <div>

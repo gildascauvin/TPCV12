@@ -30,9 +30,9 @@ import { requestStoreReview } from "@/lib/storeReview";
 import type { HealthRow } from "@/lib/deviceWellness";
 import { onboardingSlides } from "@/components/physio/miniSlides";
 import { fetchReplay, demoReplay, replayUsable, replayDownCount, replayUpCount, type Replay } from "@/lib/healthReplay";
-import { InsightStepBody, ReplayStepBody, payHeadline, payHeadlineCoach, decideOptions, decideLead, decideOptionsCoach, decideLeadCoach, contrastTitle, contrastTitleCoach, weekCostLine, pickWords, pickWordsCoach, lowestAnswer, lowWords, sportFamily, answerRows, testFor, type Answers, type Pick, type PickCoach } from "@/components/onboarding/InsightSteps";
+import { InsightStepBody, ReplayStepBody, payHeadline, payHeadlineCoach, decideOptions, decideLead, decideOptionsCoach, decideLeadCoach, contrastTitle, contrastTitleCoach, weekCostLine, pickWords, pickWordsCoach, lowestAnswer, lowWords, sportFamily, testFor, type Answers, type Pick, type PickCoach } from "@/components/onboarding/InsightSteps";
 import { SessionTemplateCard } from "@/components/programs/SessionTemplateCard";
-import AnalysisReveal, { ReadingReveal, type AnalysisStep } from "@/components/onboarding/AnalysisReveal";
+import AnalysisReveal, { type AnalysisStep } from "@/components/onboarding/AnalysisReveal";
 import { computeAutoregSuggestion } from "@/lib/autoregulation";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import { APP_STORE_URL, PLAY_STORE_URL } from "@/lib/storeLinks";
@@ -476,7 +476,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const obRingRef = useRef<SessionTemplate | null>(null);
   // Écrans « on analyse » (2026-10-29, qualité perçue) : joués une fois, avant le programme et avant le bilan.
   const [obPlanRevealed, setObPlanRevealed] = useState(false);
-  const [obInsightRevealed, setObInsightRevealed] = useState(false);
   /* Carte visible du carrousel ob_insight (2026-11-03) : le titre « Ce matin, stress fort » ne vaut que
      pour la 1re carte (choisie par cette réponse) ; les suivantes parlent d'autres thèmes. */
   const [, setObInsightIdx] = useState(0);
@@ -1981,7 +1980,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     // Frise par thème : programme, point forme, puis sportifs et notifications. Barre courante remplie selon l'avancée.
     const THEMES: StepId[][] = [
       ["ob_sport", "ob_count", "ob_program", "ob_import", "ob_goal", "ob_weak", "ob_days", "ob_plan"],
-      ["ob_health", "ob_decide", "ob_insight", "ob_week"],
+      ["ob_health", "ob_insight", "ob_decide", "ob_week"],
       ["ob_invite", "ob_notif"],
     ];
     const themeSteps = THEMES.map(t => post.filter(st => t.includes(st))).filter(t => t.length);
@@ -2333,24 +2332,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       );
     }
     if (currentStep === "ob_insight") {
-      if (!obInsightRevealed) {
-        /* 2e écran d'analyse (31/10) : la relecture du point forme, pas un 2e anneau à cocher. */
-        const ses = ringSession();
-        const sug = computeAutoregSuggestion(obCheckinScore, ses.target_difficulty, syntheticBaselineFor(obCheckinScore ?? 60));
-        const verdict = !sug ? "À garder telle quelle" : sug.dir === "low" ? "À alléger" : "Peut être poussée";
-        return (
-          <ReadingReveal kicker="Lecture" title={coach ? "On lit le point forme de ton sportif." : "On lit ton point forme."}
-            rows={answerRows(answers)} session={ses.name} verdict={verdict}
-            onDone={() => { setObInsightRevealed(true); posthog.capture("onboarding_insight_reveal_done", { role }); }} />
-        );
-      }
-      // Le bouton suit la décision de l'écran suivant (31/10) : « ajustée » seulement si la séance change.
-      const insightSes = ringSession();
-      const insightSug = computeAutoregSuggestion(obCheckinScore, insightSes.target_difficulty, syntheticBaselineFor(obCheckinScore ?? 60));
+      /* Plus d'écran « On lit ton point forme » (06/11, Gildas) : le score vient de se former sur l'anneau du point forme, la relecture faisait doublon. */
+      // Bilan avant « Tu fais quoi ? » (06/11) : même ordre que dans l'app, la question arrive juste avant la jauge qui y répond.
       return (
         <QuestionShell {...common} dark
           onSkip={() => obAdvance()}
-          cta={{ label: coach ? `Voir la séance de ${coachFirst}` : (insightSug ? "Voir ma séance ajustée" : "Voir ma séance du jour"), onClick: () => obAdvance() }}>
+          cta={{ label: "Continuer", onClick: () => obAdvance() }}>
           <InsightStepBody answers={answers} name={coach ? coachFirst : undefined} sport={sportForCopy} onIndex={setObInsightIdx}
             real={!coach && obAnswers && obCheckinScore != null ? onboardingSlides({ date: today, score: obCheckinScore, answers: obAnswers, health: obHealthRows }, sportForCopy) : []} />
         </QuestionShell>
@@ -2386,7 +2373,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       const ses = ringSession();
       const sug = computeAutoregSuggestion(obCheckinScore, ses.target_difficulty, syntheticBaselineFor(obCheckinScore ?? 60));
       return (
-        <QuestionShell {...common} dark eyebrow={coach ? "Ton instinct, avec une règle" : "Ton ressenti, avec une règle"}
+        <QuestionShell {...common} dark eyebrow={coach ? "Ton instinct, avec une règle" : "Ta forme, avec une règle"}
           title={coach ? capS(contrastTitleCoach(obPick as PickCoach | null, sug, coachFirst)) : contrastTitle(obPick as Pick | null, sug)}
           sub={weekSub(sug?.dir ?? null) || undefined}
           onSkip={() => obAdvance()}

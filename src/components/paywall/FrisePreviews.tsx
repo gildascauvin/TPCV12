@@ -1,5 +1,6 @@
 "use client";
 
+import SessionRing from "@/components/calendar/SessionRing";
 import { ExerciseLineView, exerciseViews } from "@/components/sessions/ExerciseLineView";
 import { addDays, format as formatDate } from "date-fns";
 import DiffGauge from "@/components/calendar/DiffGauge";
@@ -93,9 +94,10 @@ function SessionMiniCard({ preview, width }: { preview: SessionPreview; width?: 
     <div style={width
       ? { flexShrink: 0, width, border: "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 16, padding: "10px 11px", boxShadow: "0 2px 10px rgba(0,0,0,0.045)" }
       : { flex: 1, minWidth: 0, border: "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 16, padding: "10px 11px", boxShadow: "0 2px 10px rgba(0,0,0,0.045)" }}>
-      <div style={{ fontSize: 11.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.02em", marginBottom: 8 }}>{preview.name}</div>
-      <div style={{ marginBottom: 8 }}>
-        <DiffGauge value={preview.diff} height={9} />
+      {/* Même anneau que le Planning (06/11) à la place de la barre. */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6, marginBottom: 8 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.02em" }}>{preview.name}</div>
+        <SessionRing session={{ date: "9999-12-31", done: false, target_difficulty: preview.diff }} today="" size={48} dark />
       </div>
       <div style={{ borderRadius: 12, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
         {exerciseViews(preview.exercises).map((v, i) => (

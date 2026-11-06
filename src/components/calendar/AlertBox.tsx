@@ -70,7 +70,9 @@ function AlertText({ text, size }: { text: string; size?: number }) {
   );
 }
 
-export default function AlertBox({ alert, actions, variant = "light", centered = false }: { alert: DayAlert; actions?: React.ReactNode; variant?: "dark" | "light" | "darkColor" | "bare"; centered?: boolean }) {
+export default function AlertBox({ alert, actions, variant = "light", centered = false, lead }: { alert: DayAlert; actions?: React.ReactNode; variant?: "dark" | "light" | "darkColor" | "bare"; centered?: boolean;
+  /* Planning (06/11) : l'anneau du jour à gauche, titre et détail à sa droite. */
+  lead?: React.ReactNode }) {
   /* "bare" (2026-10-28, anneau en grand) : sans encart, posé sous l'anneau qui porte déjà le titre.
      La 1re ligne de `text` (le titre) n'est donc pas affichée, seulement le détail. */
   if (variant === "bare") {
@@ -98,7 +100,20 @@ export default function AlertBox({ alert, actions, variant = "light", centered =
         fontSize: 11, lineHeight: 1.45, color: text, fontWeight: 600,
       }}>
         <PulseDot color={alert.glow} top={11} right={11} size={7} />
-        <div style={{ paddingRight: 14 }}><AlertText text={alert.text} /></div>
+        {lead ? (() => {
+          const [head, ...rest] = alert.text.split("\n");
+          return (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, paddingRight: 14 }}>
+                {lead}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 14, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2, marginBottom: rest.length ? 5 : 0 }}>{head}</div>
+                  {rest.map((line, i) => <div key={i} style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.45, marginTop: i > 0 ? 3 : 0 }}>{line}</div>)}
+                </div>
+              </div>
+            </>
+          );
+        })() : <div style={{ paddingRight: 14 }}><AlertText text={alert.text} /></div>}
         {actions && <div style={{ marginTop: 10 }} onClick={e => e.stopPropagation()}>{actions}</div>}
       </div>
     );

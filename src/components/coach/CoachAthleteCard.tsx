@@ -1,11 +1,13 @@
 "use client";
 
+import { proposalOfDay } from "@/lib/sessionInsight";
 import { useState } from "react";
 import { proposalPersonal } from "@/lib/autoregPersonal";
 import TodaySessionCard from "@/components/sessions/TodaySessionCard";
 import EmptyDayCard from "@/components/sessions/EmptyDayCard";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
+import type { RingLegend } from "@/components/sessions/DecisionRing";
 import { RestDecisionRing, DoneDecisionRing } from "@/components/sessions/DecisionRing";
 import { breathForDir } from "@/lib/ringAmbience";
 import { validDecision } from "@/lib/autoregDecisionRecord";
@@ -19,6 +21,7 @@ import { ExerciseLineView, SessionSynthesis, exerciseViews } from "@/components/
 import { qualitativeDifficulty, type AutoregOriginal } from "@/lib/autoregulation";
 import { computeDecisionCard, decisionCardColor, withTitle, type DecisionDay } from "@/lib/decisionCard";
 import PhaseLine from "@/components/calendar/PhaseLine";
+import FlipBlock from "@/components/today/FlipBlock";
 import { PhaseCollecting, type CollectProgress } from "@/components/conseils/AnalyticsCollecting";
 import {
   Z_SWC, Z_MODERATE, relativeZoneLabel,
@@ -177,7 +180,9 @@ function zoneLabelFor(score: number | null, baseline: WellnessBaselineResult | n
   return zoneLabel(score);
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession, onProgram, programPill, locked = false, onUnlock, lockedBare = false, collect = null, onSetDifficulty, page = false, onEditSession, actionRequest = null, onCheckin, onCompleteSession }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession, onProgram, programPill, locked = false, onUnlock, lockedBare = false, collect = null, onSetDifficulty, page = false, onEditSession, actionRequest = null, onCheckin, onCompleteSession, ringLegend }: {
+  /* Lot 4 côté coach (06/11) : légende Récup / Charge sous l'anneau, ouvre le détail du sportif. */
+  ringLegend?: RingLegend;
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -306,7 +311,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
     const doneTop = [...todaySessions].filter(s => s.done).sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
     phaseDay = todaySessions.length === 0 ? { kind: "rest", tomorrowDifficulty }
       : todaySessions.some(s => !s.done) ? { kind: "planned", tomorrowDifficulty }
-      : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop) };
+      : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop), proposal: proposalOfDay(doneTop) };
   }
   const decision = computeDecisionCard({
     day: phaseDay,
@@ -324,9 +329,9 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
   });
   /* Pas assez d'historique (2026-10-02) : gratuit → phase d'exemple derrière le flou, sans mention ;
      lisible → collecte. Jamais d'exemple en clair. */
-  const phaseInside = decision.phase?.insufficient
+  const phaseInsideCard = decision.phase?.insufficient
     ? (collect ? <PhaseCollecting p={collect} perspective={selfView ? "athlete" : "coach"} /> : null)
-    : decision.phase ? <PhaseLine phase={decision.phase} /> : null;
+    : decision.phase ? <PhaseLine inCard phase={decision.phase} /> : null;
   const [previewPct, setPreviewPct] = useState<number | null>(null);
   /* Nœud des CTA d'ajustement dans la carte décision (portail d'AutoregButtons, 2026-09-30). */
   const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null);
@@ -419,13 +424,14 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
                 ringGlow={badgeColor}
                 ringBreath={ringBreath}
                 ringAmbient={ringAmbient}
+                ringLegend={ringLegend}
                 onSetDifficulty={async d => { await onSetDifficulty?.(topSession!, d); }}
                 isActive
               />
             </div>
           )
-            : todaySessions.length === 0 || !topSession ? <RestDecisionRing size={ringSz} hideHint fluid glow={badgeColor} ambient={ringAmbient} breath="flat" centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked />
-            : <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} hideZone hideHint fluid glow={badgeColor} ambient={ringAmbient} breath={doneGap >= 2 ? "low" : "flat"} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked />}
+            : todaySessions.length === 0 || !topSession ? <RestDecisionRing size={ringSz} hideHint fluid glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath="flat" centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked />
+            : <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} hideZone hideHint fluid glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath={doneGap >= 2 ? "low" : "flat"} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked />}
         </div>
       )}
       <LockedBlur locked={!!locked} bare={lockedBare} surface="coach_card" onUnlock={() => onUnlock?.()} title="Décision prête" sub="Vois quoi faire de cette séance." cta="Activer le Coach Control" radius={24}>
@@ -454,6 +460,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
                 ringGlow={badgeColor}
                 ringBreath={ringBreath}
                 ringAmbient={ringAmbient}
+                ringLegend={ringLegend}
                 onHint={setRingHint}
                 actionsSlot={actionsSlot}
                 severityColor={decision.suggestion ? badgeColor : undefined}
@@ -475,10 +482,10 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               />
             </div>
           ) : todaySessions.length === 0 || !topSession ? (
-            <RestDecisionRing size={ringSz} hideHint fluid glow={badgeColor} ambient={ringAmbient} breath="flat" centerTitle={decision.title ?? decision.text.split("\n")[0]} />
+            <RestDecisionRing size={ringSz} hideHint fluid glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath="flat" centerTitle={decision.title ?? decision.text.split("\n")[0]} />
           ) : (
-            <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} zone={decision.doneZone} hideHint fluid glow={badgeColor} ambient={ringAmbient} breath={doneGap >= 2 ? "low" : "flat"}
-              zoneLabel={decision.doneZone ? "Conseillé" : undefined} introFrom={decision.doneZone ? (decision.doneZone.low + decision.doneZone.high) / 2 : undefined}
+            <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} zone={decision.doneZone} hideHint fluid glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath={doneGap >= 2 ? "low" : "flat"}
+              zoneLabel={decision.doneZone ? "Optimal" : undefined} introFrom={decision.doneZone ? (decision.doneZone.low + decision.doneZone.high) / 2 : undefined}
               centerTitle={decision.title ?? decision.text.split("\n")[0]} />
           )}
         </div>}
@@ -511,23 +518,16 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
          action, quand aucune séance du jour n'est ajustable. */}
       <div style={{ marginBottom: todaySessions.length > 0 ? 12 : 0 }}>
         {/* Plus d'encart (2026-10-28, anneau en grand) : le titre est au centre de l'anneau. */}
-        <AlertBox
-          variant="bare"
-          alert={{ border: `${badgeColor}66`, glow: badgeColor, text: locked ? decision.text : withTitle(decision.text, adjustable ? ringHint : decision.title, adjustable ? undefined : decision.titleDetail) }}
-          centered={!!decision.phase}
-          actions={adjustable ? (
-            /* CTA d'ajustement sous le texte de la reco (portail d'AutoregButtons), puis la Phase. */
-            <div style={{ display: "grid", gap: 12 }}>
-              <div ref={setActionsSlot} className="autoreg-slot" />
-              {phaseInside}
-            </div>
-          ) : (
-            <div style={{ display: "grid", gap: 10, justifyItems: decision.phase ? "center" : undefined }}>
-            {phaseInside}
-            {/* Plus de bouton Voir/Décider (2026-10-02, Gildas) : sans séance ajustable il n'y avait
-                rien à ouvrir, et la carte séance dessous est déjà cliquable quand elle existe. */}
-            </div>
-          )}
+        {/* Même carte que /today (06/11) : conseil devant, Phase au dos, boutons dans la carte sous le conseil. */}
+        <FlipBlock
+          frontLabel={todaySessions.length === 0 ? "Jour de repos" : adjustable ? "Conseil du jour" : "Séance du jour"}
+          backLabel={decision.phase && !decision.phase.insufficient ? decision.phase.title : null}
+          front={<AlertBox
+            variant="bare"
+            alert={{ border: `${badgeColor}66`, glow: badgeColor, text: locked ? decision.text : withTitle(decision.text, adjustable ? ringHint : decision.title, adjustable ? undefined : decision.titleDetail) }}
+          />}
+          actions={adjustable ? <div ref={setActionsSlot} className="autoreg-slot" style={{ marginTop: 4 }} /> : undefined}
+          back={phaseInsideCard ?? undefined}
         />
       </div>
 
@@ -597,11 +597,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           </div>
           {/* Synthèse sous le titre : aperçu en cours, ou décision déjà appliquée vs le plan. */}
           <SessionSynthesis notes={topSession.notes} adjustPct={effectivePreviewPct} originalNotes={validDecision(topSession)?.original?.notes ?? null} compact style={{ marginTop: 6 }} />
-          {!topSession.done ? null : (
-            (topSession.done ? topSession.rpe : topSession.target_difficulty) != null && (
-              <DiffGauge value={(topSession.done ? topSession.rpe : topSession.target_difficulty) ?? null} height={8} />
-            )
-          )}
+          {/* Plus de barre (06/11) : l'anneau de la carte porte déjà la séance. */}
           {topSession.notes && (
             <div style={{ marginTop: 7, borderRadius: 12, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
               {exerciseViews(topSession.notes.split("\n").filter(Boolean), effectivePreviewPct).map((v, i) => {

@@ -107,8 +107,9 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
   const titles = primingTitles(mode, source, ctx, athleteName);
   const title = headline ?? titles.title;
   const subText = headline ? (sub ?? null) : titles.sub;
-  const hitIndex = tried ? 0 : primingHitIndex(source);
-  const hitLabel = tried || source === "first" ? "Ce que tu viens d'essayer" : "Ce que tu voulais faire";
+  /* Onboarding : pas de badge « Ce que tu viens d'essayer » (06/11, Gildas : il a vu bien plus, bilans compris). */
+  const hitIndex = tried ? -1 : primingHitIndex(source);
+  const hitLabel = source === "first" ? "Ce que tu viens d'essayer" : "Ce que tu voulais faire";
   const noAthletes = mode === "coach" && !(hasAthletes ?? (ctx.athleteNames.length > 0));
   const displayName = name ?? ctx.name ?? undefined;
   const native = isNativeApp();

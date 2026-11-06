@@ -155,3 +155,5 @@ Commun : compte coach gratuit → paywall ; pas de bilan en sandbox. PostHog `co
 - Page de gestion de la bibliothèque vidéo, chat, communauté.
 
 Détails et raisons : grep `historique.md` de ce dossier (sections datées, la plus récente prime).
+
+- Lot 4 côté coach (LOCAL 06/11) : plus d'onglets `HomeTabs` dans Coach Control. Légende Récup / Charge sous l'anneau de chaque carte (`CoachCard ringLegend`, `legendFor` dans CoachClient) : ouvre la section du sportif (le sélectionne). Vue groupe : pastilles « Récup du groupe › / Charge du groupe › » (TeamAnalyticsList). Bouton « ← Récupération · Prénom/Groupe » pour revenir. Sections avec `ScoreRing` + essaim (partagées avec /today), sans pastille Modifier.

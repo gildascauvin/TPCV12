@@ -1,5 +1,7 @@
 "use client";
 
+import { proposalOfDay } from "@/lib/sessionInsight";
+import { todayRingState, type SessionRingState } from "@/components/calendar/SessionRing";
 import { markPrimingSource } from "@/lib/primingSource";
 import { proposalPersonal } from "@/lib/autoregPersonal";
 import { usePhysioData, physioDecisionInputs, requestPhysioReplay } from "@/lib/physioData";
@@ -11,11 +13,11 @@ import { useDeviceNote } from "@/hooks/useDeviceNote";
 import { useRouter, useSearchParams } from "next/navigation";
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import dynamic from "next/dynamic";
-import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
+import { format, addDays, subDays, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { createClient } from "@/lib/supabase/client";
-import CalendarHeader, { type ViewMode } from "@/components/calendar/CalendarHeader";
+import CalendarHeader from "@/components/calendar/CalendarHeader";
 import DayColumn from "@/components/calendar/DayColumn";
 import { usePlanningScroll, PlanningScrollViews, PlanningLayoutToggle } from "@/components/calendar/PlanningScrollViews";
 import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler, PlanningDnd } from "@/components/calendar/DraggablePlanning";
@@ -52,6 +54,7 @@ import { enqueueOfflineAction } from "@/lib/offlineStore";
 import { localWellness } from "@/lib/offlineWellness";
 import { withDeviceScore } from "@/lib/deviceWellnessDb";
 import { haptic } from "@/lib/native";
+import { useChargeDays } from "@/hooks/useChargeDays";
 import { undoableDelete } from "@/lib/undoable";
 
 /* Modales/drawers ouverts sur demande (état local, jamais montés au premier rendu) — next/dynamic
@@ -110,7 +113,6 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   const gateInput = sandboxMode ? requireSubscription : <T,>(fn: () => T | Promise<T>) => Promise.resolve(fn());
   const canDecideToday = sandboxMode || isActive || !firstDecisionOn || firstDecisionOn === todayStr;
 
-  const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [weekBase, setWeekBase] = useState(initialDate ? new Date(initialDate + "T12:00:00") : new Date());
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [navKey, setNavKey] = useState(0);
@@ -119,6 +121,8 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   const weekGridRef  = useRef<HTMLDivElement>(null);
   const dayRefs      = useRef<(HTMLDivElement | null)[]>([]);
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
+  /* Anneau des jours sans séance (06/11) : charge du jour, masquée comme sur /today sans abonnement. */
+  const chargeDays = useChargeDays(!sandboxMode && isActive, todayStr, sessions.filter(s => s.done).map(s => `${s.date}${s.rpe}${s.duration}`).join(","));
   const [wellnessList, setWellnessList] = useState<WellnessDaily[]>(initialWellness);
   // Montre (Apple Santé) avant le point forme du jour : affichée dans la carte "Plan à confirmer" d'aujourd'hui.
   const deviceNote = useDeviceNote(userId, todayStr, !sandboxMode && !wellnessList.some(w => w.date === todayStr && w.bedtime != null));
@@ -132,15 +136,13 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   // Historique COMPLET (pas de filtre de date), dédié au calendrier popup uniquement — jamais
   // refetché à la navigation semaine/mois (2026-09-26, fix : "je n'ai pas toujours tous les
   // wellness rings quand je vais dans le passé"). `wellnessBaselineHistory` ci-dessus est ANCRÉ
-  // SUR LA SEMAINE AFFICHÉE (voir loadWeek/loadMonth, `.lte("date", sun)`) — naviguer vers une
+  // SUR LA SEMAINE AFFICHÉE (voir loadWeek, `.lte("date", sun)`) — naviguer vers une
   // semaine passée en réduisait donc la fenêtre à "sinceBaseline..sun", laissant tout jour entre
   // cette semaine et aujourd'hui sans aucune donnée pour la ring. Ce 2e état, séparé, ne sert QUE
   // le popup — n'affecte jamais la baseline/tendance calculée ailleurs dans ce fichier.
   // Initialisé sur le même fixture que wellnessBaselineHistory (sandbox : -41/+21j, jamais
   // refetché) — pour un vrai compte, écrasé par le fetch complet ci-dessous dès le montage.
   const [popupWellnessHistory, setPopupWellnessHistory] = useState<WellnessDaily[]>(initialWellnessBaselineHistory);
-  const [monthSessions, setMonthSessions] = useState<Session[]>([]);
-  const [monthWellness, setMonthWellness] = useState<WellnessDaily[]>([]);
   const [addingDate, setAddingDate] = useState<string | null>(null);
   const [completing, setCompleting] = useState<Session | null>(null);
   const [pendingCompleteSession, setPendingCompleteSession] = useState<Session | null>(null);
@@ -315,27 +317,6 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     if (bh) setWellnessBaselineHistory(bh);
   }
 
-  async function loadMonth(anchor: string) {
-    if (sandboxMode) return;
-    const base = new Date(anchor + "T12:00:00");
-    // La grille Mois affiche aussi les jours de bord des semaines qui chevauchent le mois
-    // (eachWeekOfInterval) — le fetch doit couvrir la même plage, pas le mois strict,
-    // sinon les séances de ces jours de bord n'apparaissent jamais.
-    const gridStart = startOfWeek(startOfMonth(base), { weekStartsOn: 1 });
-    const gridEnd = addDays(startOfWeek(endOfMonth(base), { weekStartsOn: 1 }), 6);
-    const start = format(gridStart, "yyyy-MM-dd");
-    const end = format(gridEnd, "yyyy-MM-dd");
-    const sinceBaseline = format(subDays(gridStart, 42), "yyyy-MM-dd");
-    const [{ data: s }, { data: w }, { data: bh }] = await Promise.all([
-      supabase.from("sessions").select("*").eq("user_id", userId).gte("date", start).lte("date", end).order("created_at"),
-      supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", start).lte("date", end),
-      supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", sinceBaseline).lte("date", end),
-    ]);
-    setMonthSessions(s ?? []);
-    setMonthWellness(w ?? []);
-    if (bh) setWellnessBaselineHistory(bh);
-  }
-
   // Label "Séances libres" valable uniquement pour la semaine dont `mondayStr` est le lundi.
   async function setFreeLabelForWeek(mondayStr: string, label: string) {
     const value = label.trim();
@@ -365,33 +346,25 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     const nb = new Date(date + "T12:00:00");
     setWeekBase(nb);
     planning.onDateChange(date);
-    if (viewMode === "week") loadWeek(nb);
-    else loadMonth(date);
-  }
-
-  function handleViewModeChange(mode: ViewMode) {
-    setViewMode(mode);
-    if (mode === "month") loadMonth(selectedDate);
+    loadWeek(nb);
   }
 
   function navigatePeriod(dir: "next" | "prev") {
     slideDirRef.current = dir === "next" ? "left" : "right";
     setNavKey(k => k + 1);
-    const base = viewMode === "week"
-      ? (dir === "next" ? addDays(weekBase, 7) : subDays(weekBase, 7))
-      : (dir === "next" ? addMonths(weekBase, 1) : subMonths(weekBase, 1));
+    const base = dir === "next" ? addDays(weekBase, 7) : subDays(weekBase, 7);
     handleDateChange(format(base, "yyyy-MM-dd"));
   }
 
   // Scroll vers le jour sélectionné (ring du header cliqué, ou "Aujourd'hui" par défaut au montage/
   // changement de semaine — selectedDate vaut todayStr initialement et à chaque navigation).
   useEffect(() => {
-    if (viewMode !== "week" || planning.active) return;
+    if (planning.active) return;
     const idx = dates.findIndex(d => format(d, "yyyy-MM-dd") === selectedDate);
     if (idx >= 0) {
       scrollIntoViewX(dayRefs.current[idx]);
     }
-  }, [weekBase, selectedDate, viewMode]);
+  }, [weekBase, selectedDate]);
 
   useEffect(() => {
     const el = weekGridRef.current;
@@ -727,6 +700,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     let alert;
     let decisionGaugeNode: React.ReactNode;
     let autoregTargetId: string | null = null;
+    let todayRing: SessionRingState | null = null;
     if (dstr === todayStr) {
       const todaySessions = sessions.filter(s => s.date === todayStr);
       const wellnessToday = wellnessList.find(w => w.date === todayStr) ?? null;
@@ -754,7 +728,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
       const doneTop = [...todaySessions].filter(s => s.done).sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
       const decisionDay: DecisionDay = todaySessions.length === 0 ? { kind: "rest", tomorrowDifficulty }
         : todaySessions.some(s => !s.done) ? { kind: "planned", tomorrowDifficulty }
-        : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop) };
+        : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop), proposal: proposalOfDay(doneTop) };
       const decision = computeDecisionCard({
         day: decisionDay,
         wellnessScore: wellnessToday ? wellnessSignal(wellnessToday) : null,
@@ -766,6 +740,10 @@ export default function WeekClient({ userId, userName, userSport = null, initial
       });
       const severityColor = decisionCardColor(decision.icon);
       const decisionLocked = !canDecideToday;
+      {
+        const top = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0];
+        if (top) todayRing = todayRingState(top, { suggestion: decision.suggestion, decided: !!validDecision(top), doneZone: decision.doneZone ?? null, locked: decisionLocked });
+      }
       alert = decisionLocked
         /* Freemium : le sens reste dit, le contenu de la décision non. */
         ? { border: `${severityColor}66`, glow: severityColor, text: "Analyse du jour prête\nActive l'ajustement pour la lire." }
@@ -824,7 +802,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     }
     // Score + zone relatifs ("Équilibré"...) sur CHAQUE jour de la semaine affichée, pas
     // seulement "Aujourd'hui" — réutilise le même historique déjà rechargé par semaine
-    // (wellnessBaselineHistory, voir loadWeek/loadMonth) ; un jour sans historique suffisant
+    // (wellnessBaselineHistory, voir loadWeek) ; un jour sans historique suffisant
     // retombe silencieusement sur le score/libellé absolus (DayColumn, comportement inchangé).
     // Le ring affiché ici doit rester identique au ring de /today et de CalendarHeader pour
     // le même jour — un seul calcul (computeWellnessBaselineAt), jamais 3 chiffres différents.
@@ -837,6 +815,8 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     return (
       <DroppableDay dstr={dstr}>
       <DayColumn
+        todayRing={todayRing}
+        restCharge={chargeDays[dstr] ?? null}
         date={date}
         sessions={withReveal(sessions.filter(s => s.date === dstr))}
         wellness={dayRow ? { ...dayRow, score: dayRelativeScore, zoneLabel: dayZoneLabel } : null}
@@ -890,8 +870,6 @@ export default function WeekClient({ userId, userName, userSport = null, initial
         mode="period"
         selectedDate={selectedDate}
         onDateChange={handleDateChange}
-        viewMode={viewMode}
-        onViewModeChange={handleViewModeChange}
         onProfileClick={() => setProfileOpen(true)}
         showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
         weekTitleFor={weekTitleForPopup}
@@ -914,14 +892,14 @@ export default function WeekClient({ userId, userName, userSport = null, initial
         }}>
 
       {/* ── Vue semaine ── */}
-      {viewMode === "week" && planning.active && (
+      {planning.active && (
         <PlanningScrollViews
           view={planning.view} bloc={isLg} todayStr={todayStr} weekTitleFor={weekTitleForPopup}
           renderDay={renderDay} sensors={dndSensors} onDragEnd={handleDragEnd} padX={isMd ? 20 : 14}
         />
       )}
 
-      {viewMode === "week" && !planning.active && (
+      {!planning.active && (
         <div className={planning.ready ? undefined : "planning-pending"} style={{ position: "relative" }}>
         <PlanningDnd sensors={dndSensors} onDragEnd={handleDragEnd}>
         <div style={{
@@ -950,156 +928,6 @@ export default function WeekClient({ userId, userName, userSport = null, initial
         </div>
       )}
 
-      {/* ── Vue mois ── */}
-      {viewMode === "month" && (() => {
-        const anchor = new Date(selectedDate + "T12:00:00");
-        const weeks = eachWeekOfInterval(
-          { start: startOfMonth(anchor), end: endOfMonth(anchor) },
-          { weekStartsOn: 1 }
-        );
-        const dayLabels = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-        return (
-          <div style={{ padding: isMd ? "14px 20px 100px" : "8px 8px 100px" }}>
-            {/* En-têtes colonnes */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMd ? 4 : 2, marginBottom: 4 }}>
-              {dayLabels.map(d => (
-                <div key={d} style={{ textAlign: "center", fontSize: 9, fontWeight: 900, color: "#8a8f94", letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", paddingBottom: 2 }}>
-                  {isMd ? d : d[0]}
-                </div>
-              ))}
-            </div>
-            {/* Grille semaines — une mini-bannière programme/label par semaine, façon événement
-                multi-jours au-dessus de la ligne (comme un bandeau Google Calendar). */}
-            {weeks.map(weekMonday => {
-              const mondayStr = format(weekMonday, "yyyy-MM-dd");
-              const weekMatch = findProgramForWeek(activeAssignments, mondayStr);
-              return (
-              <div key={weekMonday.toISOString()} style={{ marginBottom: isMd ? 6 : 4 }}>
-                {weekMatch ? (
-                  <ProgramBanner compact program={weekMatch.program} currentWeek={weekMatch.week} acclimatation={weekMatch.acclimatation} />
-                ) : (
-                  <ProgramBanner
-                    compact
-                    freeLabel={freeLabels[mondayStr] ?? null}
-                    onEditFreeLabel={label => setFreeLabelForWeek(mondayStr, label)}
-                  />
-                )}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMd ? 4 : 2, marginTop: 4 }}>
-                {Array.from({ length: 7 }, (_, i) => addDays(weekMonday, i)).map(date => {
-                  const dstr = format(date, "yyyy-MM-dd");
-                  const isToday = dstr === todayStr;
-                  const inMonth = date.getMonth() === anchor.getMonth();
-                  const daySessions = monthSessions.filter(s => s.date === dstr);
-                  const wellness = monthWellness.find(w => w.date === dstr) ?? null;
-                  /* Score relatif (baseline Z-score), pas absolu — vue Mois oubliée lors de
-                     l'unification wellness relatif (2026-08-30/31), seule surface encore sur
-                     wellnessSignal() brut alors que loadMonth() fetch déjà wellnessBaselineHistory
-                     pour ça (bug réel trouvé par Gildas : ring différent entre header/chart et
-                     grille Mois pour le même jour). Même calcul que la vue Semaine ci-dessus
-                     (dayRelativeScore) — un seul chiffre, jamais deux. */
-                  const monthDayBaseline = wellness?.bedtime != null
-                    ? computeWellnessBaselineAt(wellnessBaselineHistory.filter(w => w.date < dstr), wellness)
-                    : null;
-                  const score = monthDayBaseline?.hasEnoughHistory
-                    ? monthDayBaseline.relativeScore
-                    : (wellness ? wellnessSignal(wellness) : null);
-
-                  return (
-                    <div
-                      key={dstr}
-                      style={{
-                        background: inMonth ? "#fff" : "rgba(255,255,255,.45)",
-                        border: isToday ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,.08)",
-                        borderRadius: isMd ? 16 : 12,
-                        padding: isMd ? "8px 8px 6px" : "6px 5px 6px",
-                        minHeight: isMd ? 100 : 90,
-                        opacity: inMonth ? 1 : 0.4,
-                        boxShadow: isToday ? "0 4px 14px rgba(212,64,0,.10)" : "0 2px 6px rgba(0,0,0,.04)",
-                        display: "flex", flexDirection: "column",
-                      }}
-                    >
-                      {/* Desktop : date + ring côte à côte */}
-                      {isMd && (
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                          <div>
-                            <div style={{ fontSize: 8, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", letterSpacing: "0.08em", lineHeight: 1.2 }}>
-                              {format(date, "EEE", { locale: fr }).slice(0, 3)}
-                            </div>
-                            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: isToday ? "#d44000" : "#171b1f", lineHeight: 1 }}>
-                              {date.getDate()}
-                            </div>
-                          </div>
-                          {score !== null && <PlanningRing score={score} size={44} />}
-                        </div>
-                      )}
-
-                      {/* Mobile : numéro + ring empilés verticalement, dots dessous */}
-                      {!isMd && (
-                        <>
-                          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, letterSpacing: "-0.02em", color: isToday ? "#d44000" : "#171b1f", lineHeight: 1, textAlign: "center", marginBottom: 4 }}>
-                            {date.getDate()}
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}>
-                            {score !== null
-                              ? <PlanningRing score={score} size={40} />
-                              : <div style={{ width: 40, height: 40 }} />}
-                          </div>
-                          {daySessions.length > 0 && (
-                            <div style={{ display: "flex", gap: 3, justifyContent: "center", flexWrap: "wrap" }}>
-                              {daySessions.slice(0, 3).map(s => (
-                                <div key={s.id} style={{ width: 6, height: 6, borderRadius: "50%", background: s.done ? "#2f9e44" : "#d44000", flexShrink: 0 }} />
-                              ))}
-                            </div>
-                          )}
-                        </>
-                      )}
-
-                      {/* Desktop : séances + bouton ajouter */}
-                      {isMd && (
-                        <>
-                          {daySessions.slice(0, 2).map(s => {
-                            const gaugeVal = s.done ? (s.rpe ?? null) : (s.target_difficulty ?? null);
-                            return (
-                              <div
-                                key={s.id}
-                                onClick={e => { e.stopPropagation(); setEditing(s); }}
-                                style={{ background: "#f7f8f9", borderRadius: 8, padding: "4px 6px", marginBottom: 3, cursor: "pointer" }}
-                              >
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4, marginBottom: 3 }}>
-                                  <div style={{ fontSize: 10, fontWeight: 800, color: "#171b1f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-                                    {s.name}
-                                  </div>
-                                  <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 8, fontWeight: 700, padding: "1px 5px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: s.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,.10)", color: s.done ? "#2f9e44" : "#d44000" }}>
-                                    {s.done ? "Terminé" : "Prévu"}
-                                  </span>
-                                </div>
-                                <DiffGauge value={gaugeVal} height={5} />
-                              </div>
-                            );
-                          })}
-                          {daySessions.length > 2 && (
-                            <div style={{ fontSize: 9, color: "#8a8f94", textAlign: "center" }}>+{daySessions.length - 2}</div>
-                          )}
-                          {inMonth && (
-                            <div
-                              onClick={e => { e.stopPropagation(); setAddingDate(dstr); }}
-                              style={{ marginTop: "auto", border: "0.5px dashed rgba(212,64,0,.28)", borderRadius: 8, textAlign: "center", fontSize: 10, color: "#d44000", cursor: "pointer", fontWeight: 700, padding: "4px 2px" }}
-                            >
-                              +
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-                </div>
-              </div>
-              );
-            })}
-          </div>
-        );
-      })()}
 
         </div>{/* animation wrapper */}
       </div>{/* weekGridRef */}

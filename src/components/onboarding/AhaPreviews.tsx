@@ -1,5 +1,6 @@
 "use client";
 
+import SessionRing from "@/components/calendar/SessionRing";
 import { useEffect, useState } from "react";
 import DecisionRing, { decisionRingState } from "@/components/sessions/DecisionRing";
 import AggregateGauge from "@/components/conseils/AggregateGauge";
@@ -119,12 +120,10 @@ export function AhaDecisionPreview({ name, session }: { name?: string; session?:
       <div style={{ marginTop: 16, background: "#fff", color: "#171b1f", borderRadius: 24, padding: "16px 16px 14px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 10 }}>
           <span style={{ fontWeight: 900, fontSize: 15 }}>{session?.name ?? "💪 Force · Bas du corps"}</span>
-          <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "4px 8px", borderRadius: 8, background: applied ? "#fff4e6" : "rgba(212,64,0,.10)", color: applied ? "#c25d00" : "#d44000" }}>
-            {applied ? "Ajustée" : "Prévue"}
-          </span>
+          {/* Même anneau que le Planning (06/11) à la place de la pastille et de la barre. */}
+          <SessionRing session={{ date: "9999-12-31", done: false, target_difficulty: applied ? adjustDifficulty(planned, sug.reco) : planned }} today="" size={64} dark />
         </div>
         <SessionSynthesis notes={lines.join("\n")} adjustPct={applied ? sug.reco : null} style={{ marginBottom: 10 }} />
-        <DiffGauge value={applied ? adjustDifficulty(planned, sug.reco) : planned} height={10} />
         <div style={{ display: "grid", gap: 7, marginTop: 12 }}>
           {exerciseViews(lines, applied ? sug.reco : null).map((v, i) => (
             <div key={i} style={{ padding: "8px 10px", borderRadius: 12, background: "#f7f8f9" }}>

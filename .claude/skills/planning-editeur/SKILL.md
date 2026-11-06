@@ -172,3 +172,12 @@ description: Planning /week et /coach/planning, cartes et tiroirs de séance (Da
 - Grande `ProgramBanner` du Planning et pilule d'activité du header (fusionnées dans le bandeau). Bouton Dupliquer sur les cartes. Bouton « Résultat ». Barres de charge rétrospectives sans programme. Vue Bloc à cases compactes.
 
 Détails et raisons : grep `historique.md` de ce dossier (sections datées, la plus récente prime).
+
+- Planning, un anneau par séance (LOCAL 06/11, idée de Gildas, POC 0 quater) : `components/calendar/SessionRing.tsx` à droite du nom dans `DayColumn` (et 28 px dans les cartes du mois, 38 px = séance principale du jour sur mobile) ; à venir = charge prévue (orange, onglet Charge), aujourd'hui/passé = anneau de décision avec zone (`sessionZone`, Braise, trait sur le prévu si faite). Plus de `DiffGauge` dans le Planning, plus de `PlanningRing` en tête de colonne (la récup reste en mot cliquable « Récup · Équilibré 62 », ouvre le point forme). La barre interactive de décision (`decisionGauge`) reste pour la séance ciblée. Éditeur (`AddSessionModal`, `CoachSessionModal`) : `DifficultyRingInput` (anneau 120 px, option A) au lieu de la barre.
+
+## Anneaux du Planning (06/11/2026)
+- En-tête de colonne = date seule ; l'anneau du jour (`DayRing`, exporté de `DayColumn.tsx`) est dans l'encadré du jour, à gauche du titre (`AlertBox` prop `lead`), sans pastille. Séance → `SessionRing` (charge prévue à venir, zone + statut aujourd'hui et avant) ; jour sans séance → `RestDayRing` (charge de la semaine dans sa zone, comme l'anneau de repos de /today ; « Repos » vide si inconnue). Données : `/api/charge-days` + `hooks/useChargeDays.ts` (`chargeByDay` dans `metricCards.ts`).
+- Prop `ringState` : impose l'état de l'anneau (jour conseillé dans les aperçus).
+- Aperçus = mêmes composants : onboarding ob_week (`DayColumnHeader` + `WeekSessionCard`), `/p/[id]` (`DayColumn` entière, lundi fictif 2001).
+- Plus de vue Mois (code retiré le 06/11).
+- Un seul découpage de difficulté : `difficultyWord` / `HARD_FROM` 7 / `MODERATE_FROM` 4 dans `lib/loadRule.ts` (calé sur les libellés CR-10 de l'anneau).

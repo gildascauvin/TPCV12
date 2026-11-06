@@ -16,6 +16,8 @@ export type MiniSlide = {
   photo: string;
   sportPhoto?: { src: string; tint: [string, string] } | null;
   hero: { big: string | number; unit?: string; cap: string; color: string };
+  /* Visu à la place du grand chiffre (anneau récup de « Ta forme », 2026-11-06). */
+  heroNode?: React.ReactNode;
   sub?: React.ReactNode;
   body?: React.ReactNode;
 };
@@ -80,7 +82,7 @@ export default function MiniBilan({ slides, title, alt, onClose, exitClass, nav,
           {slides.map((_, i) => <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= idx ? "#fff" : "rgba(255,255,255,0.22)" }} />)}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", color: "rgba(255,255,255,0.7)", textShadow: "0 1px 6px rgba(0,0,0,.6)" }}>
-          <span>{title} · {slide.kicker}</span>
+          <span>{slide.kicker ? `${title} · ${slide.kicker}` : title}</span>
           <button onClick={onClose} aria-label="Fermer" style={{ background: "none", border: 0, color: "#fff", fontSize: 26, lineHeight: 1, cursor: "pointer", padding: 4 }}>×</button>
         </div>
         {nav && (
@@ -95,8 +97,9 @@ export default function MiniBilan({ slides, title, alt, onClose, exitClass, nav,
         )}
 
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 18, paddingTop: 12 }}>
-          <div aria-hidden="true" style={{ flex: "0 0 auto", height: nav ? "clamp(0px, calc(16vh - 72px), 64px)" : "clamp(0px, calc(28vh - 120px), 112px)" }} />
-          <Hero big={slide.hero.big} unit={slide.hero.unit} cap={slide.hero.cap} color={slide.hero.color} />
+          {/* Contenu posé juste au-dessus des boutons (06/11, Gildas) : l'espace libre passe en haut ; la cale s'efface s'il déborde. */}
+          <div aria-hidden="true" style={{ flex: "1 1 0", minHeight: 0 }} />
+          {slide.heroNode ?? <Hero big={slide.hero.big} unit={slide.hero.unit} cap={slide.hero.cap} color={slide.hero.color} />}
           {slide.sub && <div style={subStyle}>{slide.sub}</div>}
           {slide.body}
         </div>

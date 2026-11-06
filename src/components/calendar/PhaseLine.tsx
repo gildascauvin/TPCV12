@@ -7,7 +7,10 @@ import { ExampleNote } from "@/components/conseils/MetricChart";
    `actions` d'AlertBox, sous le titre et la ligne 2. Avant le ressenti du jour : moitié charge en
    clair, puis la vraie phrase floutée derrière le CTA (flou plutôt que cadenas). `onUnlock` absent
    (Coach Control : le coach ne remplit pas le ressenti à la place du sportif) = pas de flou ni de CTA. */
-export default function PhaseLine({ phase, onUnlock, onEdit, example = false, coach = false }: {
+export default function PhaseLine({ phase, onUnlock, onEdit, example = false, coach = false, inCard = false }: {
+  /* Dos du bloc qui pivote (FlipBlock, 06/11) : l'étiquette « Phase · X » est portée par la carte, pas de
+     trait pointillé, texte au même format que le conseil. */
+  inCard?: boolean;
   phase: NonNullable<DecisionCard["phase"]>;
   /* Phase d'EXEMPLE (2026-10-01) : tant que l'historique ne suffit pas aux onglets Charge/Récup
      (analyticsReady), la vraie phase n'aurait rien derrière. On montre celle de l'exemple, en clair
@@ -25,10 +28,10 @@ export default function PhaseLine({ phase, onUnlock, onEdit, example = false, co
   coach?: boolean;
 }) {
   return (
-    <div style={{ position: "relative", borderTop: "1px dashed rgba(255,255,255,.2)", paddingTop: 10, textAlign: "center" }}>
+    <div style={{ position: "relative", borderTop: inCard ? undefined : "1px dashed rgba(255,255,255,.2)", paddingTop: inCard ? 0 : 10, textAlign: "center" }}>
       {/* Mention d'exemple posée PAR-DESSUS la phase, comme sur les charts Charge/Récup. */}
       {example && <ExampleNote text={coach ? "Ses analyses arrivent après ~1 semaine de points forme et de séances." : "Tes analyses arrivent après ~1 semaine de points forme et de séances."} top="58%" />}
-      {(phase.title || onEdit) && (
+      {!inCard && (phase.title || onEdit) && (
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6, marginBottom: 5, fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "rgba(255,255,255,.6)" }}>
           {phase.title && <>
             Phase
@@ -45,7 +48,7 @@ export default function PhaseLine({ phase, onUnlock, onEdit, example = false, co
           )}
         </div>
       )}
-      <div style={{ fontSize: 14, lineHeight: 1.5, fontWeight: 600, color: "rgba(255,255,255,.92)", minHeight: example ? 64 : undefined }}>{phase.text}</div>
+      <div style={inCard ? { fontSize: 15, lineHeight: 1.45, fontWeight: 500, color: "rgba(255,255,255,.85)", minHeight: example ? 64 : undefined, textWrap: "pretty" } as React.CSSProperties : { fontSize: 14, lineHeight: 1.5, fontWeight: 600, color: "rgba(255,255,255,.92)", minHeight: example ? 64 : undefined }}>{phase.text}</div>
       {phase.lockedText && onUnlock && (
         <div style={{ position: "relative", marginTop: 8, borderRadius: 12, overflow: "hidden" }}>
           <div aria-hidden="true" style={{ filter: "blur(5px)", userSelect: "none", fontSize: 14, fontWeight: 600, lineHeight: 1.5, color: "rgba(255,255,255,.85)", padding: "4px 2px" }}>

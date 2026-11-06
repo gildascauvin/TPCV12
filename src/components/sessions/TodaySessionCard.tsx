@@ -20,7 +20,9 @@ import DoneBurst, { useJustDone } from "@/components/sessions/DoneBurst";
    retiré par `body.ath-dark`, contrairement à `.card`/`.ana-card`) : contraste volontaire, contenu
    actionnable qui doit "ressortir" du fond sombre ambiant. Retour explicite de Gildas : "les
    background des séances doivent rester light (même dans le wellness card, partout)". ─── */
-export default function TodaySessionCard({ session, onComplete, onEdit, previewPct, onReorderExercises, authorName, hideGauge, onStart, viewer = "athlete", concealed }: {
+export default function TodaySessionCard({ session, onComplete, onEdit, previewPct, onReorderExercises, authorName, hideGauge, onStart, viewer = "athlete", concealed, flashOriginal }: {
+  /* Décision qu'on vient d'appliquer (2026-11-06) : les lignes changées montrent l'ancienne valeur et flashent. */
+  flashOriginal?: string | null;
   /* Difficulté que laissait attendre la FC de la séance (physioCompare.ts) : 3e tuile « ♥ CŒUR ». */
   /* Séance d'un programme ThePerfClub au-delà de J+7 (programReveal.ts) : exercices floutés, pas d'ouverture. */
   concealed?: string | null;
@@ -56,7 +58,10 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
     return () => clearInterval(t);
   }, [live]);
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
-  const views = exerciseViews(exercises, previewPct);
+  const flashLines = flashOriginal ? flashOriginal.split("\n").filter(Boolean) : null;
+  const views = flashLines && flashLines.length === exercises.length
+    ? exerciseViews(exercises, null).map((v, i) => (flashLines[i] !== exercises[i] ? { ...v, original: flashLines[i] } : v))
+    : exerciseViews(exercises, previewPct);
   const decidedOriginal = validDecision(session)?.original?.notes ?? null;
   const gaugeValue = session.done ? (session.rpe ?? null) : (session.target_difficulty ?? null);
   const exerciseSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -88,7 +93,7 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
     >
       {justDone && <DoneBurst />}
       {/* 1. Name + badge */}
-      <div data-sheet-peek={hideGauge || !gaugeValue ? "" : undefined} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+      <div data-sheet-peek="" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
         <span style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, color: "#171b1f", lineHeight: 1.2, letterSpacing: "-0.02em" }}>
           {session.name}
         </span>
@@ -119,13 +124,7 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
       {/* Synthèse de l'ajustement, sous le titre : aperçu en cours, ou décision déjà appliquée. */}
       {!concealed && <SessionSynthesis notes={session.notes} adjustPct={previewPct} originalNotes={decidedOriginal} style={{ marginBottom: 12 }} />}
 
-      {/* 2. Single difficulty gauge (no label) — masquée pour la séance dont la jauge de décision a
-         été promue en tête de l'onglet, voir `hideGauge`. */}
-      {!hideGauge && gaugeValue && (
-        <div data-sheet-peek style={{ marginBottom: 12 }}>
-          <DiffGauge value={gaugeValue} height={12} />
-        </div>
-      )}
+      {/* Plus de barre de difficulté sur l'Accueil (06/11, Gildas) : l'anneau de décision porte déjà la séance. */}
 
       {/* 3. Exercise display list — drag & drop, même composant que /week et /coach/planning */}
       {concealed ? (
@@ -144,8 +143,13 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
               const unseen = viewer === "coach"
                 ? hasUnseenAttachment(session.exercise_media?.[String(i)], "coach", (session as Session & { viewed_by_coach_at?: string | null }).viewed_by_coach_at)
                 : hasUnseenAttachment(session.exercise_media?.[String(i)], "athlete", session.viewed_by_athlete_at);
+              const changed = !!flashLines && views[i].original !== undefined;
+              /* Célébration : les lignes apparaissent une à une, les lignes changées flashent. */
+              const anim = flashLines ? `tpcLineIn .35s cubic-bezier(.22,1,.36,1) ${i * 110}ms both${changed ? `, tpcLineFlash 2.4s ease-out ${i * 110}ms` : ""}` : undefined;
               return (
-                <DraggableExerciseLine key={i} sessionId={session.id} index={i} text={views[i].text} originalText={views[i].original} unseen={unseen} ctx={views[i].ctx} compact={false} adjusting={views[i].adjusting} />
+                <div key={i} data-ex-line={changed ? "changed" : ""} data-ex-idx={i} style={anim ? { animation: anim } : undefined}>
+                  <DraggableExerciseLine sessionId={session.id} index={i} text={views[i].text} originalText={views[i].original} unseen={unseen} ctx={views[i].ctx} compact={false} adjusting={views[i].adjusting} />
+                </div>
               );
             })}
           </DndContext>

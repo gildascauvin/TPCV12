@@ -25,7 +25,8 @@ import { chronicPenaltyFor } from "@/lib/decisionCard";
 import { applyAutoregDifficulty, suggestionSeverityColor, recoveryAxisX, effectiveRecoveryX } from "@/lib/autoregulation";
 import { monotonyStrainFor, computeDecisionCard } from "@/lib/decisionCard";
 import CoachPageBg from "@/components/calendar/CoachPageBg";
-import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
+import { type HomeTab } from "@/components/today/HomeTabs";
+import type { RingLegend } from "@/components/sessions/DecisionRing";
 import { decisionRingState, DecisionRingMini } from "@/components/sessions/DecisionRing";
 import AggregateGauge from "@/components/conseils/AggregateGauge";
 import CoachRadar, { type RadarPoint } from "@/components/coach/CoachRadar";
@@ -192,6 +193,21 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const [metricFilter, setMetricFilter] = useState<DimensionKey | null>(null);
   useEffect(() => { if (selectedAthleteId !== null) setMetricFilter(null); }, [selectedAthleteId]);
   useEffect(() => { setSelectedAthleteId(athleteFilterStorage.read()); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  /* Lot 4 côté coach (06/11) : plus d'onglets. La légende sous l'anneau d'un sportif ouvre sa récup ou sa
+     charge ; « ← … » ramène à la vue d'avant. */
+  const legendCache = useRef<{ key: unknown[]; map: Record<string, ConseilsData> }>({ key: [], map: {} });
+  function legendData(a: CoachAthlete): ConseilsData {
+    const key = [selectedDate, recentSessions, wellnessBaselineHistory];
+    if (legendCache.current.key.some((k, i) => k !== key[i]) || !legendCache.current.key.length) legendCache.current = { key, map: {} };
+    return legendCache.current.map[a.id] ??= computeConseilsData(selectedDate, null, recentSessions[a.id] ?? [], a.user_id ? wellnessBaselineHistory[a.user_id] ?? [] : [], "coach");
+  }
+  function legendFor(a: CoachAthlete): RingLegend {
+    /* Calculée aussi sur l'onglet du jour (06/11, bug : « Récup – / Charge – » alors que le sportif voit ses scores). */
+    const d = athleteConseilsData[a.id] ?? legendData(a);
+    const r = d && analyticsReady(d, "recup") ? aggregateFor("recup", d) : null, c = d && analyticsReady(d, "charge") ? aggregateFor("charge", d) : null;
+    const open = (t: HomeTab) => () => { selectAthleteFilter(a.id); setHomeTab(t); window.scrollTo({ top: 0 }); };
+    return { recup: { value: r ? Math.round(r.pos * 100) : null, onClick: open("recuperation") }, charge: { value: c ? Math.round(c.pos * 100) : null, onClick: open("charge") } };
+  }
   function selectAthleteFilter(id: string | null) {
     setSelectedAthleteId(id);
     athleteFilterStorage.write(id);
@@ -873,7 +889,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
             const a = athletes.find(x => x.id === id);
             if (!a) return null;
             return (
-              <CoachCard showPhase athlete={a} sessions={sessions} isPriority={needsDecision(a) && !isReviewed(a)}
+              <CoachCard ringLegend={legendFor(a)} showPhase athlete={a} sessions={sessions} isPriority={needsDecision(a) && !isReviewed(a)}
                 isReviewed={false}
                 actionRequest={action}
                 trend={trends[a.id]}
@@ -901,25 +917,19 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       )}
       {athletes.length > 0 && (
         <div style={{ maxWidth: isLg ? 1180 : isMd ? 720 : 600, margin: "0 auto", padding: isLg ? "0 40px" : isMd ? "0 24px" : "0 16px" }}>
-          <HomeTabs
-            active={homeTab}
-            onChange={setHomeTab}
-            previews={selectedTabData
-              ? {
-                  /* Même lecture que /today : l'ajustement conseillé en points de RPE, null = pas
-                     de suggestion (arc sans curseur). */
-                  today: (() => {
-                    const a = athletes.find(x => x.id === selectedAthleteId);
-                    if (!a) return null;
-                    return decisionRingState(sessions.filter(s => s.athlete_id === a.id), cardSuggestion(a));
-                  })(),
-                  charge: analyticsReady(selectedTabData, "charge") ? aggregateFor("charge", selectedTabData) : null,
-                  recuperation: analyticsReady(selectedTabData, "recup") ? aggregateFor("recup", selectedTabData) : null,
-                }
-              : undefined}
-            locked={selectedTabLocked}
-            lockedTabs={["today"]}
-          />
+          {homeTab !== "today" ? (
+            <button type="button" onClick={() => setHomeTab("today")}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8, margin: "4px 0 6px", padding: "7px 12px 7px 9px", borderRadius: 999, border: "none", cursor: "pointer", background: "rgba(255,255,255,.08)", color: "#fff", fontFamily: "inherit", fontSize: 13, fontWeight: 800 }}>
+              <span aria-hidden>←</span>{homeTab === "charge" ? "Charge" : "Récupération"}
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: "rgba(255,255,255,.55)" }}>· {selectedAthleteId ? (athletes.find(x => x.id === selectedAthleteId)?.name.split(" ")[0] ?? "Sportif") : "Groupe"}</span>
+            </button>
+          ) : !selectedAthleteId && (
+            /* Vue groupe : les listes Récup / Charge du groupe, mêmes pastilles que sous l'anneau. */
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", margin: "4px 0 6px" }}>
+              <button type="button" onClick={() => setHomeTab("recuperation")} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, border: "none", cursor: "pointer", fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", background: "rgba(255,255,255,.07)", boxShadow: "inset 0 0 0 1px rgba(255,255,255,.1)", color: "rgba(255,255,255,.8)" }}><i style={{ width: 7, height: 7, borderRadius: "50%", background: "#80b8cc" }} />Récup du groupe<span aria-hidden style={{ opacity: .5 }}>›</span></button>
+              <button type="button" onClick={() => setHomeTab("charge")} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, border: "none", cursor: "pointer", fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", background: "rgba(255,255,255,.07)", boxShadow: "inset 0 0 0 1px rgba(255,255,255,.1)", color: "rgba(255,255,255,.8)" }}><i style={{ width: 7, height: 7, borderRadius: "50%", background: "#f6803f" }} />Charge du groupe<span aria-hidden style={{ opacity: .5 }}>›</span></button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1013,7 +1023,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           const a = athletes.find(x => x.id === selectedAthleteId)!;
           return (
             <div style={{ maxWidth: 600, margin: "0 auto", paddingTop: 4 }}>
-              <CoachCard showPhase page athlete={a} sessions={sessions} isPriority={false}
+              <CoachCard ringLegend={legendFor(a)} showPhase page athlete={a} sessions={sessions} isPriority={false}
                 isReviewed={false}
                 trend={trends[a.id]}
                 trendInput={trendInputs[a.id]}

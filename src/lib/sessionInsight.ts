@@ -71,7 +71,7 @@ export function sessionVerdict(s: ResultSession, subject?: string): Verdict | nu
         : { followed: true, label: subject ? `${subject} a ${proposed === "low" ? "allégé" : "poussé"} sans le noter` : `J'ai ${proposed === "low" ? "allégé" : "poussé"} sans le noter` };
     }
   } else {
-    row = { icon: "·", text: "Conseil du matin : rien à changer." };
+    // Pas de ligne « Conseil du matin : rien à changer. » (06/11, Gildas : le titre le dit déjà).
     title = outcome === "none_harder" ? "Plus dure que prévu, sans alerte ce matin."
       : outcome === "none_easier" ? `Plus facile que prévu : ${had} de la marge.`
       : zg ? `${cap(vsZone(zg, "prévu"))}, sans alerte ce matin.`
@@ -118,6 +118,13 @@ export function sessionResult(s: ResultSession, week: WeekSession[], subject?: s
    même règle que doneZone (decisionCard.ts) : la zone proposée ce matin-là (décision enregistrée,
    sinon reco figée ou rejouée), sinon la zone par défaut de l'anneau (le prévu et le point en dessous).
    `advised` = il y avait un conseil (alléger/pousser) : étiquette « Conseillé », sinon « Prévu ». */
+/* Reco figée du jour de la séance (autoreg_proposal), seulement si elle date bien de ce jour-là. */
+export function proposalOfDay(s: unknown) {
+  const x = s as { date?: string; autoreg_proposal?: { date?: string; proposed: "low" | "high" | null; zoneLow: number | null; zoneHigh: number | null } | null } | null | undefined;
+  const p = x?.autoreg_proposal;
+  return p && x?.date && p.date === x.date ? { proposed: p.proposed ?? null, zoneLow: p.zoneLow ?? null, zoneHigh: p.zoneHigh ?? null } : null;
+}
+
 export function sessionZone(s: ResultSession): { low: number; high: number; advised: boolean } | null {
   const d = validDecision(s);
   if (d?.proposed && d.zoneLow != null && d.zoneHigh != null) return { low: d.zoneLow, high: d.zoneHigh, advised: true };

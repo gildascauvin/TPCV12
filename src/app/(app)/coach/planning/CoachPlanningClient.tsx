@@ -1,5 +1,7 @@
 "use client";
 
+import { useChargeDays } from "@/hooks/useChargeDays";
+import { proposalOfDay } from "@/lib/sessionInsight";
 import type { EstimatedSession } from "@/lib/watchEstimates";
 import { openCoachSession } from "@/components/coach/CoachResultHost";
 import { proposalPersonal } from "@/lib/autoregPersonal";
@@ -10,7 +12,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import dynamic from "next/dynamic";
 import posthog from "posthog-js";
-import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
+import { format, addDays, subDays, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "@/lib/toast";
 import { useSessionSeries } from "@/hooks/useSessionSeries";
@@ -26,7 +28,7 @@ import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 
-import CalendarHeader, { type ViewMode } from "@/components/calendar/CalendarHeader";
+import CalendarHeader from "@/components/calendar/CalendarHeader";
 import CoachPageBg from "@/components/calendar/CoachPageBg";
 import PlanningRingShared from "@/components/calendar/PlanningRing";
 import DiffGaugeShared from "@/components/calendar/DiffGauge";
@@ -49,7 +51,7 @@ import { parseAndApply } from "@/lib/loadAdjust";
 import { NO_ADJUST, adjustNotesCharge, adjustDifficultyCharge, type ChargeAdjust } from "@/lib/chargeAdjust";
 import { applyAutoregDifficulty } from "@/lib/autoregulation";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
-import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZByDate, relativeWellnessByDate } from "@/lib/wellnessBaseline";
+import { computeWellnessBaselineAt, relativeZoneLabel, wellnessZByDate, relativeWellnessByDate } from "@/lib/wellnessBaseline";
 
 /* Modales/drawers ouverts sur demande — même traitement next/dynamic que WeekClient.tsx
    (2026-09-17) : leur JS (CoachSessionModal → ExerciseBlockEditor, ProgramLibraryPage →
@@ -134,7 +136,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   // via un clic délibéré sur la puce "Équipe" (AthleteFilterBar, plus bas). Le défaut au montage
   // reste le 1er sportif, comme avant — Tous n'est jamais le comportement initial implicite.
   const defaultAthleteId = searchParams.get("athlete") ?? athletes[0]?.id ?? "";
-  const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(defaultAthleteId);
   const [selectedDate, setSelectedDate] = useState(initialDate ?? todayStr);
   const [navKey, setNavKey] = useState(0);
@@ -148,7 +149,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   // LE MOIS AFFICHÉS, pas sur "aujourd'hui" (même bug/fix que WeekClient.tsx/TodayClient.tsx : sans
   // ça, naviguer vers une période passée réduit progressivement l'historique disponible jusqu'à
   // retomber à tort sur l'ancien libellé absolu malgré des mois de données réelles). Refetché dans
-  // handleDateChange()/loadMonth(), remplacé entièrement à chaque navigation.
+  // handleDateChange(), remplacé entièrement à chaque navigation.
   const [wellnessBaselineHistory, setWellnessBaselineHistory] = useState<Record<string, WellnessDaily[]>>(initialWellnessBaselineHistory);
   // Historique COMPLET par sportif (pas de filtre de date), dédié au calendrier popup uniquement —
   // jamais refetché à la navigation semaine/mois (2026-09-26, fix, même cause que WeekClient.tsx :
@@ -159,8 +160,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   // `coach_read_athlete_wellness` autorise déjà ce fetch direct pour un sportif réel lié, même
   // pattern que handleDateChange ci-dessous).
   const [popupWellnessHistory, setPopupWellnessHistory] = useState<Record<string, WellnessDaily[]>>({});
-  const [monthSessions, setMonthSessions] = useState<CoachViewSession[]>([]);
-  const [monthWellnessMap, setMonthWellnessMap] = useState<Record<string, Record<string, number>>>({});
   const [addingDate, setAddingDate] = useState<string | null>(null);
   const [editingSession, setEditingSession] = useState<CoachViewSession | null>(null);
   /* Séance faite d'un sportif : l'écran de résultat d'abord (verdict, ressenti vs prévu), l'éditeur
@@ -248,6 +247,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   }, [searchParams]);
 
   const athlete = selectedAthleteId === null ? null : (athletes.find(a => a.id === selectedAthleteId) ?? athletes[0] ?? null);
+  /* Anneau des jours sans séance (06/11) : charge du jour du sportif affiché. */
+  const chargeDays = useChargeDays(!sandboxMode && !!athlete && (isActive || canDecideFor(athlete)), todayStr, sessions.filter(s => s.done && (!athlete || (s as { athlete_id?: string }).athlete_id === athlete.id)).map(s => `${s.date}${s.rpe}${s.duration}`).join(","), athlete?.id ?? null);
 
   function freeLabelsFor(a: CoachAthlete): Record<string, string> {
     return freeLabelOverrides[a.id] ?? (a.free_training_label as Record<string, string> | undefined) ?? {};
@@ -393,13 +394,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     // Sandbox : le fixture initial couvre déjà -14/+14 jours (voir sandboxFixtures.ts) — un
     // refetch réseau écraserait cette fenêtre avec un résultat vide pour un coach_id fictif.
     if (sandboxMode) return;
-    // En vue Mois, naviguer (flèches ‹/›) doit recharger `monthSessions` pour le nouveau
-    // mois — sinon la grille affiche un mois différent avec les données de l'ancien
-    // (jamais rafraîchies par le fetch semaine ci-dessous, qui ignore `viewMode`).
-    if (viewMode === "month") {
-      if (athlete) await loadMonth(date, athlete);
-      return;
-    }
     const mon = format(startOfWeek(new Date(date + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
     const sun = format(addDays(startOfWeek(new Date(date + "T12:00:00"), { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
     const sinceBaseline = format(subDays(startOfWeek(new Date(date + "T12:00:00"), { weekStartsOn: 1 }), 42), "yyyy-MM-dd");
@@ -605,66 +599,23 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const handleDragEnd = makePlanningDragEndHandler({ sessions, moveSession: series.wrapMove(moveSessionToDate), moveExercise: series.wrapExerciseMove(moveExercise) }) as (event: DragEndEvent) => void;
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
-  async function loadMonth(anchor: string, athleteObj: CoachAthlete) {
-    if (sandboxMode) return;
-    const base = new Date(anchor + "T12:00:00");
-    // La grille Mois affiche aussi les jours de bord des semaines qui chevauchent le mois
-    // (eachWeekOfInterval) — le fetch doit couvrir la même plage, pas le mois strict,
-    // sinon les séances de ces jours de bord n'apparaissent jamais.
-    const gridStart = startOfWeek(startOfMonth(base), { weekStartsOn: 1 });
-    const gridEnd = addDays(startOfWeek(endOfMonth(base), { weekStartsOn: 1 }), 6);
-    const start = format(gridStart, "yyyy-MM-dd");
-    const end = format(gridEnd, "yyyy-MM-dd");
-
-    if (athleteObj.user_id) {
-      const sinceBaseline = format(subDays(gridStart, 42), "yyyy-MM-dd");
-      const [realRes, demoRes, wellRes, baselineRes] = await Promise.all([
-        supabase.from("sessions").select("*").eq("user_id", athleteObj.user_id).gte("date", start).lte("date", end),
-        supabase.from("coach_sessions").select("*").eq("coach_id", userId).eq("athlete_id", athleteObj.id).gte("date", start).lte("date", end),
-        supabase.from("wellness_daily").select("date, score, base_score").eq("user_id", athleteObj.user_id).gte("date", start).lte("date", end),
-        supabase.from("wellness_daily").select("*").eq("user_id", athleteObj.user_id).gte("date", sinceBaseline).lte("date", end),
-      ]);
-      const unified: CoachViewSession[] = [
-        ...(realRes.data || []).map(s => realToView(s as Session, athletes)),
-        ...(demoRes.data || []).map(s => demoToView(s as CoachSession)),
-      ];
-      setMonthSessions(unified);
-      const wm: Record<string, Record<string, number>> = {};
-      (wellRes.data || []).forEach((w: { date: string; score: number | null; base_score: number | null }) => {
-        const v = wellnessSignal(w);
-        if (v != null) {
-          if (!wm[athleteObj.user_id!]) wm[athleteObj.user_id!] = {};
-          wm[athleteObj.user_id!][w.date] = v;
-        }
-      });
-      setMonthWellnessMap(wm);
-      setWellnessBaselineHistory(prev => ({ ...prev, [athleteObj.user_id!]: (baselineRes.data || []) as WellnessDaily[] }));
-    } else {
-      const { data } = await supabase.from("coach_sessions").select("*").eq("coach_id", userId).eq("athlete_id", athleteObj.id).gte("date", start).lte("date", end);
-      setMonthSessions((data || []).map(s => demoToView(s as CoachSession)));
-      setMonthWellnessMap({});
-    }
-  }
-
   function navigatePeriod(dir: "next" | "prev") {
     slideDirRef.current = dir === "next" ? "left" : "right";
     setNavKey(k => k + 1);
     const base = new Date(selectedDate + "T12:00:00");
-    const newBase = viewMode === "week"
-      ? (dir === "next" ? addDays(base, 7) : subDays(base, 7))
-      : (dir === "next" ? addMonths(base, 1) : subMonths(base, 1));
+    const newBase = dir === "next" ? addDays(base, 7) : subDays(base, 7);
     handleDateChange(format(newBase, "yyyy-MM-dd"));
   }
 
   // Scroll vers le jour sélectionné (ring du header cliqué, ou "Aujourd'hui" par défaut au montage/
   // changement de semaine — selectedDate vaut todayStr initialement et à chaque navigation).
   useEffect(() => {
-    if (viewMode !== "week" || planning.active) return;
+    if (planning.active) return;
     const idx = weekDates.findIndex(d => format(d, "yyyy-MM-dd") === selectedDate);
     if (idx >= 0) {
       scrollIntoViewX(dayRefs.current[idx]);
     }
-  }, [selectedDate, viewMode]);
+  }, [selectedDate]);
 
   useEffect(() => {
     const el = calGridRef.current;
@@ -686,15 +637,10 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     return () => el.removeEventListener("wheel", handler);
   });
 
-  function handleViewModeChange(mode: ViewMode) {
-    setViewMode(mode);
-    if (mode === "month" && athlete) loadMonth(selectedDate, athlete);
-  }
-
   if (athletes.length === 0) {
     return (
       <CoachPageBg>
-        <CalendarHeader mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)} seamless />
+        <CalendarHeader mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} onProfileClick={() => setProfileOpen(true)} seamless />
         {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
         <div className="page-shell" style={{ textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
@@ -716,20 +662,14 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
      unique n'a de sens pour plusieurs sportifs à la fois sur un même jour) : chaque colonne reprend
      la coquille visuelle de DayColumn sans en réutiliser le composant lui-même, qui suppose un seul
      athlète (ring wellness, loadRule). Cliquer une séance sélectionne ce sportif (comportement déjà
-     existant, inchangé). Vue Mois n'a pas d'équivalent "Tous" pour l'instant (loadMonth() est scopé
-     à un seul sportif) — message d'attente plutôt qu'un écran cassé. */
+     existant, inchangé).  */
   if (athlete === null) {
     return (
       <CoachPageBg>
         {/* Sélecteur de sportif au-dessus du header de date — voir CoachClient.tsx pour le pourquoi. */}
         <AthleteFilterBar athletes={athletes} selectedId={null} onSelect={id => { setSelectedAthleteId(id); athleteFilterStorage.write(id); }} />
-        <CalendarHeader mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)} seamless />
+        <CalendarHeader mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} onProfileClick={() => setProfileOpen(true)} seamless />
         {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
-        {viewMode === "month" ? (
-          <div className="page-shell" style={{ textAlign: "center", color: "rgba(255,255,255,.55)", padding: "40px 16px" }}>
-            Vue mensuelle équipe non disponible pour l&apos;instant — sélectionne un sportif.
-          </div>
-        ) : (
           <div style={{
             display: "grid",
             gridTemplateColumns: "repeat(7, var(--wk-col, 280px))",
@@ -797,7 +737,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
               );
             })}
           </div>
-        )}
       </CoachPageBg>
     );
   }
@@ -921,7 +860,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       const doneTop = [...daySessions].filter(s => s.done).sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
       const decisionDay: DecisionDay = daySessions.length === 0 ? { kind: "rest", tomorrowDifficulty }
         : daySessions.some(s => !s.done) ? { kind: "planned", tomorrowDifficulty }
-        : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop) };
+        : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop), proposal: proposalOfDay(doneTop) };
       const decision = computeDecisionCard({
         day: decisionDay,
         wellnessScore: wellness, plannedDifficulty: autoregTarget?.target_difficulty ?? null,
@@ -994,6 +933,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       <DayColumn
         date={date}
         sessions={daySessions}
+        restCharge={chargeDays[dstr] ?? null}
         wellness={wellness !== null ? { score: dayRelativeScore, zoneLabel: dayZoneLabel } : null}
         todayStr={todayStr}
         ctx={ctx}
@@ -1055,7 +995,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         }}
       />
       <CalendarHeader
-        mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)}
+        mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} onProfileClick={() => setProfileOpen(true)}
         showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
         weekTitleFor={weekTitleFor}
         leftControls={<PlanningLayoutToggle alt={planning.active} bloc={isLg} onChange={on => planning.enable(on, selectedDate)} />}
@@ -1072,7 +1012,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       {/* Bannière programme fusionnée dans le bandeau d'activité de la barre des sportifs (2026-10-04). */}
 
       {(() => {
-        if (viewMode === "week" && athlete && sessions.filter(s => s.athlete_id === athlete.id).length === 0) {
+        if (athlete && sessions.filter(s => s.athlete_id === athlete.id).length === 0) {
           return (
             <div style={{ padding: isMd ? "0 24px 4px" : "0 16px 4px" }}>
               <EmptySessionState
@@ -1093,155 +1033,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           : undefined,
       }}>
 
-      {/* ── Vue mois coach ── */}
-      {viewMode === "month" && athlete && (() => {
-        const anchor = new Date(selectedDate + "T12:00:00");
-        const weeks = eachWeekOfInterval(
-          { start: startOfMonth(anchor), end: endOfMonth(anchor) },
-          { weekStartsOn: 1 }
-        );
-        const dayLabels = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-        return (
-          <div style={{ padding: isMd ? "14px 24px 100px" : "8px 8px 100px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMd ? 4 : 2, marginBottom: 4 }}>
-              {dayLabels.map(d => (
-                <div key={d} style={{ textAlign: "center", fontSize: 9, fontWeight: 900, color: "#8a8f94", letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", paddingBottom: 2 }}>
-                  {isMd ? d : d[0]}
-                </div>
-              ))}
-            </div>
-            {weeks.map(weekMonday => {
-              const mondayStr = format(weekMonday, "yyyy-MM-dd");
-              const weekMatch = findProgramForWeek(activeAssignments, mondayStr);
-              return (
-              <div key={weekMonday.toISOString()} style={{ marginBottom: isMd ? 6 : 4 }}>
-                {weekMatch ? (
-                  <ProgramBanner compact program={weekMatch.program} currentWeek={weekMatch.week} acclimatation={weekMatch.acclimatation} />
-                ) : (
-                  <ProgramBanner
-                    compact
-                    freeLabel={freeLabelsFor(athlete)[mondayStr] ?? null}
-                    onEditFreeLabel={label => setFreeLabelForWeek(athlete, mondayStr, label)}
-                  />
-                )}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMd ? 4 : 2, marginTop: 4 }}>
-                {Array.from({ length: 7 }, (_, i) => addDays(weekMonday, i)).map(date => {
-                  const dstr = format(date, "yyyy-MM-dd");
-                  const isToday = dstr === todayStr;
-                  const inMonth = date.getMonth() === anchor.getMonth();
-                  const daySessions = monthSessions.filter(s => s.athlete_id === athlete.id && s.date === dstr);
-                  const wellRaw = dayWellness(athlete, dstr, monthWellnessMap, wellnessBaselineHistory);
-                  /* Score relatif (baseline Z-score), pas absolu — vue Mois oubliée lors de
-                     l'unification wellness relatif (2026-08-30/31), même bug que côté sportif
-                     (WeekClient.tsx) trouvé par Gildas : ring différent entre header/vue Semaine et
-                     grille Mois pour le même jour, alors que loadMonth() fetch déjà
-                     wellnessBaselineHistory pour ce calcul. Même pattern que la vue Semaine
-                     ci-dessous (dayRelativeScore, ~ligne 856) — un seul chiffre, jamais deux. */
-                  const monthAthleteHistory = wellnessBaselineHistory[athlete.user_id ?? athlete.id] ?? [];
-                  const monthDayBaseline = wellRaw !== null
-                    ? computeWellnessBaselineAt(
-                        monthAthleteHistory.filter(w => w.date < dstr),
-                        { score: wellRaw, base_score: wellRaw, sleep: 7, stress: 5, recovery: 7, motivation: 7 },
-                      )
-                    : null;
-                  const wellScore = monthDayBaseline?.hasEnoughHistory ? monthDayBaseline.relativeScore : wellRaw;
 
-                  return (
-                    <div
-                      key={dstr}
-                      style={{
-                        background: inMonth ? "#fff" : "rgba(255,255,255,.45)",
-                        border: isToday ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,.08)",
-                        borderRadius: isMd ? 16 : 12,
-                        padding: isMd ? "8px 8px 6px" : "6px 5px 6px",
-                        minHeight: isMd ? 100 : 90,
-                        opacity: inMonth ? 1 : 0.4,
-                        boxShadow: isToday ? "0 4px 14px rgba(212,64,0,.10)" : "0 2px 6px rgba(0,0,0,.04)",
-                        display: "flex", flexDirection: "column",
-                      }}
-                    >
-                      {/* Desktop : date + ring côte à côte */}
-                      {isMd && (
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                          <div>
-                            <div style={{ fontSize: 8, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", letterSpacing: "0.08em", lineHeight: 1.2 }}>
-                              {format(date, "EEE", { locale: fr }).slice(0, 3)}
-                            </div>
-                            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: isToday ? "#d44000" : "#171b1f", lineHeight: 1 }}>
-                              {date.getDate()}
-                            </div>
-                          </div>
-                          {inMonth && <PlanningRingShared score={wellScore} size={44} />}
-                        </div>
-                      )}
-
-                      {/* Mobile : numéro + ring empilés, dots dessous */}
-                      {!isMd && (
-                        <>
-                          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, letterSpacing: "-0.02em", color: isToday ? "#d44000" : "#171b1f", lineHeight: 1, textAlign: "center", marginBottom: 4 }}>
-                            {date.getDate()}
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}>
-                            {inMonth
-                              ? <PlanningRingShared score={wellScore} size={40} />
-                              : <div style={{ width: 40, height: 40 }} />}
-                          </div>
-                          {daySessions.length > 0 && (
-                            <div style={{ display: "flex", gap: 3, justifyContent: "center", flexWrap: "wrap" }}>
-                              {daySessions.slice(0, 3).map(s => (
-                                <div key={s.id} style={{ width: 6, height: 6, borderRadius: "50%", background: s.done ? "#2f9e44" : "#d44000", flexShrink: 0 }} />
-                              ))}
-                            </div>
-                          )}
-                        </>
-                      )}
-
-                      {/* Desktop : séances + bouton ajouter */}
-                      {isMd && (
-                        <>
-                          {daySessions.slice(0, 2).map(s => {
-                            const gaugeVal = s.done ? (s.rpe ?? null) : (s.target_difficulty ?? null);
-                            return (
-                              <div
-                                key={s.id}
-                                onClick={e => { e.stopPropagation(); openSessionOrResult(s); }}
-                                style={{ background: "#f7f8f9", borderRadius: 8, padding: "4px 6px", marginBottom: 3, cursor: "pointer" }}
-                              >
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4, marginBottom: 3 }}>
-                                  <div style={{ fontSize: 10, fontWeight: 800, color: "#171b1f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{s.name}</div>
-                                  <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 8, fontWeight: 700, padding: "1px 5px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: s.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,.10)", color: s.done ? "#2f9e44" : "#d44000" }}>
-                                    {s.done ? "Terminé" : "Prévu"}
-                                  </span>
-                                </div>
-                                <DiffGauge value={gaugeVal} height={5} />
-                              </div>
-                            );
-                          })}
-                          {daySessions.length > 2 && (
-                            <div style={{ fontSize: 9, color: "#8a8f94", textAlign: "center" }}>+{daySessions.length - 2}</div>
-                          )}
-                          {inMonth && (
-                            <div
-                              onClick={e => { e.stopPropagation(); setAddingDate(dstr); }}
-                              style={{ marginTop: "auto", border: "0.5px dashed rgba(212,64,0,.28)", borderRadius: 8, textAlign: "center", fontSize: 11, color: "#d44000", cursor: "pointer", fontWeight: 700, padding: "4px 2px" }}
-                            >
-                              +
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-                </div>
-              </div>
-              );
-            })}
-          </div>
-        );
-      })()}
-
-      {viewMode === "week" && planning.active && (
+      {planning.active && (
         <PlanningScrollViews
           view={planning.view} bloc={isLg} todayStr={todayStr} weekTitleFor={weekTitleFor}
           renderDay={(date, prevStr, nextStr) => renderDay(athlete, date, prevStr, nextStr)}
@@ -1250,7 +1043,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       )}
 
       {/* 7-column scrollable grid — semaine — même DayColumn générique que /week (WeekClient.tsx) */}
-      {viewMode === "week" && !planning.active && (
+      {!planning.active && (
         <div className={planning.ready ? undefined : "planning-pending"} style={{ position: "relative" }}>
         <PlanningDnd sensors={dndSensors} onDragEnd={handleDragEnd}>
         <div style={{

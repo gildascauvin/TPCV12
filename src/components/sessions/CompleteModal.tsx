@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
 import type { Session } from "@/types";
 import { createClient } from "@/lib/supabase/client";
@@ -8,10 +8,15 @@ import { fetchWorkoutsForDay, workoutLabel, workoutTime, type HealthWorkout } fr
 import { isAndroidApp } from "@/lib/native";
 import { chronoMinutes } from "@/lib/liveSession";
 import { invalidatePhysio, requestPhysioReveal } from "@/lib/physioData";
-import ScaleBars, { CR10_LABELS } from "@/components/ui/ScaleBars";
+import { CR10_LABELS } from "@/components/ui/ScaleBars";
+import PointFormeRing from "@/components/wellness/PointFormeRing";
+import { DARK_CARD_BG } from "@/lib/theme";
+import { sessionLoad } from "@/lib/sessionLoad";
 import RpeInsightLine from "@/components/sessions/RpeInsightLine";
 import { rpeInsight, type RatedSession, type RpeInsight } from "@/lib/rpeInsight";
 
+
+const DUR_MIN = 5, DUR_MAX = 240;
 
 interface CompleteModalProps {
   session: Session;
@@ -29,6 +34,10 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
   const chrono = session.duration == null ? chronoMinutes(session) : null;
   const [duration, setDuration] = useState(session.duration ?? chrono ?? 45);
   const [saving, setSaving] = useState(false);
+  const [stage, setStage] = useState<0 | 1>(0);
+  const [pulse, setPulse] = useState(0);
+  const advance = useRef<number | null>(null);
+  useEffect(() => () => { if (advance.current) window.clearTimeout(advance.current); }, []);
   /* Insight après la note (2026-10-20) : historique des séances notées, lu une fois. */
   const [rated, setRated] = useState<RatedSession[]>([]);
   const [insight, setInsight] = useState<RpeInsight | null>(null);
@@ -78,121 +87,100 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
   }
 
 
+  /* Fin de séance à l'anneau (2026-11-06, lot 2 du POC « Le curseur est le formulaire », version B) :
+     plein écran sombre, l'effort puis la durée sur le même anneau que le point forme, en orange. La piste
+     fine montre la charge de la séance (effort × durée) qui se construit ; la comparaison au prévu et à
+     la semaine vit dans le mini bilan, juste après. Une séance déjà notée s'ouvre sur sa note. */
+  const darkTitle = { fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, lineHeight: 1.05, letterSpacing: "-0.03em", color: "#fff", textAlign: "center", textWrap: "balance" } as React.CSSProperties;
+  const L = rpe == null ? null : sessionLoad(rpe, duration);
+  const loadFill = L ? L.fill : null;
+  const loadLine = (
+    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, height: 22, marginTop: 10, fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.75)", opacity: loadFill == null ? 0 : 1, transition: "opacity .3s" }}>
+      <span aria-hidden style={{ width: 16, height: 4, borderRadius: 2, background: "#ff7a33" }} />
+      Charge de la séance{L ? <b style={{ color: "#fff" }}>{L.word.toLowerCase()}</b> : null}
+    </div>
+  );
+  const chip = (on: boolean) => ({
+    display: "flex", alignItems: "center", gap: 6, padding: "7px 11px", borderRadius: 999, fontFamily: "inherit",
+    border: on ? "1px solid rgba(255,140,90,.65)" : "1px solid rgba(255,255,255,.14)",
+    background: on ? "rgba(212,64,0,.18)" : "rgba(255,255,255,.05)", color: on ? "#ffc8a8" : "rgba(255,255,255,.75)",
+    fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+  }) as React.CSSProperties;
+  const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${String(m % 60).padStart(2, "0")}` : ""}` : `${m} min`);
+
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)",
-        backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 2147483100, padding: 18,
-      }}
-      className={exitClass}
-      onClick={e => { if (e.target === e.currentTarget) close(); }}
-    >
-      {/* Boutons fixés en bas (31/10) : après l'échelle de 10 lignes, « Valider » sortait de l'écran sur un petit téléphone. */}
-      <div style={{
-        background: "#fff", color: "#171b1f",
-        border: "1px solid rgba(0,0,0,.10)",
-        boxShadow: "0 42px 120px rgba(0,0,0,.34)",
-        borderRadius: 24,
-        width: "100%", maxWidth: 400, maxHeight: "calc(100dvh - 36px)", display: "flex", flexDirection: "column", overflow: "hidden",
-        animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
-      }}>
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "28px 28px 8px" }}>
-        {/* Title */}
-        <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", marginBottom: 4 }}>
-          Terminer la séance
-        </div>
-        <div style={{ fontSize: 14, color: "#62686e", marginBottom: 22, lineHeight: 1.4 }}>
-          {session.name}
-        </div>
-
-
-        {/* Duration */}
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
-            <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Durée</div>
-            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 20, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em" }}>{duration} <span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 600 }}>min</span></div>
-          </div>
-          <input
-            type="range" min={5} max={240} step={1} value={duration}
-            onChange={e => { setDuration(Number(e.target.value)); setPicked(null); }}
-            style={{ width: "100%", accentColor: "#d44000", cursor: "pointer" }}
-          />
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8a8f94", marginTop: 4 }}>
-            <span>5 min</span><span>2h</span><span>4h</span>
-          </div>
-          {chrono != null && (
-            <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
-              <button
-                onClick={() => { setPicked("chrono"); setDuration(Math.min(240, chrono)); }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 999,
-                  border: picked === "chrono" ? "1px solid rgba(212,64,0,.45)" : "1px solid rgba(0,0,0,.10)",
-                  background: picked === "chrono" ? "#fff3e8" : "#f7f8f9", color: picked === "chrono" ? "#d44000" : "#3b4046",
-                  fontSize: 12, fontWeight: 700, cursor: "pointer",
-                }}
-              >
-                <span aria-hidden>⏱</span><span>Chrono · {chrono} min</span>
-              </button>
-            </div>
+    <div className={exitClass} style={{ position: "fixed", inset: 0, zIndex: 2147483100, background: DARK_CARD_BG, color: "#fff", overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
+      <div style={{ maxWidth: 440, margin: "0 auto", minHeight: "100%", display: "flex", flexDirection: "column", padding: "max(14px, env(safe-area-inset-top)) 20px max(18px, env(safe-area-inset-bottom))", boxSizing: "border-box" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12, minHeight: 34 }}>
+          {stage === 1 && (
+            <button onClick={() => setStage(0)} aria-label="Retour"
+              style={{ width: 34, height: 34, borderRadius: "50%", border: "1px solid rgba(255,255,255,.16)", background: "rgba(255,255,255,.06)", color: "#fff", cursor: "pointer", fontSize: 16, flexShrink: 0, display: "grid", placeItems: "center" }}>←</button>
           )}
-          {workouts.length > 0 && (
-            <div style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 11, color: "#8a8f94", marginBottom: 6 }}>
-                {workouts.length > 1 ? `Enregistrés dans ${isAndroidApp() ? "Health Connect" : "Santé"} ce jour-là :` : `Enregistré dans ${isAndroidApp() ? "Health Connect" : "Santé"} :`}
+          <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.8)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.name}</div>
+          <button onClick={close} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,.6)", fontSize: 14, fontWeight: 700, padding: "6px 2px", fontFamily: "inherit", flexShrink: 0 }}>Annuler</button>
+        </div>
+        <div style={{ display: "flex", gap: 3, marginBottom: 22 }}>
+          {[0, 1].map(i => <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= stage ? "#fff" : "rgba(255,255,255,.14)", transition: "background 0.3s" }} />)}
+        </div>
+
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", paddingBottom: 24 }}>
+          {stage === 0 ? (
+            <div key="effort" style={{ animation: "modalIn 0.25s cubic-bezier(0.2,0,0,1)" }}>
+              <div style={darkTitle}>Comment as-tu vécu ta séance ?</div>
+              <div style={{ fontSize: 14, color: "rgba(255,255,255,.6)", marginTop: 6, textAlign: "center" }}>L&apos;effort ressenti, sur toute la séance</div>
+              <div style={{ marginTop: 18 }}>
+                <PointFormeRing value={rpe} labels={CR10_LABELS} kicker="Effort" placeholder="Touche ou glisse sur l'anneau" palette="charge"
+                  score={loadFill} pulse={pulse}
+                  onChange={n => { if (advance.current) { window.clearTimeout(advance.current); advance.current = null; } setRpe(n); setInsight(null); }}
+                  onRelease={n => {
+                    setPulse(x => x + 1);
+                    const ins = rpeInsight(n, session.target_difficulty, rated, session.date);
+                    setInsight(ins);
+                    advance.current = window.setTimeout(() => { advance.current = null; setStage(1); }, ins ? 2600 : 450);
+                  }} />
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {workouts.map(w => {
-                  const on = picked === w.platform_id;
-                  return (
-                    <button
-                      key={w.platform_id}
-                      onClick={() => { setPicked(w.platform_id); setDuration(Math.min(240, w.duration_min)); }}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 999,
-                        border: on ? "1px solid rgba(212,64,0,.45)" : "1px solid rgba(0,0,0,.10)",
-                        background: on ? "#fff3e8" : "#f7f8f9", color: on ? "#d44000" : "#3b4046",
-                        fontSize: 12, fontWeight: 700, cursor: "pointer",
-                      }}
-                    >
-                      <span aria-hidden>⌚</span>
-                      <span>{workoutLabel(w.workout_type)} · {workoutTime(w.start_at)} · {w.duration_min} min</span>
+              {loadLine}
+              <RpeInsightLine insight={insight} dark />
+            </div>
+          ) : (
+            <div key="duree" style={{ animation: "modalIn 0.25s cubic-bezier(0.2,0,0,1)" }}>
+              <div style={darkTitle}>Combien de temps ?</div>
+              <div style={{ fontSize: 14, color: "rgba(255,255,255,.6)", marginTop: 6, textAlign: "center" }}>{picked === "chrono" ? "Préremplie par le chrono, pauses déduites" : "Glisse pour ajuster"}</div>
+              <div style={{ marginTop: 18 }}>
+                <PointFormeRing value={duration} min={DUR_MIN} max={DUR_MAX} ticks={9} tickEvery={5} palette="charge"
+                  wordOf={fmtMin} ends={["5 min", "4 h"]} kicker={picked === "chrono" ? "Chrono de la séance" : picked ? "Montre" : "Ta durée"} placeholder=""
+                  better={m => 1 + Math.min(9, Math.floor(m / 25))}
+                  score={loadFill} pulse={pulse}
+                  onChange={m => { setDuration(m); setPicked(null); }} />
+              </div>
+              {loadLine}
+              {(chrono != null || workouts.length > 0) && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginTop: 14 }}>
+                  {chrono != null && (
+                    <button onClick={() => { setPicked("chrono"); setDuration(Math.min(DUR_MAX, Math.max(DUR_MIN, chrono))); }} style={chip(picked === "chrono")}>
+                      <span aria-hidden>⏱</span>{picked === "chrono" ? "✓ " : ""}Chrono · {chrono} min
                     </button>
-                  );
-                })}
-              </div>
+                  )}
+                  {workouts.map(w => (
+                    <button key={w.platform_id} onClick={() => { setPicked(w.platform_id); setDuration(Math.min(DUR_MAX, Math.max(DUR_MIN, w.duration_min))); }} style={chip(picked === w.platform_id)}>
+                      <span aria-hidden>⌚</span>{picked === w.platform_id ? "✓ " : ""}{workoutLabel(w.workout_type)} · {workoutTime(w.start_at)} · {w.duration_min} min
+                    </button>
+                  ))}
+                </div>
+              )}
+              {workouts.length > 0 && <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.5)", textAlign: "center", marginTop: 6 }}>Enregistré{workouts.length > 1 ? "s" : ""} dans {isAndroidApp() ? "Health Connect" : "Santé"} ce jour-là</div>}
             </div>
           )}
         </div>
 
-        {/* RPE — jauge 1-10 (ScaleBars, palette charge), un libellé CR-10 par note. */}
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-            <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Difficulté réelle</div>
+        {stage === 1 && (
+          <div style={{ position: "sticky", bottom: 0, paddingTop: 14 }}>
+            <button onClick={handleSave} disabled={saving || rpeMissing}
+              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "14px 16px", borderRadius: 16, border: "1px solid rgba(212,64,0,0.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 800, cursor: "pointer", boxShadow: "0 14px 28px rgba(212,64,0,0.25)", fontFamily: "inherit", opacity: rpeMissing ? 0.45 : 1 }}>
+              {saving ? <span aria-label="Enregistrement" style={{ width: 16, height: 16, border: "2px solid currentColor", borderTopColor: "transparent", borderRadius: "50%", display: "inline-block", animation: "spinBtn 0.7s linear infinite" }} /> : `Valider ${fmtMin(duration)}`}
+            </button>
           </div>
-          <ScaleBars value={rpe} palette="load" labels={CR10_LABELS}
-            onChange={n => { setRpe(n); setInsight(null); }}
-            onRelease={n => setInsight(rpeInsight(n, session.target_difficulty, rated, session.date))} />
-          <RpeInsightLine insight={insight} />
-        </div>
-        </div>
-
-        {/* Actions */}
-        <div style={{ display: "flex", gap: 8, flexShrink: 0, padding: "14px 28px max(20px, env(safe-area-inset-bottom))", borderTop: "1px solid rgba(0,0,0,.06)" }}>
-          <button
-            onClick={close}
-            style={{ flex: 1, height: 46, borderRadius: 16, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#62686e", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
-          >
-            Annuler
-          </button>
-          <button
-            onClick={handleSave} disabled={saving || rpeMissing}
-            style={{ flex: 1, height: 46, borderRadius: 16, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: rpeMissing ? "default" : "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)", opacity: rpeMissing ? 0.45 : 1 }}
-          >
-            {saving ? "..." : "Valider ✓"}
-          </button>
-        </div>
+        )}
       </div>
     </div>
   );

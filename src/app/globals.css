@@ -411,4 +411,13 @@ html.native input, html.native textarea, html.native [contenteditable="true"] { 
 .tpc-breath1 { animation: tpcBreath1 var(--p1, 6s) ease-in-out infinite; }
 .tpc-breath2 { animation: tpcBreath2 var(--p2, 9s) ease-in-out infinite; }
 .tpc-breath-glow { animation: tpcBreathGlow var(--p1, 6s) ease-in-out infinite; }
+/* Célébration d'une décision (2026-11-06, lot 3) : onde qui part de l'anneau, lignes modifiées qui flashent. */
+@keyframes tpcSonar { 0% { opacity: .9; transform: translate(-50%, -50%) scale(.92); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.32); } }
+.tpc-sonar { animation: tpcSonar .9s cubic-bezier(.22,1,.36,1) forwards; }
+@keyframes tpcLineFlash { 0%, 35% { background: rgba(212,64,0,.16); } 100% { background: transparent; } }
+.tpc-line-flash { animation: tpcLineFlash 2.4s ease-out; }
+@keyframes tpcLineIn { from { opacity: 0; transform: translateY(6px); } }
+@keyframes tpcGlowPulse { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.9); } 35% { opacity: .9; transform: translate(-50%, -50%) scale(1.12); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.2); } }
+.tpc-glow-pulse { animation: tpcGlowPulse 1s ease-out forwards; }
+@media (prefers-reduced-motion: reduce) { .tpc-sonar, .tpc-line-flash, .tpc-glow-pulse { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .tpc-breath1, .tpc-breath2, .tpc-breath-glow { animation: none !important; } }

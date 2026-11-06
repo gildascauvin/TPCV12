@@ -1,13 +1,13 @@
 "use client";
 
+import MiniScoreArc from "@/components/ui/MiniScoreArc";
 import { ExerciseLineView, ExerciseLinesBox, SessionSynthesis, exerciseViews, type ExerciseLineViewData } from "@/components/sessions/ExerciseLineView";
 import { validDecision, type AutoregDecisionRecord } from "@/lib/autoregDecisionRecord";
 import { format } from "date-fns";
 import EmptyDayCard from "@/components/sessions/EmptyDayCard";
-import DiffGauge from "@/components/calendar/DiffGauge";
-import PlanningRing from "@/components/calendar/PlanningRing";
+import SessionRing, { RestDayRing, type SessionRingSession, type SessionRingState } from "@/components/calendar/SessionRing";
 import AlertBox from "@/components/calendar/AlertBox";
-import { loadRule, ruleTagColors, type LoadContext } from "@/lib/loadRule";
+import { loadRule, type LoadContext } from "@/lib/loadRule";
 import type { DayAlert } from "@/lib/alerts";
 import type { ExerciseAttachments } from "@/types";
 import DoneBurst, { useJustDone } from "@/components/sessions/DoneBurst";
@@ -53,6 +53,60 @@ export interface SessionLike {
   concealed?: string | null;
   /* Calculé côté affichage (jamais en base, 2026-10-11) : difficulté que laissait attendre la FC de
      la séance (physioCompare.ts), 3e tuile « ♥ CŒUR » d'une séance faite. */
+}
+
+/* L'anneau du jour (06/11, Gildas) : séance principale (charge prévue à venir, zone + statut aujourd'hui
+   et avant), ou décision du jour de repos (charge de la semaine dans sa zone, « Repos » si inconnue). */
+export function DayRing({ date, sessions, todayStr, todayRing, ringState, restCharge, size = 92 }: {
+  date: Date; sessions: SessionLike[]; todayStr: string; todayRing?: SessionRingState | null;
+  ringState?: SessionRingState | null; restCharge?: number | null; size?: number;
+}) {
+  const dstr = format(date, "yyyy-MM-dd");
+  const top = [...sessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0];
+  return top
+    ? <SessionRing session={top as unknown as SessionRingSession} today={todayStr} size={size} dark state={ringState ?? (dstr === todayStr ? todayRing : undefined)} />
+    : <RestDayRing pos={dstr <= todayStr ? restCharge ?? null : null} size={size} />;
+}
+
+/* En-tête d'une colonne du Planning (date + anneau du jour), exporté pour l'aperçu programme de
+   l'onboarding (06/11, Gildas : mêmes composants que le Planning). */
+export function DayColumnHeader({ date, sessions, todayStr, todayRing, ringState, restCharge, hideDayNumber, noRing }: {
+  /* L'anneau passe dans l'encadré du jour (06/11) : l'en-tête ne garde que la date. */
+  noRing?: boolean;
+  date: Date; sessions: SessionLike[]; todayStr: string; todayRing?: SessionRingState | null;
+  /* État d'anneau imposé quel que soit le jour (aperçus : jour conseillé d'un programme, onboarding). */
+  ringState?: SessionRingState | null;
+  /* Position de charge du jour (0-1, chargeByDay) pour un jour sans séance. */
+  restCharge?: number | null;
+  wellness?: WellnessScoreLike | null; onWellness?: () => void; hideDayNumber?: boolean;
+}) {
+  const dstr = format(date, "yyyy-MM-dd");
+  return (
+    <>
+      {/* Header: day + ring */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>
+            {DAYS[date.getDay() === 0 ? 6 : date.getDay() - 1]}
+          </div>
+          {!hideDayNumber && (
+            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 26, fontWeight: 700, color: "#171b1f", lineHeight: 1.05, letterSpacing: "-0.02em" }}>
+              {date.getDate()}
+            </div>
+          )}
+          {(dstr === todayStr) && (
+            <span style={{ fontFamily: "var(--font-mono), monospace", display: "inline-block", fontSize: 9, fontWeight: 700, color: "#fff", background: "#d44000", padding: "2px 7px", borderRadius: 999, marginTop: 3, letterSpacing: "0.04em" }}>
+              Aujourd'hui
+            </span>
+          )}
+        </div>
+        {!noRing && <DayRing date={date} sessions={sessions} todayStr={todayStr} todayRing={todayRing} ringState={ringState} restCharge={restCharge} size={92} />}
+
+      </div>
+
+
+    </>
+  );
 }
 
 /* ─── Week session card (v59 POC exact layout) — extrait de WeekClient.tsx pour être réutilisé
@@ -126,16 +180,15 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
             style={{ cursor: "grab", touchAction: "none", color: "#c7ccd1", fontSize: 12, flexShrink: 0, marginTop: 2, userSelect: "none" as const, lineHeight: 1 }}
           >⠿</span>
         )}
-        <div style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.025em", wordBreak: "break-word", flex: 1 }}>
-          {session.name}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.025em", wordBreak: "break-word" }}>
+            {session.name}
+          </div>
+          {/* Plus de pastille (06/11, Gildas) : le statut est dans l'anneau du jour. Reste l'indication « en cours ». */}
+          {liveLabel && !session.done && (
+            <span style={{ display: "inline-block", marginTop: 4, fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap", background: "rgba(212,64,0,0.10)", color: "#d44000" }}>● {liveLabel}</span>
+          )}
         </div>
-        <span style={{
-          fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0,
-          background: session.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,0.10)",
-          color: session.done ? "#2f9e44" : "#d44000",
-        }}>
-          {session.done ? "Terminé" : liveLabel ? `● ${liveLabel}` : "Prévu"}
-        </span>
       </div>
       {!concealed && <SessionSynthesis notes={session.notes} adjustPct={adjustPct} originalNotes={synthOriginal} compact style={{ marginBottom: 8 }} />}
 
@@ -145,11 +198,7 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
         <div style={{ marginBottom: 8 }} onClick={e => e.stopPropagation()}>
           {decisionGauge}
         </div>
-      ) : gaugeValue && (
-        <div style={{ marginBottom: 8 }}>
-          <DiffGauge value={gaugeValue} height={10} />
-        </div>
-      )}
+      ) : null}
 
       {/* 3. Exercise display list (v50 — no numbers) */}
       {concealed ? (
@@ -220,7 +269,12 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
 /* ─── Day column — extrait de WeekClient.tsx, réutilisé à l'identique par /coach/planning
    (CoachPlanningClient.tsx, générique sur CoachViewSession) et par l'aperçu programme de
    l'onboarding (WeekPreviewStep.tsx, générique sur Session). ─── */
-export default function DayColumn<T extends SessionLike>({ date, sessions, wellness, todayStr, ctx, onAddSession, onComplete, onEdit, onDuplicate, onWellness, hideDayNumber, hideAddSession, emptyToday, emptyPerspective, recoveryAdvice, alert, alertActions, renderSession, columnRef, columnStyle, onProgram }: {
+export default function DayColumn<T extends SessionLike>({ todayRing, ringState, restCharge, date, sessions, wellness, todayStr, ctx, onAddSession, onComplete, onEdit, onDuplicate, onWellness, hideDayNumber, hideAddSession, emptyToday, emptyPerspective, recoveryAdvice, alert, alertActions, renderSession, columnRef, columnStyle, onProgram }: {
+  /* Anneau du jour calculé comme /today (WeekClient). */
+  todayRing?: SessionRingState | null;
+  /* Jour sans séance : position de charge du jour (chargeByDay), pour l'anneau de repos. */
+  restCharge?: number | null;
+  ringState?: SessionRingState | null;
   date: Date; sessions: T[]; wellness: WellnessScoreLike | null;
   /* Jours vides : lien "Ou démarrer un programme" sous le CTA (2026-10-02, étendu à tous les jours vides le 2026-10-05). */
   onProgram?: () => void;
@@ -256,7 +310,6 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
   const isToday = dstr === todayStr;
   const score = wellness?.score ?? null;
   const rule = loadRule(sessions, ctx);
-  const tagColor = ruleTagColors[rule.cls];
   const showEmptyToday = isToday && sessions.length === 0 && !!emptyToday && !hideAddSession;
 
   return (
@@ -270,32 +323,7 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
       transition: "transform 0.22s ease, box-shadow 0.22s ease",
       ...columnStyle,
     }}>
-      {/* Header: day + ring */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>
-            {DAYS[date.getDay() === 0 ? 6 : date.getDay() - 1]}
-          </div>
-          {!hideDayNumber && (
-            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 26, fontWeight: 700, color: "#171b1f", lineHeight: 1.05, letterSpacing: "-0.02em" }}>
-              {date.getDate()}
-            </div>
-          )}
-          {isToday && (
-            <span style={{ fontFamily: "var(--font-mono), monospace", display: "inline-block", fontSize: 9, fontWeight: 700, color: "#fff", background: "#d44000", padding: "2px 7px", borderRadius: 999, marginTop: 3, letterSpacing: "0.04em" }}>
-              Aujourd'hui
-            </span>
-          )}
-        </div>
-        <div onClick={e => { e.stopPropagation(); onWellness(); }} style={{ cursor: "pointer" }}>
-          <PlanningRing score={score} />
-        </div>
-      </div>
-
-      {/* Zone label */}
-      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, color: score !== null ? scoreColor(score) : "#8a8f94", marginBottom: 8, letterSpacing: "0.01em" }}>
-        {wellness?.zoneLabel ?? formLabel(score)}
-      </div>
+      <DayColumnHeader date={date} sessions={sessions} todayStr={todayStr} hideDayNumber={hideDayNumber} noRing />
 
       {/* Load rule card — remplacé par l'alerte wellness/décision quand un cas notable est détecté
          (prioritaire), sinon par le conseil récupération quand recoveryAdvice est fourni (aperçu
@@ -303,28 +331,30 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
          pastille pulsants (copie exacte de CoachAthleteCard.tsx, showBadge) — la carte du jour reste
          blanche, comme /week et /coach/planning en vrai. */}
       {alert ? (
-        <AlertBox alert={alert} actions={alertActions} />
+        <AlertBox alert={alert} actions={alertActions} lead={<DayRing date={date} sessions={sessions} todayStr={todayStr} todayRing={todayRing} ringState={ringState} restCharge={restCharge} size={84} />} />
       ) : recoveryAdvice ? (
         <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
-          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.09em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#171b1f", marginBottom: 5 }}>🌿 Récupération</div>
-          <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{recoveryAdvice}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <DayRing date={date} sessions={sessions} todayStr={todayStr} todayRing={todayRing} ringState={ringState} restCharge={restCharge} size={84} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.09em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#171b1f", marginBottom: 4 }}>🌿 Récupération</div>
+              <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{recoveryAdvice}</div>
+            </div>
+          </div>
         </div>
       ) : (
         <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
-            <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2 }}>{rule.title}</div>
-            <div style={{ fontSize: 9, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.09em", borderRadius: 999, padding: "4px 7px", whiteSpace: "nowrap", background: tagColor.bg, color: tagColor.color, flexShrink: 0 }}>
-              {rule.tag}
+          {/* Anneau du jour + titre (06/11, Gildas) : plus de pastille, l'anneau dit déjà la difficulté. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <DayRing date={date} sessions={sessions} todayStr={todayStr} todayRing={todayRing} ringState={ringState} restCharge={restCharge} size={84} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2, marginBottom: 4 }}>{rule.title}</div>
+              <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{rule.text}</div>
             </div>
           </div>
-          <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{rule.text}</div>
         </div>
       )}
 
-      {/* Sessions label */}
-      <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.13em", color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", marginBottom: 7 }}>
-        Séances · {sessions.length}
-      </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {showEmptyToday && (

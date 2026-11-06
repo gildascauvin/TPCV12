@@ -71,8 +71,8 @@ export function CollectChecks({ p }: { p: CollectProgress }) {
 /* Ligne Phase de la carte décision pendant la collecte (à la place de la phase d'exemple). */
 export function PhaseCollecting({ p, perspective = "athlete" }: { p: CollectProgress; perspective?: Perspective }) {
   return (
-    <div style={{ borderTop: "1px dashed rgba(255,255,255,.2)", paddingTop: 10, textAlign: "center" }}>
-      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "rgba(255,255,255,.6)", marginBottom: 5 }}>Phase</div>
+    <div style={{ textAlign: "center" }}>
+      {/* Pas de titre « Phase » ici : le dos de la carte (FlipBlock) l'affiche déjà (06/11). */}
       <div style={{ fontSize: 13, lineHeight: 1.5, fontWeight: 600, color: "rgba(255,255,255,.8)", marginBottom: 10 }}>
         {perspective === "coach" ? "Ses" : "Tes"} analyses arrivent dans {inDays(p.remaining)} de suivi. {p.done} sur {p.total}.
       </div>

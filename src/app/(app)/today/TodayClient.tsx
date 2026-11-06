@@ -1,5 +1,7 @@
 "use client";
 
+import { proposalOfDay } from "@/lib/sessionInsight";
+import { flyToken } from "@/lib/flyToken";
 import { markPrimingSource } from "@/lib/primingSource";
 import { Skel } from "@/components/ui/Skeleton";
 import { toast } from "@/lib/toast";
@@ -38,7 +40,7 @@ import { findProgramForWeek, programWeekTag } from "@/lib/programAssignment";
 import { revealLabel } from "@/lib/programReveal";
 import { ACTIVITY_LABEL_CHANGED } from "@/components/layout/ActivityPill";
 import { programSportEmoji } from "@/lib/sportCategories";
-import DecisionRing, { RestDecisionRing, DoneDecisionRing, decisionRingState } from "@/components/sessions/DecisionRing";
+import DecisionRing, { RestDecisionRing, DoneDecisionRing, decisionRingState, type RingLegend } from "@/components/sessions/DecisionRing";
 import FlipBlock from "@/components/today/FlipBlock";
 import { breathForDir } from "@/lib/ringAmbience";
 import { computeWellnessBaselineAt, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
@@ -49,7 +51,7 @@ import { applyAutoregDifficulty } from "@/lib/autoregulation";
 import { learnSignals, personalAdjust, proposalPersonal, type PersonalSignal, type PersonalAdjust } from "@/lib/autoregPersonal";
 import { aggregateFor, AGG_BANDS } from "@/lib/metricCards";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus, ExerciseAttachments, Program } from "@/types";
-import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
+import { type HomeTab } from "@/components/today/HomeTabs";
 import { ChargeSection, RecuperationSection } from "@/components/conseils/HomeAnalyticsSections";
 import type { RangeMode } from "@/components/calendar/RangeToggle";
 import type { ConseilsData } from "@/lib/conseilsData";
@@ -266,6 +268,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   }, []);
   // Repliée par défaut (2026-10-23, Gildas) : nom + jauge de RPE de la séance visibles, la feuille borne à son minimum.
   const [sheetH, setSheetH] = useState(0);
+  /* Feuille ouverte par défaut autant que possible sans recouvrir l'anneau ni le conseil (06/11, Gildas) :
+     sa hauteur suit le bas du bloc décision, tant que le sportif ne l'a pas réglée lui-même. */
+  const decisionEndRef = useRef<HTMLDivElement>(null);
+  const sheetTouched = useRef(false);
   const [liveScoreSlot, setLiveScoreSlot] = useState<HTMLDivElement | null>(null);
   const [pageArea, setPageArea] = useState<HTMLDivElement | null>(null);
   /* Haut du score du point forme dans la page : la feuille s'ouvre juste en dessous de l'arc, pour que le
@@ -300,6 +306,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   // Tiroir ouvert par la carte elle-même (lib/morph.ts) : il saute alors son animation d'entrée.
   const [editingMorph, setEditingMorph] = useState(false);
   const [autoregPreview, setAutoregPreview] = useState<{ sessionId: string; pct: number } | null>(null);
+  /* Célébration de la décision (2026-11-06, lot 3) : la séance monte d'elle-même, ses lignes changées
+     flashent avec l'ancienne valeur, et l'écart part du curseur de l'anneau jusqu'à la 1re ligne changée. */
+  const [celebration, setCelebration] = useState<{ sessionId: string; original: string } | null>(null);
+  const celebrationTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (celebrationTimer.current) window.clearTimeout(celebrationTimer.current); }, []);
   /* Nœud des CTA d'ajustement, dans la carte décision (portail d'AutoregButtons, 2026-09-30). */
   const [autoregActionsSlot, setAutoregActionsSlot] = useState<HTMLDivElement | null>(null);
   /* Texte vivant de l'anneau (Dans / Sous / Au-dessus de la zone, puis décision appliquée), titre de
@@ -438,7 +449,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     ? { kind: "rest", tomorrowDifficulty }
     : autoregTargetTop
     ? { kind: "planned", tomorrowDifficulty }
-    : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop) };
+    : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop), proposal: proposalOfDay(doneTop) };
   /* Réglages personnels du jour : seuil recalé (profil) + signal appris si la séance à faire est
      concernée ; séance déjà faite = ceux figés le matin. */
   const autoregShift = profile.autoreg_shift ?? 0;
@@ -507,6 +518,15 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const historyLocked = decisionLocked && !sandboxMode;
   const chargeReady = !analyticsData || analyticsReady(analyticsData, "charge");
   const recupReady = !analyticsData || analyticsReady(analyticsData, "recup");
+  /* Légende de l'anneau : récup et charge du jour, chacune ouvre son détail (lot 4). */
+  const legendRecup = analyticsData && recupReady ? aggregateFor("recup", analyticsData) : null;
+  const legendCharge = analyticsData && chargeReady ? aggregateFor("charge", analyticsData) : null;
+  /* Lot 4 : la pastille sous l'anneau Charge rouvre la note de la dernière séance faite. */
+  const lastDoneSession = [...allSessions].filter(x => x.done && x.date <= initialDate).sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
+  const ringLegend: RingLegend = {
+    recup: { value: legendRecup ? Math.round(legendRecup.pos * 100) : null, color: legendRecup?.band.color, onClick: () => { setHomeTab("recuperation"); window.scrollTo({ top: 0 }); } },
+    charge: { value: legendCharge ? Math.round(legendCharge.pos * 100) : null, color: legendCharge?.band.color, onClick: () => { setHomeTab("charge"); window.scrollTo({ top: 0 }); } },
+  };
   /* Sans assez d'historique (gratuit ou Premium) : la collecte. Les mesures étant gratuites, elles se
      débloquent vraiment au bout, pour tout le monde ; jamais de données d'exemple. */
 
@@ -548,6 +568,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       ringGlow={decisionColor}
       ringBreath={breathForDir(decisionLocked ? null : decision.suggestion?.dir)}
       ringAmbient={ringAmbient}
+      ringLegend={ringLegend}
       onHint={setRingHint}
       actionsSlot={decisionLocked ? undefined : autoregActionsSlot}
       severityColor={decision.suggestion && !decisionLocked ? decisionColor : undefined}
@@ -567,6 +588,26 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
            l'afficher « appliquée » (31/10). */
         if (!saved) { toast("Séance non modifiée. Réessaie dans un instant."); throw new Error("séance non modifiée"); }
         setAllSessions(prev => prev.map(s => s.id === saved.id ? saved : s));
+        if (original.notes && notes !== original.notes) {
+          const sid = autoregTargetTop.id;
+          setCelebration({ sessionId: sid, original: original.notes });
+          if (sheetMode) setSheetH(Math.round(viewportH * 0.62));
+          /* Un jeton par ligne changée (3 au plus), l'un après l'autre : « −1 série » quand le nombre de séries
+             bouge, sinon l'écart appliqué en %. */
+          const before = original.notes.split("\n").filter(Boolean), after = (notes ?? "").split("\n").filter(Boolean);
+          const changedIdx = before.length === after.length ? before.map((l, i) => (l !== after[i] ? i : -1)).filter(i => i >= 0) : [];
+          const label = (a: string, b: string) => {
+            const sa = Number(a.match(/(\d+)\s*[x×]/i)?.[1]), sb = Number(b.match(/(\d+)\s*[x×]/i)?.[1]);
+            if (sa && sb && sa !== sb) { const d = sb - sa; return `${d > 0 ? "+" : "−"}${Math.abs(d)} série${Math.abs(d) > 1 ? "s" : ""}`; }
+            return `${pct < 0 ? "−" : "+"}${Math.abs(Math.round(pct))} %`;
+          };
+          changedIdx.forEach((li, k) => window.setTimeout(() => {
+            const knob = document.querySelector("[data-ring-knob]"), line = document.querySelector(`[data-session-id="${sid}"] [data-ex-idx="${li}"]`);
+            if (knob && line) flyToken(knob, line, label(before[li], after[li]), pct < 0 ? "#d44000" : "#2f9e44");
+          }, (sheetMode ? 1000 : 700) + k * 380));
+          if (celebrationTimer.current) window.clearTimeout(celebrationTimer.current);
+          celebrationTimer.current = window.setTimeout(() => setCelebration(null), 6000);
+        }
         return original;
       }}
       onUndo={async (original) => {
@@ -581,10 +622,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     restCharge ? (
       <DecisionRing readOnly fluid hideHint value={restCharge.pos} zoneLow={1} zoneHigh={1} onChange={() => {}}
         axis={{ zone: restChargeZone, colors: [AGG_BANDS.charge[0].color, restCharge.band.color] }}
-        glow={decisionColor} ambient={ringAmbient} breath="flat"
+        glow={decisionColor} ambient={ringAmbient} breath="flat" legend={ringLegend}
         kicker={decision.title ?? undefined}
-        centerTitle={restCharge.pos < restChargeZone[0] ? "Semaine sous la zone" : restCharge.pos > restChargeZone[1] ? "Semaine au-dessus de la zone" : "Semaine dans la zone"} />
-    ) : <RestDecisionRing hideHint fluid glow={decisionColor} ambient={ringAmbient} breath="flat" centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked={decisionLocked} />
+        centerTitle={restCharge.pos < restChargeZone[0] ? "Sous la zone" : restCharge.pos > restChargeZone[1] ? "Au-dessus de la zone" : "Dans la zone"} />
+    ) : <RestDecisionRing hideHint fluid glow={decisionColor} ambient={ringAmbient} breath="flat" legend={ringLegend} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked={decisionLocked} />
   ) : (() => {
     /* Séance(s) déjà faite(s), aujourd'hui ou dans le passé : anneau en lecture seule sur le RPE
        réel de la plus dure (2026-09-30). */
@@ -594,8 +635,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     const dz = decision.doneZone;
     const gap = doneTop.rpe != null && doneTop.target_difficulty != null ? doneTop.rpe - doneTop.target_difficulty : 0;
     return <DoneDecisionRing rpe={doneTop.rpe ?? null} planned={doneTop.target_difficulty ?? null} hideZone={decisionLocked} hideHint zone={dz} fluid glow={decisionColor} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked={decisionLocked}
-      ambient={ringAmbient} breath={gap >= 2 ? "low" : "flat"}
-      zoneLabel={dz && !decisionLocked ? "Conseillé" : undefined}
+      ambient={ringAmbient} breath={gap >= 2 ? "low" : "flat"} legend={ringLegend}
+      zoneLabel={dz && !decisionLocked ? "Optimal" : undefined}
       introFrom={dz && !decisionLocked ? (dz.low + dz.high) / 2 : undefined} />;
   })();
 
@@ -895,6 +936,19 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
      tant que le point forme du jour n'est pas fait, c'est lui qui est dans la feuille, et son score se
      construit en haut à la place de l'anneau de décision. Desktop et autres onglets : inchangés. */
   const sheetMode = !isMd && homeTab === "today";
+  useEffect(() => {
+    if (!sheetMode) return;
+    const fit = () => {
+      const el = decisionEndRef.current;
+      if (!el || sheetTouched.current) return;
+      const bottom = el.getBoundingClientRect().bottom + window.scrollY;
+      setSheetH(Math.max(0, Math.round(window.innerHeight - bottom - 12)));
+    };
+    const t = window.setTimeout(fit, 700); // après l'arrivée de l'anneau
+    const ro = new ResizeObserver(fit);
+    if (decisionEndRef.current?.parentElement) ro.observe(decisionEndRef.current.parentElement);
+    return () => { window.clearTimeout(t); ro.disconnect(); };
+  }, [sheetMode, viewportH, selectedDate]);
   /* Point forme obligatoire (2026-11-04) : tant que celui du jour n'est pas fait, il s'ouvre sans « Plus
      tard » (ni séance ni Planning avant ; PointFormeGate renvoie ici depuis les autres pages). */
   const pointFormeRequired = !sandboxMode && selectedDate === initialDate && !wellnessFilledToday;
@@ -903,8 +957,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const startFromRing = !sandboxMode && !decisionLocked && wellnessFilledToday && selectedDate === initialDate
     && !!autoregTargetTop && !autoregTargetTop.done
     && (!decision.suggestion || ["Allègement appliqué", "Surcharge appliquée", "Difficulté maintenue"].includes(ringHint ?? ""));
-  const embeddedCheckin = !isMd && !sandboxMode && selectedDate === initialDate
-    && (showWellness || !wellnessFilledToday);
+  /* Point forme à l'anneau (2026-11-06) : plein écran sombre partout, plus intégré à la feuille de l'Accueil. */
+  const embeddedCheckin = false as boolean;
   const checkinTopSession = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
   // Score du point forme : aussi grand que la place laissée au-dessus de la feuille.
   const liveScoreSize = Math.max(110, Math.min(230, viewportH - (sheetVisibleH ?? sheetH) - (liveSlotTop ?? 250) - 75));
@@ -942,6 +996,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     onStart={!sandboxMode && s.date === initialDate && !s.done ? (s) => gateInput(() => handleStart(s)) : undefined}
                     onEdit={(s) => { setEditingMorph(morphOpen(document.querySelector(`[data-session-id="${s.id}"]`), MORPH_SESSION, () => setEditing(s))); }}
                     previewPct={!futureDay && autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
+                    flashOriginal={celebration?.sessionId === s.id ? celebration.original : null}
                     concealed={!sandboxMode && s.program_assignment_id && revealAssignmentIds.includes(s.program_assignment_id) ? revealLabel(s.date, initialDate) : null}
                     onReorderExercises={reorderTodayExercises}
                     authorName={profile.name ?? "Toi"}
@@ -1032,20 +1087,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       <div style={{ padding: `14px ${pad}px 0`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
 
         {/* Pendant le point forme dans la feuille (mobile), les onglets laissent leur place au score. */}
-        {!(sheetMode && embeddedCheckin) && <HomeTabs
-          active={homeTab}
-          onChange={setHomeTab}
-          previews={{
-            today: decisionRingState(todaySessions, decision.suggestion, autoregPreview && autoregTargetTop && autoregPreview.sessionId === autoregTargetTop.id ? autoregPreview.pct : null, decision.doneZone),
-            /* Onglet en mode exemple → miniature de l'exemple (2026-09-30, Gildas : elle incite au clic,
-               et le bandeau "Exemple" de l'onglet dit ensuite ce que c'est). */
-            charge: analyticsData && chargeReady ? aggregateFor("charge", analyticsData) : null,
-            recuperation: analyticsData && recupReady ? aggregateFor("recup", analyticsData) : null,
-          }}
-          locked={historyLocked}
-          lockedTabs={["today"]}
-        />}
-
+        {/* Lot 4 (2026-11-06) : plus d'onglets, la légende Récup / Charge sous l'anneau ouvre le détail ; retour en haut du détail. */}
+        {homeTab !== "today" && (
+          <button type="button" onClick={() => setHomeTab("today")}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, margin: "0 0 10px", padding: "7px 12px 7px 9px", borderRadius: 999, border: "none", cursor: "pointer", background: "rgba(255,255,255,.08)", color: "#fff", fontFamily: "inherit", fontSize: 13, fontWeight: 800 }}>
+            <span aria-hidden>←</span>{homeTab === "charge" ? "Charge" : "Récupération"}
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: "rgba(255,255,255,.55)" }}>· Aujourd&apos;hui</span>
+          </button>
+        )}
         {homeTab === "today" && (
         <>
         {!sandboxMode && userId && selectedDate === initialDate && <BilanCard userId={userId} today={initialDate} onOpen={(kind, anchor) => setBilanOpen({ kind, anchor, source: "home_card" })} />}
@@ -1105,7 +1154,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   reste net (difficulté prévue seule, sans zone ni sens ; repos et séance faite tels
                   quels), seule la carte décision est floutée. */}
               {decisionGaugeSlot && decisionLocked && (
-                <div key={`ring-${checkinReplay}`} onClick={e => e.stopPropagation()} style={{ position: "relative", zIndex: 2, marginBottom: 14, animation: checkinReplay ? "tpcFadeUp .35s cubic-bezier(.2,0,0,1)" : undefined }}>
+                <div key={`ring-${checkinReplay}`} onClick={e => e.stopPropagation()} style={{ position: "relative", zIndex: 2, marginTop: 26, marginBottom: 26, animation: checkinReplay ? "tpcFadeUp .35s cubic-bezier(.2,0,0,1)" : undefined }}>
                   {decisionGaugeSlot}
                 </div>
               )}
@@ -1118,7 +1167,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 radius={16}
               >
               {decisionGaugeSlot && !decisionLocked && (
-                <div key={`ring-${checkinReplay}`} onClick={e => e.stopPropagation()} style={{ position: "relative", zIndex: 2, marginBottom: 14, animation: checkinReplay ? "tpcFadeUp .35s cubic-bezier(.2,0,0,1)" : undefined }}>
+                <div key={`ring-${checkinReplay}`} onClick={e => e.stopPropagation()} style={{ position: "relative", zIndex: 2, marginTop: 26, marginBottom: 26, animation: checkinReplay ? "tpcFadeUp .35s cubic-bezier(.2,0,0,1)" : undefined }}>
                   {decisionGaugeSlot}
                 </div>
               )}
@@ -1132,14 +1181,17 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     seuls le conseil, le CTA et la Phase restent dessous. */}
                 {/* Bloc qui pivote (2026-11-04) : conseil + CTA devant, Phase au dos (« Phase · Accumulation ↻ »). */}
                 <FlipBlock
+                  frontLabel={autoregTargetTop ? "Conseil du jour" : todaySessions.length === 0 ? "Jour de repos" : "Ta séance du jour"}
                   backLabel={decision.phase && analyticsData && chargeReady && recupReady ? decision.phase.title : null}
-                  front={<>
+                  front={
                     <AlertBox
                       variant="bare"
                       alert={{ border: `${decisionColor}66`, glow: decisionColor, text: withTitle(decision.text, autoregTargetTop ? ringHint : decision.title, autoregTargetTop ? undefined : decision.titleDetail) }}
-                      /* CTA d'ajustement juste sous le texte de la reco (2026-09-30). */
-                      actions={autoregTargetTop ? <div ref={setAutoregActionsSlot} className="autoreg-slot" /> : undefined}
                     />
+                  }
+                  /* Maintenir / Alléger dans la carte sous le conseil ; Démarrer sous la carte (06/11). */
+                  actions={autoregTargetTop ? <div ref={setAutoregActionsSlot} className="autoreg-slot" style={{ marginTop: 4 }} /> : undefined}
+                  below={<>
                     {/* Démarrer juste sous le conseil (2026-11-05, POC) : une fois la décision prise (ou s'il n'y a
                        rien à décider), la suite logique est de lancer la séance, sans descendre jusqu'à sa carte. */}
                     {startFromRing && autoregTargetTop && (
@@ -1147,7 +1199,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                         <button onClick={() => gateInput(() => handleStart(autoregTargetTop))}
                           style={{ width: "100%", maxWidth: 320, height: 46, borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: "pointer", border: "none", fontFamily: "inherit",
                             background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}>
-                          {isLive(autoregTargetTop) ? "Reprendre la séance" : "▶ Démarrer la séance"}
+                          {isLive(autoregTargetTop) ? "Reprendre la séance" : ringHint === "Allègement appliqué" || ringHint === "Surcharge appliquée" ? "▶ Démarrer ta nouvelle séance" : "▶ Démarrer la séance"}
                         </button>
                       </div>
                     )}
@@ -1158,22 +1210,15 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     <PhaseCollecting p={phaseProgress(analyticsData)} />
                   ) : (
                     <PhaseLine
+                      inCard
                       phase={decision.phase}
                       onUnlock={() => setShowWellness(true)}
-                      onEdit={wellnessFilledToday ? editWellness : undefined}
                     />
                   )}
                 />
               </div>
               </LockedBlur>
-              {decisionLocked && (
-                /* Le ressenti reste modifiable (c'est une entrée) ; aucun indice de la décision ne passe. */
-                <div style={{ textAlign: "center", marginTop: 10 }}>
-                  <button onClick={editWellness} style={{ border: "none", background: "none", cursor: "pointer", color: "rgba(255,255,255,.55)", fontSize: 12, fontWeight: 700 }}>
-                    {wellnessFilledToday ? "✎ Modifier mon ressenti" : "Renseigner mon ressenti"}
-                  </button>
-                </div>
-              )}
+              <div ref={decisionEndRef} aria-hidden />
             </div>
 
             {/* Séance(s) du jour : dans la feuille du bas sur mobile (2026-10-22), sous la carte décision sinon. */}
@@ -1191,13 +1236,13 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           analyticsData ? (
             <>
               {homeTab === "charge" && (chargeReady
-                ? <ChargeSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} physio={physio} />
+                ? <ChargeSection data={analyticsData} ringAction={lastDoneSession ? { label: "✎ Modifier ma dernière séance", onClick: () => openResult(lastDoneSession) } : null} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} physio={physio} />
                 : <>{!sandboxMode && <WatchPrompt userId={userId} physio={physio} />}<AnalyticsCollecting data={analyticsData} group="charge" /></>)}
               {/* Comportements n'est plus un onglet (2026-09-29) : c'est un déterminant de la
                  récupération, il devient donc le dernier item de ce rapport-là. */}
               {homeTab === "recuperation" && <>
                 {recupReady
-                  ? <RecuperationSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} physio={physio} />
+                  ? <RecuperationSection data={analyticsData} ringAction={wellnessFilledToday ? { label: "✎ Modifier mon point forme", onClick: editWellness } : null} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} physio={physio} />
                   : <>{!sandboxMode && <WatchPrompt userId={userId} physio={physio} />}<AnalyticsCollecting data={analyticsData} group="recup" /></>}
               </>}
             </>
@@ -1212,7 +1257,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       </div>
 
       {sheetMode && (
-        <HomeSheet height={sheetH} onHeightChange={setSheetH} onVisibleHeight={setSheetVisibleH} contentKey={embeddedCheckin ? "checkin" : "sessions"} dragArea={pageArea} overNav={embeddedCheckin}
+        <HomeSheet height={sheetH} onHeightChange={h => { sheetTouched.current = true; setSheetH(h); }} onVisibleHeight={setSheetVisibleH} contentKey={embeddedCheckin ? "checkin" : "sessions"} dragArea={pageArea} overNav={embeddedCheckin}
           header={embeddedCheckin && checkinTopSession ? (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "0 14px 10px", padding: "9px 12px", borderRadius: 12, background: "#fff" }}>
               <span style={{ fontSize: 13.5, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{checkinTopSession.name}</span>

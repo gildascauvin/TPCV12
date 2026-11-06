@@ -16,7 +16,9 @@ export function sheetBounds(vh: number) {
   return { min: MIN_H, mid: Math.round(Math.min(max, Math.max(MIN_H + 80, vh * 0.52))), max };
 }
 
-export default function HomeSheet({ height, onHeightChange, onVisibleHeight, children, header, dragArea, overNav = false, contentKey }: {
+export default function HomeSheet({ height, onHeightChange, onVisibleHeight, children, header, dragArea, overNav = false, contentKey, bottom }: {
+  /** Posée au-dessus d'une barre fixe (bouton de l'onboarding) au lieu du bas de l'écran ; pas de place réservée à la navigation. */
+  bottom?: string;
   /** Hauteur visible de la feuille en px (navigation comprise). */
   height: number;
   onHeightChange: (h: number) => void;
@@ -32,7 +34,7 @@ export default function HomeSheet({ height, onHeightChange, onVisibleHeight, chi
   /** Change quand le contenu est remplacé (point forme → séance) : le contenu repart en haut. */
   contentKey?: string;
 }) {
-  const navClear = overNav ? 0 : NAV_CLEAR;
+  const navClear = overNav || bottom ? 0 : NAV_CLEAR;
   const [vh, setVh] = useState(() => (typeof window === "undefined" ? 800 : window.innerHeight));
   useEffect(() => {
     const on = () => setVh(window.innerHeight);
@@ -241,7 +243,7 @@ export default function HomeSheet({ height, onHeightChange, onVisibleHeight, chi
   const grab = { onPointerDown: down, onPointerMove: move, onPointerUp: up, onPointerCancel: up };
   return (
     <div style={{
-      position: "fixed", left: 0, right: 0, bottom: 0, height: h, zIndex: overNav ? 2147483050 : 40,
+      position: "fixed", left: 0, right: 0, bottom: bottom ?? 0, height: h, zIndex: overNav ? 2147483050 : 40,
       background: "#f1f0ee", color: "#171b1f", borderRadius: "24px 24px 0 0",
       boxShadow: "0 -18px 44px rgba(0,0,0,.45)", display: "flex", flexDirection: "column", overflow: "hidden",
       transition: dragging ? "none" : "height .32s cubic-bezier(.22,1,.36,1)",

@@ -37,6 +37,7 @@ description: Règles de texte et de design visuel de ThePerfClub, à relire avan
 - Constantes : accent `#d44000` / fort `#f04a08`, gradient bouton `linear-gradient(180deg,#f04a08,#d44000)`, modale `#fff` radius 30 padding 28, ombre `0 42px 120px rgba(0,0,0,.34)`, z-index modales `2147483100` (bottom nav `2147483000`).
 - Footer de modale scrollable : carte `display:flex; flexDirection:column; overflow:hidden`, contenu `overflowY:auto`, footer `flexShrink:0` (pas de `position:sticky`), padding `20px 28px 20px`.
 - Une seule jauge par carte de séance (RPE si faite, difficulté prévue sinon), sans label.
+- Règle des jauges (06/11) : **un anneau = un score** (décision, récup, charge, miniatures, récup du jour du Planning, datepicker), arc de 240° partout (`MiniScoreArc`, `AggregateGauge`, `DecisionRingMini`) ; **une barre = une séance** (`DiffGauge`, `DecisionGauge`). Couleurs : séance à venir / difficulté prévue = orange de charge (`chargeColor`) ; séance faite = Braise de l'effort face au prévu (`difficultyGradient(value, planned)`) + trait du prévu ; décision avec zone = Braise ; récup = bleu (`recupColor`). Chiffres en blanc. Plus de vert/orange/rouge de difficulté.
 - Comportements : toujours traduire les clés DB (`alcohol`, `screen_late`…) avant affichage.
 
 ## Checklist avant de livrer un texte
@@ -44,3 +45,9 @@ description: Règles de texte et de design visuel de ThePerfClub, à relire avan
 2. grep « athlète », « check-in », « wellness », « équipe », « /10 » dans le texte affiché.
 3. L'information colorée a-t-elle aussi une forme ou un mot ?
 4. Si un flow a été restructuré, comparer à l'ancien flow : rien n'a disparu sans qu'on l'ait voulu ?
+
+## 06/11/2026
+- Anneau : « Dans la zone », « Sous la zone », « Au-dessus de la zone », « Optimal » le long de la zone des grands anneaux ; jamais « Semaine dans la zone », « Conseillé ».
+- Pas d'annonce de données futures dans les bilans (« dès ton 5e point forme… ») : on dit ce qu'on sait dès J0.
+- Côté coach : « sa norme », jamais « ta norme ».
+- Pas de pastille de difficulté dans l'encadré du jour : l'anneau dit déjà la difficulté ; un seul mot par niveau (Facile / Dure / Très dure).

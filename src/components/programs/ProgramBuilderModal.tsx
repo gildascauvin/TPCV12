@@ -1,11 +1,11 @@
 "use client";
 
+import DayColumn, { WeekSessionCard } from "@/components/calendar/DayColumn";
 import { useState, useEffect, useRef } from "react";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import type { ProgramTemplate, SessionTemplate, WeekTemplate, Session } from "@/types";
 import AddSessionModal from "@/components/sessions/AddSessionModal";
 import ReconduireModal, { type ReconduireOutputRow } from "@/components/sessions/ReconduireModal";
-import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import { NO_ADJUST, adjustNotesCharge, adjustDifficultyCharge, type ChargeAdjust } from "@/lib/chargeAdjust";
 import ChargeAdjustPicker, { chargePreviewLine } from "@/components/sessions/ChargeAdjustPicker";
 import { SeriesChoiceModal, RepeatModal, SeriesRow } from "@/components/sessions/SeriesModals";
@@ -14,10 +14,9 @@ import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
 import { newSeriesId, editSummary, following, propagateEdit, moveFollowing, deleteFollowing, repeatSession, seriesLabel, hasSessionChange, type SessionState } from "@/lib/sessionSeries";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
-import { SessionTemplateCard, avgWeekRpe, loadBarColor } from "@/components/programs/SessionTemplateCard";
-import AlertBox from "@/components/calendar/AlertBox";
+import { avgWeekRpe, loadBarColor } from "@/components/programs/SessionTemplateCard";
 import PeriodPill from "@/components/calendar/PeriodPill";
-import { computeAutoregSuggestion, suggestionSeverityColor, autoregHeadline, autoregAdvice, formatAutoregPoints, applyAutoregDifficulty } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, suggestionSeverityColor, autoregHeadline, autoregAdvice, applyAutoregDifficulty, zoneRange } from "@/lib/autoregulation";
 import { relativeZoneLabel } from "@/lib/wellnessBaseline";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import WellnessRing from "@/components/wellness/WellnessRing";
@@ -44,14 +43,11 @@ function DroppableProgramDay({ day, children }: { day: string; children: React.R
   );
 }
 
-function DraggableProgramSession({ day, sIdx, session, onClick, badgeOverride, gaugeOverride, autoregReco }: {
+function DraggableProgramSession({ day, sIdx, session, onClick, autoregReco }: {
   day: string; sIdx: number; session: SessionTemplate; onClick: () => void;
   /* Simulateur d'autorégulation (2026-09-18) — voir ProgramBuilderModal, calcul daySuggestions.
-     badgeOverride/gaugeOverride affichent l'effet de la reco sur la jauge/le badge de la carte ;
      autoregReco (le %, signé) pilote le rendu barré/gras des lignes d'exercice (voir
      DraggableProgramExercise) — tous absents = comportement in-app inchangé. */
-  badgeOverride?: { label: string; bg: string; color: string };
-  gaugeOverride?: number;
   autoregReco?: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `sess:${day}:${sIdx}`, data: { type: "session", day, sIdx } });
@@ -70,21 +66,29 @@ function DraggableProgramSession({ day, sIdx, session, onClick, badgeOverride, g
     position: isDragging ? "relative" : undefined,
     zIndex: isDragging ? 30 : undefined,
   };
+  /* Même carte que le Planning (06/11, Gildas : mêmes composants partout) ; la reco du simulateur se lit
+     dans l'anneau du jour et les lignes ajustées. */
   return (
-    <SessionTemplateCard
-      session={session}
-      onClick={onClick}
+    <WeekSessionCard
+      session={asDaySession(session, day, sIdx)}
+      onEdit={onClick}
+      onComplete={() => {}}
+      hideActions
       dragHandleProps={{ ...attributes, ...listeners }}
       cardRef={cardRef}
       cardStyle={style}
-      badgeOverride={badgeOverride}
-      gaugeOverride={gaugeOverride}
       adjustPct={autoregReco ?? null}
       renderExerciseLine={(_line, exIdx, view) => (
         <DraggableProgramExercise key={exIdx} day={day} sIdx={sIdx} exIdx={exIdx} view={view} />
       )}
     />
   );
+}
+
+/* Séance de modèle → forme d'une séance du Planning (pas de date : lundi fictif 2001 calé sur le jour). */
+function dayDate(day: string) { return `2001-01-${String(1 + Math.max(0, DAYS.indexOf(day))).padStart(2, "0")}`; }
+function asDaySession(s: SessionTemplate, day: string, sIdx: number, concealed: string | null = null) {
+  return { id: `${day}-${sIdx}`, date: dayDate(day), name: s.name, notes: s.notes, duration: null, rpe: null, done: false, target_difficulty: s.target_difficulty ?? null, exercise_media: s.exercise_media ?? null, concealed };
 }
 
 function DraggableProgramExercise({ day, sIdx, exIdx, view }: { day: string; sIdx: number; exIdx: number; view: ExerciseLineViewData }) {
@@ -209,13 +213,14 @@ function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultD
 
           <ChargeAdjustPicker value={adjust} onChange={setAdjust} />
 
-          {/* Aperçu — même carte que le builder (SessionTemplateCard), diff avant/après si la
+          {/* Aperçu : même carte que le builder et le Planning (WeekSessionCard), diff avant/après si la
               charge a été ajustée. */}
           <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
             Aperçu de la copie
           </div>
-          <SessionTemplateCard
-            session={previewSession}
+          <WeekSessionCard
+            session={asDaySession(previewSession, "Lun", 0)}
+            hideActions onComplete={() => {}} onEdit={() => {}} cardStyle={{ cursor: "default" }}
             renderExerciseLine={chargePreviewLine(adjust)}
           />
         </div>
@@ -814,71 +819,36 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
             prevMax: prevSess.length ? Math.max(...prevSess.map(s => s.target_difficulty ?? 6)) : 0,
             nextMax: nextSess.length ? Math.max(...nextSess.map(s => s.target_difficulty ?? 6)) : 0,
           };
-          const rule = loadRule(daySessions.map(s => ({ target_difficulty: s.target_difficulty })), ctx);
-          const tagColor = ruleTagColors[rule.cls];
           const { targetSession, suggestion } = daySuggestions[dayIdx];
+          const lock = concealFrom?.(weekIdx, day) ?? null;
+          const cols = daySessions.map((s, sIdx) => ({ ...asDaySession(s, day, sIdx, lock), sIdx, tpl: s }));
+          const planned = targetSession?.target_difficulty ?? 5;
+          const zr = suggestion ? zoneRange(applyAutoregDifficulty(planned, suggestion.reco), suggestion.dir) : null;
+          /* La colonne du Planning (06/11, Gildas : mêmes composants) : date, anneau dans l'encadré, cartes. */
           return (
             <div key={day}>
             <DroppableProgramDay day={day}>
-            <div style={{ background: "#fff", borderRadius: 24, border: "1px solid rgba(0,0,0,.08)", padding: 16, boxShadow: "0 6px 18px rgba(0,0,0,0.05)", scrollSnapAlign: "start" }}>
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>{day}</div>
-              </div>
-
-              {suggestion ? (
-                <AlertBox
-                  variant="light"
-                  alert={{
-                    glow: suggestionSeverityColor(suggestion),
-                    border: suggestionSeverityColor(suggestion),
-                    text: `${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, targetSession?.target_difficulty ?? 5, role === "coach" ? "tes sportifs" : undefined, simBaseline)}`,
-                  }}
-                />
-              ) : (daySessions.length > 0 || rule.cls !== "rest") && (
-                <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
-                    <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2 }}>{rule.title}</div>
-                    <div style={{ fontSize: 9, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.09em", borderRadius: 999, padding: "4px 7px", whiteSpace: "nowrap", background: tagColor.bg, color: tagColor.color, flexShrink: 0 }}>{rule.tag}</div>
-                  </div>
-                  <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{rule.text}</div>
-                </div>
-              )}
-
-              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.13em", color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", marginBottom: 7 }}>
-                Séances · {daySessions.length}
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {daySessions.length === 0 && (
-                  <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 12, padding: "11px 4px" }}>
-                    Repos / libre
-                  </div>
-                )}
-                {daySessions.map((s, sIdx) => {
-                  const isTarget = !!suggestion && s === targetSession;
-                  // Programme ThePerfClub côté sportif : séance pas encore dévoilée (programReveal.ts).
-                  const lock = concealFrom?.(weekIdx, day) ?? null;
-                  if (lock) return <SessionTemplateCard key={sIdx} session={s} concealed={lock} />;
-                  return (
-                    <DraggableProgramSession
-                      key={sIdx} day={day} sIdx={sIdx} session={s}
-                      onClick={() => openEditor({ weekIdx, day, sessionIdx: sIdx })}
-                      badgeOverride={isTarget ? { label: formatAutoregPoints(suggestion!.reco), bg: `${suggestionSeverityColor(suggestion!)}22`, color: suggestionSeverityColor(suggestion!) } : undefined}
-                      gaugeOverride={isTarget ? applyAutoregDifficulty(s.target_difficulty ?? 5, suggestion!.reco) : undefined}
-                      autoregReco={isTarget ? suggestion!.reco : undefined}
-                    />
-                  );
-                })}
-                {!concealFrom?.(weekIdx, day) && <div style={{ display: "flex", gap: 5 }}>
-                  <div
-                    onClick={() => addSession(day)}
-                    style={{ flex: 1, border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 12, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700 }}
-                  >
-                    + Ajouter une séance
-                  </div>
-                </div>}
-              </div>
-            </div>
+            <DayColumn
+              date={new Date(2001, 0, 1 + dayIdx, 12)}
+              sessions={cols}
+              todayStr="2000-01-01" wellness={null} hideDayNumber
+              ctx={ctx}
+              hideAddSession={!!lock}
+              onAddSession={() => addSession(day)}
+              onComplete={() => {}} onEdit={() => {}} onWellness={() => {}}
+              ringState={suggestion && zr && targetSession ? { value: planned, zone: { low: zr.zoneLow, high: zr.zoneHigh } } : undefined}
+              alert={suggestion ? {
+                glow: suggestionSeverityColor(suggestion),
+                border: suggestionSeverityColor(suggestion),
+                text: `${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, planned, role === "coach" ? "tes sportifs" : undefined, simBaseline)}`,
+              } : undefined}
+              columnStyle={{ border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 6px 18px rgba(0,0,0,0.05)" }}
+              renderSession={c => lock
+                ? <WeekSessionCard key={c.id} session={c} hideActions onComplete={() => {}} onEdit={() => {}} />
+                : <DraggableProgramSession key={c.id} day={day} sIdx={c.sIdx} session={c.tpl}
+                    onClick={() => openEditor({ weekIdx, day, sessionIdx: c.sIdx })}
+                    autoregReco={suggestion && c.tpl === targetSession ? suggestion.reco : undefined} />}
+            />
             </DroppableProgramDay>
             </div>
           );

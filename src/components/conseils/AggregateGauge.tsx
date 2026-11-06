@@ -18,6 +18,7 @@
 
 import type { AggBand } from "@/lib/metricCards";
 import { useCountUp } from "@/hooks/useCountUp";
+import { chargeColor, recupColor } from "@/lib/ringColors";
 
 const A0 = -120, A1 = 120;   // 240° ouverts en bas, même géométrie que les jauges contrainte/monotonie
 
@@ -62,7 +63,9 @@ export default function AggregateGauge({
   const cy = r + sw / 2 + (bare ? 1 : 2);
   const h = Math.round(cy + r * 0.5 + sw / 2 + (bare ? 1 : 4));
   const at = (f: number) => A0 + Math.max(0, Math.min(1, f)) * (A1 - A0);
-  const color = band?.color ?? "rgba(255,255,255,.28)";
+  /* Chiffre et mot en blanc (06/11, Gildas) ; palette selon le groupe (les bandes de la charge commencent par « Sous-charge »). */
+  const color = pos === null ? "rgba(255,255,255,.4)" : "#fff";
+  const pal = bands[0]?.label === "Sous-charge" ? chargeColor : recupColor;
 
   return (
     <div style={{ position: "relative", width: size, height: h, flexShrink: 0 }}>
@@ -74,24 +77,18 @@ export default function AggregateGauge({
             couleurs de la première et de la dernière bande — un linecap rond par bande ferait mordre
             chaque bande sur la suivante. Opacité portée par le groupe, sinon le recouvrement
             pastille/bande ressortirait plus foncé. */}
-        <g opacity={bare ? 0.55 : 0.9}>
-          {[...bands].reverse().map(b => (
-            <path key={b.label} d={arcPath(cx, cy, r, at(b.from), at(b.to))} fill="none" stroke={b.color} strokeWidth={sw} />
-          ))}
-          {bands.length > 0 && (() => {
-            const first = bands.reduce((m, b) => (b.from < m.from ? b : m), bands[0]);
-            const last = bands.reduce((m, b) => (b.to > m.to ? b : m), bands[0]);
-            const [sx, sy] = polar(cx, cy, r, at(first.from));
-            const [ex, ey] = polar(cx, cy, r, at(last.to));
-            return <>
-              <circle cx={sx.toFixed(2)} cy={sy.toFixed(2)} r={sw / 2} fill={first.color} />
-              <circle cx={ex.toFixed(2)} cy={ey.toFixed(2)} r={sw / 2} fill={last.color} />
-            </>;
-          })()}
-        </g>
-        {shownPos !== null && (() => {
-          const [mx, my] = polar(cx, cy, r, at(shownPos));
-          return <circle cx={mx.toFixed(2)} cy={my.toFixed(2)} r={(sw * 0.62).toFixed(1)} fill={color} stroke="#0f1318" strokeWidth={Math.max(2, Math.round(sw * 0.24))} />;
+        {/* 06/11 (nouvelles jauges partout) : remplissage jusqu'au score dans la palette du groupe (récup bleu,
+            charge orange), comme les grands anneaux ; plus de bandes peintes sur tout l'arc. */}
+        {shownPos !== null && shownPos > 0.005 && (() => {
+          const end = at(shownPos), n = 16;
+          const [sx, sy] = polar(cx, cy, r, A0), [ex, ey] = polar(cx, cy, r, end);
+          return <>
+            {Array.from({ length: n }, (_, i) => (
+              <path key={i} d={arcPath(cx, cy, r, A0 + ((end - A0) * i) / n, A0 + ((end - A0) * (i + 1.04)) / n)} fill="none" stroke={pal(0.25 + 0.75 * shownPos * (i + 0.5) / n)} strokeWidth={sw} />
+            ))}
+            <circle cx={sx.toFixed(2)} cy={sy.toFixed(2)} r={sw / 2} fill={pal(0.25)} />
+            <circle cx={ex.toFixed(2)} cy={ey.toFixed(2)} r={(sw * 0.62).toFixed(1)} fill="#fff" stroke="#0f1318" strokeWidth={Math.max(2, Math.round(sw * 0.24))} />
+          </>;
         })()}
       </svg>
       {/* Le centre du cercle n'est pas le centre de la boîte (l'arc est ouvert en bas, la boîte est

@@ -1,5 +1,7 @@
 "use client";
 
+import { arcSegments, trackPath } from "@/components/ui/MiniScoreArc";
+import { recupColor } from "@/lib/ringColors";
 import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import PeriodPill from "@/components/calendar/PeriodPill";
 import { createPortal } from "react-dom";
@@ -15,14 +17,10 @@ import ActivityPill from "@/components/layout/ActivityPill";
 import { setDisplayedPeriod, refreshActivitySoon } from "@/lib/activityStatus";
 import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
 
-export type ViewMode = "week" | "month";
 export type HeaderMode = "day" | "period" | "title";
 
-// ViewModeSegmented (toggle Sem./Mois) supprimé (2026-09-26) — le calendrier popup ci-dessous
-// (rings + points de séance + titre semaine/programme, façon "vue mois") remplace désormais ce
-// que la vue Mois de /week et /coach/planning apportait ; leur bloc `viewMode === "month"` reste
-// en place (dead code assumé, `viewMode` figé sur "week" faute d'un toggle pour le changer — même
-// principe déjà appliqué ailleurs dans ce repo pour un step/mode devenu inatteignable).
+// Plus de vue Mois (toggle supprimé le 2026-09-26, code retiré le 2026-11-06) : le calendrier popup
+// ci-dessous (anneaux + points de séance + titre semaine/programme) la remplace.
 
 interface CalendarHeaderProps {
   mode?: HeaderMode;
@@ -30,12 +28,9 @@ interface CalendarHeaderProps {
   title?: string;
   selectedDate: string;
   onDateChange?: (date: string) => void;
-  viewMode?: ViewMode;
-  onViewModeChange?: (mode: ViewMode) => void;
   /* Slot alternatif dans le même emplacement (haut-droite) que le toggle Semaine/Mois — pour les
      pages qui veulent un contrôle différent à cet endroit sans activer le toggle de navigation
-     lui-même (ex. RangeToggle.tsx : 7j/28j/90j des graphiques Charge/Récupération). Ignoré si
-     onViewModeChange est fourni (jamais les deux en même temps). */
+     lui-même (ex. RangeToggle.tsx : 7j/28j/90j des graphiques Charge/Récupération). */
   extraControls?: React.ReactNode;
   /* Contrôle au bord gauche du header, en miroir du bouton profil — ex. bascule Semaine/Colonne de /week. */
   leftControls?: React.ReactNode;
@@ -116,18 +111,12 @@ const DOT_COLOR: Record<string, string> = {
 // reste toujours centré et proportionné quelle que soit la taille réelle rendue.
 const RING_VB = 36;
 function DayRing({ score }: { score: number }) {
-  const r = RING_VB / 2 - 3;
-  const c = 2 * Math.PI * r;
-  const pct = Math.max(0, Math.min(100, score)) / 100;
-  const color = wellnessColor(score);
+  /* Datepicker (06/11) : arc de 240° autour du jour, récup en bleu, comme les autres anneaux. */
+  const r = RING_VB / 2 - 3, c = RING_VB / 2;
   return (
     <svg viewBox={`0 0 ${RING_VB} ${RING_VB}`} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
-      <circle cx={RING_VB / 2} cy={RING_VB / 2} r={r} fill="none" stroke="rgba(255,255,255,.14)" strokeWidth={2.5} />
-      <circle
-        cx={RING_VB / 2} cy={RING_VB / 2} r={r} fill="none" stroke={color} strokeWidth={2.5}
-        strokeDasharray={`${c * pct} ${c}`} strokeLinecap="round"
-        transform={`rotate(-90 ${RING_VB / 2} ${RING_VB / 2})`}
-      />
+      <path d={trackPath(c, c, r)} fill="none" stroke="rgba(255,255,255,.14)" strokeWidth={2.5} strokeLinecap="round" />
+      {arcSegments(c, c, r, 2.5, score, recupColor, 10)}
     </svg>
   );
 }
@@ -137,8 +126,6 @@ export default function CalendarHeader({
   title,
   selectedDate,
   onDateChange,
-  viewMode = "week",
-  onViewModeChange,
   extraControls,
   leftControls,
   onProfileClick,
@@ -229,16 +216,16 @@ export default function CalendarHeader({
   // Popup calendrier — day mode et period+week uniquement (POC 2026-09-24). En period+month, une
   // grille mensuelle complète est déjà affichée sur la page elle-même : un 2e calendrier dans le
   // header serait redondant, le label reste un simple pas-à-pas comme avant.
-  const hasPopup = mode !== "title" && !!onDateChange && !(mode === "period" && viewMode === "month");
+  const hasPopup = mode !== "title" && !!onDateChange;
 
   function prevPeriod() {
-    const newDate = mode === "day" ? subDays(currentDate, 1) : viewMode === "month" ? subMonths(currentDate, 1) : subDays(currentDate, 7);
+    const newDate = mode === "day" ? subDays(currentDate, 1) : subDays(currentDate, 7);
     setCurrentDate(newDate);
     onDateChange?.(format(newDate, "yyyy-MM-dd"));
   }
 
   function nextPeriod() {
-    const newDate = mode === "day" ? addDays(currentDate, 1) : viewMode === "month" ? addMonths(currentDate, 1) : addDays(currentDate, 7);
+    const newDate = mode === "day" ? addDays(currentDate, 1) : addDays(currentDate, 7);
     setCurrentDate(newDate);
     onDateChange?.(format(newDate, "yyyy-MM-dd"));
   }
@@ -286,13 +273,11 @@ export default function CalendarHeader({
 
   const isOnCurrentPeriod = mode === "day"
     ? format(currentDate, "yyyy-MM-dd") === today
-    : mode === "period" && viewMode === "week"
-    ? days.some(d => format(d, "yyyy-MM-dd") === today)
-    : format(currentDate, "yyyy-MM") === format(new Date(), "yyyy-MM");
+    : days.some(d => format(d, "yyyy-MM-dd") === today);
 
   // Masqué quand le calendrier popup existe pour ce mode — son propre bouton "Aujourd'hui" en
   // footer le remplace (POC 2026-09-24, "plus besoin du 'Aujourd'hui' dans le header si le
-  // calendar view le contient"). Reste affiché tel quel sur period+month, seul cas sans popup.
+  // calendar view le contient").
   const showTodayBtn = mode !== "title" && !!onDateChange && !isOnCurrentPeriod && !hasPopup;
 
   const label = mode === "title"
@@ -300,8 +285,6 @@ export default function CalendarHeader({
     : mode === "day"
     // Sans le mois sur mobile (2026-10-03) : laisse la place à la pilule d'activité complète.
     ? cap(format(currentDate, isMd ? "EEE d MMM" : "EEE d", { locale: fr }))
-    : viewMode === "month"
-    ? cap(format(currentDate, "MMM", { locale: fr }))
     : weekRangeLabel(weekStart);
 
   function handleHeaderTouchStart(e: React.TouchEvent) {

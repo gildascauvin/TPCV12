@@ -14,7 +14,7 @@ import {
   sessionQualifier, sessionReference, seriesOf, statusDisplayColor, trendFor, TREND_STATUS_LABEL,
   type MetricGroup, type MetricKey,
 } from "@/lib/metricCards";
-import AggregateGauge, { aggregateGaugeCenterY } from "@/components/conseils/AggregateGauge";
+import { ScoreRing } from "@/components/wellness/PointFormeRing";
 import { decisionRingCenterY } from "@/components/sessions/DecisionRing";
 import type { ConseilsData } from "@/lib/conseilsData";
 import { watchPairs, type WatchPair } from "@/lib/watchCompare";
@@ -81,7 +81,9 @@ export type ExtraIndexCard = {
   rangeToggle?: boolean;
 };
 
-export default function IndexCards({ data, rangeMode, onRangeModeChange, group, insight, perspective = "athlete", extraCards = [], lockedHistory = null, example = false, compare = null, scoreVerdict = null }: {
+export default function IndexCards({ data, rangeMode, onRangeModeChange, group, insight, perspective = "athlete", extraCards = [], lockedHistory = null, example = false, compare = null, scoreVerdict = null, ringAction = null }: {
+  /* Pastille sous l'anneau (06/11) : « ✎ Modifier mon point forme » / « ✎ Modifier ma dernière séance ». */
+  ringAction?: { label: string; onClick: () => void } | null;
   data: ConseilsData;
   /* Le toggle 7/28/90 vit DANS le chart déplié (2026-09-28, arguments de Gildas : les aperçus ne
      sont pas des charts complets, et avec des cartes qui se déplient un contrôle en haut de section
@@ -262,11 +264,18 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
         {/* Même hauteur que l'anneau de décision de l'onglet Aujourd'hui (2026-10-03) : passer d'un
             onglet à l'autre ne fait plus sauter la jauge. Décalage = écart des centres des deux arcs
             + la marge haute du bloc décision (TodayClient : 8px desktop, 4px mobile). */}
-        {agg && (
-          <div style={{ paddingTop: decisionRingCenterY() - aggregateGaugeCenterY() + (isMd ? 8 : 4) }}>
-            <AggregateGauge pos={agg.pos} band={agg.band} bands={AGG_BANDS[group]} />
-          </div>
-        )}
+        {/* Lot 4 (2026-11-06) : même anneau et même essaim que la décision, le point forme et les bilans. */}
+        {/* Chiffre et zone en blanc (06/11, Gildas). « Ta norme » : récup = sa norme (50), charge = sa charge habituelle (ACWR 1, soit 50). */}
+        {agg && <div style={{ paddingTop: 30, paddingBottom: 8 }}><ScoreRing key={`${group}-${Math.round(agg.pos * 100)}`} palette={group === "charge" ? "charge" : "recup"} fill={Math.round(agg.pos * 100)} big={Math.round(agg.pos * 100)} unit="/100" zone={agg.band.label} norm={50} normLabel={perspective === "coach" ? "SA NORME" : undefined} />
+          {ringAction && (
+            <div style={{ display: "flex", justifyContent: "center", marginTop: 4 }}>
+              <button type="button" onClick={ringAction.onClick}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 999, border: "none", cursor: "pointer", fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", background: "rgba(255,255,255,.07)", boxShadow: "inset 0 0 0 1px rgba(255,255,255,.1)", color: "rgba(255,255,255,.75)" }}>
+                {ringAction.label}
+              </button>
+            </div>
+          )}
+        </div>}
         {/* Analyses avant 2 semaines (2026-10-01) : on dit qu'elles sont partielles plutôt que
             d'attendre ou de montrer l'exemple. */}
         {!example && group === "recup" && lastB?.provisional && (
@@ -293,7 +302,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
         )}
         {/* 14px (2026-10-03) : même échelle que la carte de décision de l'Accueil (texte 14) — avant
             17,5px, plus gros que la décision du jour, qui doit pourtant se lire en premier. */}
-        <div style={{ position: "relative", maxWidth: 460, display: "flex", alignItems: "center", minHeight: locked ? 112 : undefined }}>
+        <div style={{ position: "relative", maxWidth: 460, display: "flex", alignItems: "center", minHeight: locked ? 112 : undefined, marginBottom: 18 }}>
         {/* Freemium (2026-10-02) : la pancarte se pose sur le 1er flou de l'écran (l'insight) ;
             les flous suivants (cartes, charts) n'ont plus aucun bouton. */}
         {locked && (

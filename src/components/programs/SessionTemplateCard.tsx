@@ -1,5 +1,5 @@
 import type { SessionTemplate, WeekTemplate } from "@/types";
-import DiffGauge from "@/components/calendar/DiffGauge";
+import SessionRing from "@/components/calendar/SessionRing";
 import { ExerciseLineView, ExerciseLinesBox, SessionSynthesis, exerciseViews, type ExerciseLineViewData } from "@/components/sessions/ExerciseLineView";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -66,12 +66,17 @@ export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef
         <div style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.025em", wordBreak: "break-word", flex: 1 }}>
           {session.name}
         </div>
-        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: badgeOverride?.bg ?? "rgba(212,64,0,0.10)", color: badgeOverride?.color ?? "#d44000" }}>
-          {badgeOverride?.label ?? "Prévu"}
-        </span>
+        {badgeOverride && (
+          <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: badgeOverride.bg ?? "rgba(212,64,0,0.10)", color: badgeOverride.color ?? "#d44000" }}>
+            {badgeOverride.label}
+          </span>
+        )}
+        {/* Même anneau que le Planning (06/11, Gildas : « les mêmes composants ») : la charge prévue, libellé au centre.
+            Remplace la barre horizontale et la pastille « Prévu ». */}
+        {!gaugeSlot && gaugeValue ? <SessionRing session={{ date: "9999-12-31", done: false, target_difficulty: gaugeValue }} today="" size={64} dark /> : null}
       </div>
       {!concealed && <SessionSynthesis notes={session.notes} adjustPct={adjustPct} compact style={{ marginBottom: 8 }} />}
-      {gaugeSlot ?? (gaugeValue ? <DiffGauge value={gaugeValue} height={10} /> : null)}
+      {gaugeSlot ?? null}
       {concealed ? (
         <div style={{ marginTop: 7 }}>
           {exercises.length > 0 && (
@@ -86,7 +91,7 @@ export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef
           {exercises.map((ex, i) => renderExerciseLine ? (
             <div key={i}>{renderExerciseLine(ex, i, views[i])}</div>
           ) : (
-            <div key={i} style={{ padding: "6px 9px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none", background: "#fff" }}>
+            <div key={i} data-ex-idx={i} data-ex-changed={views[i].original !== undefined && views[i].original !== views[i].text ? "1" : undefined} style={{ padding: "6px 9px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none", background: "#fff" }}>
               <ExerciseLineView text={views[i].text} original={views[i].original} ctx={views[i].ctx} adjusting={views[i].adjusting} compact />
             </div>
           ))}

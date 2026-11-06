@@ -4,12 +4,11 @@ import { useState, useEffect, useRef } from "react";
 import posthog from "posthog-js";
 import { createClient } from "@/lib/supabase/client";
 import type { Program, SessionTemplate, WeekTemplate } from "@/types";
-import { SessionTemplateCard, avgWeekRpe, loadBarColor } from "@/components/programs/SessionTemplateCard";
+import { avgWeekRpe, loadBarColor } from "@/components/programs/SessionTemplateCard";
+import DayColumn, { WeekSessionCard } from "@/components/calendar/DayColumn";
 import { NOT_STARTED_LABEL } from "@/lib/programReveal";
-import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import AlertBox from "@/components/calendar/AlertBox";
-import { computeAutoregSuggestion, suggestionSeverityColor, autoregHeadline, autoregAdvice, formatAutoregPoints, applyAutoregDifficulty, zoneRange } from "@/lib/autoregulation";
-import DecisionGauge from "@/components/sessions/DecisionGauge";
+import { computeAutoregSuggestion, suggestionSeverityColor, autoregHeadline, autoregAdvice, applyAutoregDifficulty, zoneRange } from "@/lib/autoregulation";
 import { relativeZoneLabel } from "@/lib/wellnessBaseline";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import { WELLNESS_RAMP } from "@/lib/wellness";
@@ -418,87 +417,36 @@ export default function PublicProgramView({ program, coachName }: Props) {
             prevMax: prevSess.length ? Math.max(...prevSess.map(s => s.target_difficulty ?? 6)) : 0,
             nextMax: nextSess.length ? Math.max(...nextSess.map(s => s.target_difficulty ?? 6)) : 0,
           };
-          const rule = loadRule(daySessions.map(s => ({ target_difficulty: s.target_difficulty })), ctx);
-          const tagColor = ruleTagColors[rule.cls];
           const { suggestion, targetSession } = daySuggestions[dayIdx];
           const severityColor = suggestion ? suggestionSeverityColor(suggestion) : null;
+          /* La colonne du Planning telle quelle (06/11, Gildas : mêmes composants que le Planning, la date,
+             l'anneau, le titre de séance, les exercices). Pas de dates sur un programme : un lundi fictif
+             cale le jour de la semaine, tout est « à venir ». */
+          const date = new Date(2001, 0, 1 + dayIdx, 12);
+          const dstr = `2001-01-${String(1 + dayIdx).padStart(2, "0")}`;
+          const cols = daySessions.map((s, i) => ({ id: `${day}-${i}`, date: dstr, name: s.name, notes: s.notes, duration: null, rpe: null, done: false, target_difficulty: s.target_difficulty ?? null, exercise_media: s.exercise_media ?? null, concealed: isLocked ? NOT_STARTED_LABEL : null, tpl: s }));
+          const top = suggestion && targetSession ? cols.find(c => c.tpl === targetSession) : undefined;
+          const planned = targetSession?.target_difficulty ?? 6;
+          const zr = suggestion ? zoneRange(applyAutoregDifficulty(planned, suggestion.reco), suggestion.dir) : null;
           return (
-            <div key={day} style={{ background: "#fff", borderRadius: 24, border: "1px solid rgba(0,0,0,.08)", padding: 16, boxShadow: "0 6px 18px rgba(0,0,0,0.05)", scrollSnapAlign: "start" }}>
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>{day}</div>
-              </div>
-
-              {suggestion && targetSession ? (
-                <AlertBox
-                  variant="light"
-                  alert={{
-                    border: `${severityColor}40`, glow: severityColor!,
-                    text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, targetSession.target_difficulty ?? 6)}`,
-                  }}
-                />
-              ) : (daySessions.length > 0 || rule.cls !== "rest") && (
-                <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
-                    <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2 }}>{rule.title}</div>
-                    <div style={{ fontSize: 9, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.09em", borderRadius: 999, padding: "4px 7px", whiteSpace: "nowrap", background: tagColor.bg, color: tagColor.color, flexShrink: 0 }}>{rule.tag}</div>
-                  </div>
-                  <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{rule.text}</div>
-                </div>
+            <DayColumn
+              key={day}
+              date={date}
+              sessions={cols}
+              todayStr="2000-01-01" wellness={null}
+              ctx={ctx}
+              hideDayNumber
+              hideAddSession
+              ringState={top && zr ? { value: planned, zone: { low: zr.zoneLow, high: zr.zoneHigh } } : undefined}
+              alert={suggestion && targetSession ? { border: `${severityColor}40`, glow: severityColor!, text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, planned)}` } : undefined}
+              onAddSession={() => {}} onComplete={() => {}} onEdit={() => {}} onWellness={() => {}}
+              columnStyle={{ border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 6px 18px rgba(0,0,0,0.05)" }}
+              renderSession={c => (
+                <WeekSessionCard key={c.id} session={c} hideActions cardStyle={{ cursor: "default" }}
+                  adjustPct={suggestion && c === top ? suggestion.reco : null}
+                  onComplete={() => {}} onEdit={() => {}} />
               )}
-
-              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.13em", color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", marginBottom: 7 }}>
-                Séances · {daySessions.length}
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {daySessions.length === 0 && (
-                  <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 12, padding: "11px 4px" }}>
-                    Repos / libre
-                  </div>
-                )}
-                {daySessions.map((s, sIdx) => {
-                  const isTarget = suggestion && s === targetSession;
-                  return (
-                    <SessionTemplateCard
-                      key={sIdx}
-                      session={s}
-                      /* Semaines 2+ pour un visiteur (2026-10-05, aligné sur les programmes de l'app) :
-                         nom, jauge et charge visibles, exercices floutés. */
-                      concealed={isLocked ? NOT_STARTED_LABEL : undefined}
-                      gaugeOverride={isTarget ? applyAutoregDifficulty(s.target_difficulty ?? 6, suggestion.reco) : undefined}
-                      /* Jauge de décision en lecture seule (2026-09-29) — même composant et même
-                         comportement qu'en app (/today, Coach Control) : le curseur reste sur la
-                         difficulté PRÉVUE, c'est la ZONE conseillée (2 entiers, zoneRange() autour
-                         de la cible) qui se déplace autour de lui, et le libellé sous la jauge est
-                         celui que DecisionGauge calcule lui-même (sous / dans / au dessus). On ne
-                         passe donc ni `value` ajustée ni `hint` : la recommandation se lit dans
-                         l'écart entre le curseur et la bande verte, comme en prod. DiffGauge,
-                         utilisée ici jusqu'à présent, ne sait afficher qu'une valeur unique — le
-                         range restait donc invisible, alors que c'est exactement ce que le
-                         simulateur du bandeau vend juste au-dessus. */
-                      gaugeSlot={isTarget ? (() => {
-                        const planned = s.target_difficulty ?? 6;
-                        const adjusted = applyAutoregDifficulty(planned, suggestion.reco);
-                        const { zoneLow, zoneHigh } = zoneRange(adjusted, suggestion.dir);
-                        return (
-                          <DecisionGauge
-                            light
-                            readOnly
-                            dir={suggestion.dir}
-                            zoneLow={zoneLow}
-                            zoneHigh={zoneHigh}
-                            value={planned}
-                            onChange={() => {}}
-                          />
-                        );
-                      })() : undefined}
-                      badgeOverride={isTarget ? { label: formatAutoregPoints(suggestion.reco), bg: `${severityColor}22`, color: severityColor! } : undefined}
-                      adjustPct={isTarget ? suggestion.reco : null}
-                    />
-                  );
-                })}
-              </div>
-            </div>
+            />
           );
         })}
       </div>

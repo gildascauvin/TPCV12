@@ -1,5 +1,6 @@
 "use client";
 
+import DifficultyRingInput from "@/components/sessions/DifficultyRingInput";
 import { CR10_LABELS } from "@/components/ui/ScaleBars";
 
 import { useState, useEffect, useRef } from "react";
@@ -224,40 +225,25 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
         viewTransitionName: morphName,
       }}>
         <div style={{ flex: 1, overflowY: "auto", padding: 28, overscrollBehavior: "contain", scrollbarWidth: "thin" as const }}>
-          {/* Nom + date — champs éditables directement, pas de titre ni de doublon */}
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-            <input
+          {/* Nom, date et récurrence à gauche, anneau de difficulté aligné à droite (06/11, Gildas). */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <input
               type="text" value={name} onChange={e => setName(e.target.value)}
               placeholder="Nom de la séance"
-              style={{ flex: 1, minWidth: 0, fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", background: "transparent", border: "none", outline: "none", padding: 0, fontFamily: "var(--font-display)" }}
+              style={{ display: "block", width: "100%", minWidth: 0, fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", background: "transparent", border: "none", outline: "none", padding: 0, fontFamily: "var(--font-display)" }}
             />
-            {isEdit && session && (
-              <div style={{ flexShrink: 0, marginTop: 2 }}>
-                <ShareButton
-                  resourceType="session"
-                  buildSnapshot={() => ({
-                    name: name.trim() || session.name,
-                    done: session.done,
-                    difficulty: targetDiff,
-                    exercises: exercisesText.split("\n").map(l => l.trim()).filter(Boolean),
-                    authorName: userName ?? "Toi",
-                  })}
-                  title={name.trim() || session.name}
-                  text={(() => {
-                    const n = exercisesText.split("\n").filter(Boolean).length;
-                    return n ? `${n} exercice${n > 1 ? "s" : ""}` : undefined;
-                  })()}
-                />
-              </div>
+            {!hideDate && (
+              <input
+                type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+                style={{ fontSize: 16, color: "#62686e", background: "transparent", border: "none", outline: "none", padding: 0, fontFamily: "inherit", marginTop: 4, cursor: "pointer" }}
+              />
             )}
+            {belowTitle && <div style={{ marginTop: 8 }}>{belowTitle}</div>}
+            </div>
+            {/* Difficulté prévue (06/11) : à la place du partage, sans encadré ni répétition. */}
+            <div style={{ flexShrink: 0 }}><DifficultyRingInput compact size={112} value={targetDiff} onChange={setTargetDiff} /></div>
           </div>
-          {!hideDate && (
-            <input
-              type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
-              style={{ fontSize: 16, color: "#62686e", background: "transparent", border: "none", outline: "none", padding: 0, fontFamily: "inherit", marginTop: 4, cursor: "pointer" }}
-            />
-          )}
-          {belowTitle && <div style={{ marginTop: 8 }}>{belowTitle}</div>}
           {!isEdit && (
             <div style={{ fontSize: 15, color: "#62686e", lineHeight: 1.5, marginTop: 10, marginBottom: 16 }}>
               Planifie ta séance et ajoute tes exercices.
@@ -265,21 +251,6 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
           )}
           {isEdit && <div style={{ marginBottom: 16 }} />}
 
-          {/* Difficulté cible */}
-          <div style={{ background: diffBg, border: `1px solid ${diffBorder}`, borderRadius: 16, padding: 14, marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: "#202428" }}>Difficulté prévue</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <span style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", background: diffBg, border: `1px solid ${diffBorder}`, color: diffColor, borderRadius: 999, padding: "3px 8px" }}>{diffLabel}</span>
-                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: diffColor, lineHeight: 1, letterSpacing: "-0.02em" }}>{targetDiff}</span>
-              </div>
-            </div>
-            {/* Même jauge que le Planning (2026-10-02), en simple réglage : pas de zone. */}
-            <div style={{ padding: "4px 0 2px" }}><DecisionGauge noZone light zoneLow={0} zoneHigh={0} dir="low" value={targetDiff} onChange={setTargetDiff} /></div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8a8f94", marginTop: 4 }}>
-              <span>{CR10_LABELS[1]}</span><span>{CR10_LABELS[10]}</span>
-            </div>
-          </div>
 
           {/* Séance vide : raccourcis modèle / import / générer au-dessus de l'éditeur, repliés dès qu'un
               exercice existe. Aussi dans l'éditeur de programme (2026-10-08) : mêmes features partout. */}

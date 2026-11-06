@@ -21,6 +21,7 @@ import AggregateGauge from "@/components/conseils/AggregateGauge";
 import { computeBehaviorCorrelations, CONSEILS_HISTORY_DAYS } from "@/lib/conseilsData";
 import type { WellnessDaily } from "@/types";
 import WellnessRing from "@/components/wellness/WellnessRing";
+import PointFormeRing from "@/components/wellness/PointFormeRing";
 import type { PlannedIntensity } from "@/lib/plannedIntensity";
 
 const BEDTIME_OPTIONS = [
@@ -243,11 +244,14 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
   if (history.length >= INSIGHT_MIN_DAYS) {
     for (const c of computeBehaviorCorrelations(history as WellnessDaily[])) behaviorCost[c.key] = c.impact;
   }
-  const hasCost = Object.keys(behaviorCost).length > 0;
   useEffect(() => () => { if (advanceTimer.current) window.clearTimeout(advanceTimer.current); }, []);
   /* Aperçu du wizard seulement : valeurs neutres tant que la question n'a pas de réponse. */
   const pv = { sleep: sleep ?? 7, stress: stress ?? 5, recovery: recovery ?? 7, motivation: motivation ?? 8 };
   const [saving, setSaving] = useState(false);
+  /* Point forme à l'anneau (2026-11-06, version B du POC) : partout sauf le wizard à bandeau et l'ancien mode intégré. */
+  const ringMode = !wizardHero && !embedded;
+  const [ringPulse, setRingPulse] = useState(0);
+  const ringStart = useRef<number | null>(null);
   // Fermeture animée (croix, fond, Annuler) ; l'enregistrement, lui, ferme tout de suite.
   const { close: closeAnimated, exitClass } = useExitAnimation(onClose);
 
@@ -293,6 +297,11 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     .map(([k, e, v]) => ({ k, e, word: v == null ? null : SCALE_WORDS[k].labels[v] }));
   // Même jauge ouverte que l'onglet Récupération (AggregateGauge), score en gros au centre.
   const buildGauge = recoveryGauge(buildScore);
+  /* Anneau du point forme : la piste fine suit la moyenne des réponses (partBase), sans norme ni charge.
+     Le score relatif (buildScore) peut bondir de 30 points pour un cran près de la norme ; la comparaison
+     à la norme et le score officiel vivent dans le mini bilan, juste après. */
+  const ringScore = partBase;
+  useEffect(() => { ringStart.current = ringScore; }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
   function renderBuildingScore(size: number) {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", color: "#fff" }}>
@@ -443,6 +452,177 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     );
   }
 
+  /* ── Point forme à l'anneau (version B) ── */
+  const RING_KICKER: Record<ScaleKey, string> = { sleep: "Sommeil", stress: "Stress", recovery: "Corps", motivation: "Envie" };
+  /* Comportements en dernier (06/11) : les quatre questions à l'anneau s'enchaînent, la seule à cases termine. */
+  const rq = q; // 0 sommeil, 1 stress, 2 corps, 3 envie, 4 comportements
+  const ringLast = step === total - 1;
+  /* Fin : on enregistre tout de suite, le mini bilan s'ouvre sur l'anneau récup (« Ta forme »). */
+  function ringFinish(override: { motivation?: number } = {}) {
+    if (advanceTimer.current) { window.clearTimeout(advanceTimer.current); advanceTimer.current = null; }
+    handleSave(override);
+  }
+  function ringAdvance(override: { motivation?: number } = {}) {
+    if (ringLast) ringFinish(override); else autoAdvance(override);
+  }
+  const darkTitle = { fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, lineHeight: 1.05, letterSpacing: "-0.03em", color: "#fff", textAlign: "center", textWrap: "balance" } as React.CSSProperties;
+  const darkSub = { fontSize: 14, lineHeight: 1.45, color: "rgba(255,255,255,.6)", marginTop: 6, textAlign: "center", textWrap: "balance" } as React.CSSProperties;
+  const monoKicker = { fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)" } as const;
+  function ringScoreLine() {
+    if (ringScore == null) return <div style={{ height: 22 }} />;
+    const d = ringStart.current == null ? 0 : ringScore - ringStart.current;
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, height: 22, fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.75)" }}>
+        <span aria-hidden style={{ width: 16, height: 4, borderRadius: 2, background: "#8cc3d4" }} />
+        {who ? `Récup de ${who}` : "Ta récup"}
+        {d !== 0 && <span style={{ fontWeight: 700, color: d > 0 ? "#8cc3d4" : "rgba(255,255,255,.55)" }}>{d > 0 ? "↑ en hausse" : "↓ en baisse"}</span>}
+      </div>
+    );
+  }
+  function ringInsight(key: ScaleKey) {
+    if (!insight || insight.key !== key) return null;
+    return (
+      <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 12, fontSize: 14, fontWeight: 700, lineHeight: 1.35, background: "rgba(255,255,255,.07)", color: insight.bad ? "#ffc8a8" : "#bfe2ee", animation: "modalIn 0.25s cubic-bezier(0.2,0,0,1)" }}>
+        {insight.bad ? "↘ " : "↗ "}{insight.text}
+      </div>
+    );
+  }
+  function ringScale(key: ScaleKey, title: string, sub: string, value: number | null, onPick: (n: number) => void, onRelease: (n: number) => void) {
+    const w = SCALE_WORDS[key];
+    return (
+      <div key={key} style={{ animation: "modalIn 0.25s cubic-bezier(0.2,0,0,1)" }}>
+        <div style={darkTitle}>{title}</div>
+        <div style={darkSub}>{sub}</div>
+        <div style={{ marginTop: 18 }}>
+          <PointFormeRing value={value} labels={w.labels} kicker={RING_KICKER[key]} placeholder="Touche ou glisse sur l'anneau"
+            score={ringScore} pulse={ringPulse}
+            better={n => (w.inverted ? 11 - n : n)}
+            onChange={n => { if (advanceTimer.current) { window.clearTimeout(advanceTimer.current); advanceTimer.current = null; } onPick(n); }}
+            onRelease={n => {
+              setRingPulse(p => p + 1);
+              const ins = notableInsight(key, n, history, date, !!who);
+              setInsight(ins ? { key, ...ins } : null);
+              advanceDelay.current = ins ? 3000 : null;
+              onRelease(n);
+            }} />
+        </div>
+        <div style={{ marginTop: 10 }}>{ringScoreLine()}</div>
+        {ringInsight(key)}
+      </div>
+    );
+  }
+  function ringChip(b: { key: string; emoji: string; label: string }, negative: boolean) {
+    const checked = behaviors.includes(b.key);
+    return (
+      <button key={b.key} onClick={() => { toggleBehavior(b.key); hapticTick(0, 1); }}
+        style={{
+          display: "flex", flexWrap: "wrap", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 12, fontFamily: "inherit",
+          border: checked ? `1px solid ${negative ? "rgba(255,140,90,.65)" : "rgba(127,219,143,.6)"}` : "1px solid rgba(255,255,255,.12)",
+          background: checked ? (negative ? "rgba(212,64,0,.18)" : "rgba(47,158,68,.16)") : "rgba(255,255,255,.04)",
+          color: checked ? (negative ? "#ffc8a8" : "#a8e6b4") : "rgba(255,255,255,.72)",
+          fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left", transition: "all 0.14s",
+        }}>
+        <span style={{ fontSize: 16 }}>{b.emoji}</span>{checked ? "✓ " : ""}{b.label}
+        {behaviorCost[b.key] != null && <CostBadge impact={behaviorCost[b.key]} />}
+      </button>
+    );
+  }
+  function renderRingLayout() {
+    let content: React.ReactNode = null;
+    if (q === -1) {
+      content = (
+        <div>
+          <div style={darkTitle}>Qu&apos;as-tu prévu aujourd&apos;hui ?</div>
+          <div style={darkSub}>Rien n&apos;est encore au planning. On cale ta séance sur ta forme.</div>
+          <div style={{ display: "grid", gap: 8, marginTop: 18 }}>
+            {PLAN_OPTIONS.map(o => (
+              <button key={o.key} onClick={() => { setPlannedIntensity(o.key); setStep(s => s + 1); }}
+                style={{ display: "flex", alignItems: "center", gap: 14, textAlign: "left", padding: "14px 16px", borderRadius: 16, cursor: "pointer", fontFamily: "inherit", color: "#fff", background: "rgba(255,255,255,.06)", border: plannedIntensity === o.key ? "1.5px solid #ffb08a" : "1.5px solid rgba(255,255,255,.1)" }}>
+                <span style={{ fontSize: 24, width: 30, textAlign: "center" }}>{o.emoji}</span>
+                <span style={{ display: "flex", flexDirection: "column" }}>
+                  <span style={{ fontSize: 16, fontWeight: 800 }}>{o.label}</span>
+                  <span style={{ fontSize: 13, color: "rgba(255,255,255,.6)", marginTop: 2 }}>{o.sub}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    } else if (rq === 0) {
+      content = (
+        <div>
+          {ringScale("sleep", who ? `😴 Comment a dormi ${who} ?` : "😴 Comment as-tu dormi ?", "Qualité et récupération pendant le sommeil", sleep, setSleep, () => {
+            if (bedtime != null) { ringAdvance(); return; }
+            setTimeout(() => document.getElementById("wq-bedtime")?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 200);
+          })}
+          <div id="wq-bedtime" style={{ marginTop: 16, scrollMarginBottom: 24 }}>
+            <div style={{ ...monoKicker, marginBottom: 8, textAlign: "center" }}>Heure de coucher</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7, justifyContent: "center" }}>
+              {BEDTIME_OPTIONS.map(o => {
+                const on = bedtime === o.value;
+                return (
+                  <button key={o.value} type="button" onClick={() => { hapticTick(0, 1); setBedtime(o.value); if (sleep != null) ringAdvance(); }}
+                    style={{ padding: "9px 12px", borderRadius: 12, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 600, border: on ? "1.5px solid #8cc3d4" : "1.5px solid rgba(255,255,255,.14)", background: on ? "rgba(140,195,212,.16)" : "rgba(255,255,255,.04)", color: on ? "#fff" : "rgba(255,255,255,.72)" }}>
+                    {on ? "✓ " : ""}{o.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      );
+    } else if (rq === 1) {
+      content = ringScale("stress", "🧠 Niveau de stress mental", "Travail, vie personnelle, charge mentale", stress, setStress, () => ringAdvance());
+    } else if (rq === 2) {
+      content = ringScale("recovery", "💪 État physique aujourd'hui", "Ressenti musculaire, douleurs, lourdeur", recovery, setRecovery, () => ringAdvance());
+    } else if (rq === 4) {
+      content = (
+        <div style={{ animation: "modalIn 0.25s cubic-bezier(0.2,0,0,1)" }}>
+          <div style={darkTitle}>🔍 Comportements d&apos;hier</div>
+          <div style={darkSub}>Coche tout ce qui s'applique</div>
+          <div style={{ ...monoKicker, color: "#ffb08a", margin: "18px 0 8px", textAlign: "center" }}>{who ? `Ce qui a pénalisé ${who}` : "Ce qui m'a pénalisé"}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>{NEGATIVE_BEHAVIORS.map(b => ringChip(b, true))}</div>
+          <div style={{ ...monoKicker, color: "#9fd8ad", margin: "14px 0 8px", textAlign: "center" }}>{who ? `Ce que ${who} a fait de bien` : "Ce que j'ai fait de bien"}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>{POSITIVE_BEHAVIORS.map(b => ringChip(b, false))}</div>
+        </div>
+      );
+    } else if (rq === 3) {
+      content = ringScale("motivation", who ? `⚡ ${Who} a envie de s'entraîner ?` : "⚡ As-tu envie de t'entraîner ?", "Motivation intrinsèque du moment", motivation, setMotivation, n => ringAdvance({ motivation: n }));
+    }
+    return (
+      <div className={exitClass} style={{ position: "fixed", inset: 0, zIndex: 2147483100, background: DARK_CARD_BG, color: "#fff", overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
+        <div style={{ maxWidth: 440, margin: "0 auto", minHeight: "100%", display: "flex", flexDirection: "column", padding: "max(14px, env(safe-area-inset-top)) 20px max(18px, env(safe-area-inset-bottom))", boxSizing: "border-box" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12, minHeight: 34 }}>
+            {(step > 0 || onBack) && (
+              <button onClick={step > 0 ? goBack : onBack} aria-label="Retour"
+                style={{ width: 34, height: 34, borderRadius: "50%", border: "1px solid rgba(255,255,255,.16)", background: "rgba(255,255,255,.06)", color: "#fff", cursor: "pointer", fontSize: 16, flexShrink: 0, display: "grid", placeItems: "center" }}>←</button>
+            )}
+            {who && <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", minWidth: 0 }}>{subject?.heading ?? `Point forme de ${who}`}</div>}
+            {!required && (
+              <button onClick={closeAnimated} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,.6)", fontSize: 14, fontWeight: 700, padding: "6px 2px", fontFamily: "inherit" }}>{cancelLabel}</button>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 3, marginBottom: 22 }}>
+            {Array.from({ length: total }).map((_, i) => (
+              <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= step ? "#fff" : "rgba(255,255,255,.14)", transition: "background 0.3s" }} />
+            ))}
+          </div>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", paddingBottom: 24 }}>{content}</div>
+          {(rq === 4 || saving) && (
+            <div style={{ position: "sticky", bottom: 0, paddingTop: 14, marginTop: 8 }}>
+              <button onClick={() => (ringLast ? ringFinish() : goNext())} disabled={saving}
+                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "14px 16px", borderRadius: 16, border: "1px solid rgba(212,64,0,0.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 800, cursor: "pointer", boxShadow: "0 14px 28px rgba(212,64,0,0.25)", fontFamily: "inherit" }}>
+                {saving
+                  ? <span aria-label="Enregistrement" style={{ width: 16, height: 16, border: "2px solid currentColor", borderTopColor: "transparent", borderRadius: "50%", display: "inline-block", animation: "spinBtn 0.7s linear infinite" }} />
+                  : behaviors.length ? "Terminer →" : "Rien de tout ça →"}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   const body = (
     <>
         {/* En-tête « 💓 Wellness du jour · 1 / 5 » retiré (2026-10-27, Gildas : les barres disent déjà où
@@ -540,7 +720,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
               🔍 Comportements d'hier
             </div>
             <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 14 }}>
-              {hasCost ? (who ? `Coche tout ce qui s'applique. Le chiffre : son effet moyen sur la récupération de ${who}.` : "Coche tout ce qui s'applique. Le chiffre : son effet moyen sur ta récupération, chez toi.") : "Coche tout ce qui s'applique"}
+              Coche tout ce qui s'applique
             </div>
 
             {/* Negative section */}
@@ -617,6 +797,8 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
           </button>
         </div>
   );
+
+  if (ringMode) return renderRingLayout();
 
   /* Intégré à la feuille de l'Accueil : questions + boutons collés en bas, score porté en haut de page. */
   if (embedded) {

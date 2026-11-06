@@ -30,13 +30,13 @@ Interrupteur `readEliteFlag()` : allumé par défaut. `NEXT_PUBLIC_ELITE_ONBOARD
 ```
 value_intro → decision_2a → account
 → ob_sport → ob_program → (ob_import | ob_goal → ob_weak → ob_days)   (« Passer » sur ob_program = obHas "later" : pas de questions)
-→ ob_plan → [ob_health si Apple Santé lisible, app iOS] → ob_decide → ob_insight → ob_week
+→ ob_plan → [ob_health si Apple Santé lisible, app iOS] → ob_insight → ob_decide → ob_week
 → [ob_notif si notifs activables] → ob_pay → app (/today)
 ```
 **Coach**
 ```
 value_intro → decision_2b → account → ob_sport → ob_count → questions programme
-→ ob_plan → ob_decide → ob_insight → ob_week → ob_invite → [ob_notif] → ob_pay → app (/coach)
+→ ob_plan → ob_insight → ob_decide → ob_week → ob_invite → [ob_notif] → ob_pay → app (/coach)
 ```
 - **Programme claimé** (`claim_program_id` en localStorage, posé par `/p/[id]`) : pas de questions de programme (coach : `ob_count` seul). Le programme claimé est montré tel quel sur `ob_plan`.
 - **Sportif invité par un coach** (`INVITE_ATHLETE_PATH` = `value_intro → account`) : puis l'app directement, la checklist prend le relais ; si le coach ne paie pas, le paywall arrive par le gating de l'app. Prioritaire sur tout le reste.
@@ -63,7 +63,7 @@ value_intro → decision_2b → account → ob_sport → ob_count → questions 
 - Inscription : vrai `<form>` (Entrée/« Aller » valide), champs 16 px + autocomplete, email vérifié (`EMAIL_RE`), erreurs Supabase traduites (`signupErrorFr`). Sur téléphone (`pointer: coarse`), pendant la saisie le bouton fixe disparaît et « Activer mon espace » s'affiche sous le champ email (`inlineCta`) : le bouton déplacé au-dessus du clavier (visualViewport) se plaçait mal dans Safari et Chrome iOS, ne pas y revenir.
 - Préparation : `fetchWithTimeout` (20 s) sur génération, enregistrement et attribution du programme.
 - Frise des questions par thème (`segments` de `QuestionShell`) : programme / point forme / sportifs et notifications.
-- 2e analyse = `ReadingReveal` (« On lit ton point forme », vraies réponses + verdict), jamais un 2e anneau à cocher. Jamais « ton matin ».
+- Plus de 2e analyse (06/11, LOCAL) : `ReadingReveal` « On lit ton point forme » retiré de `ob_insight` (doublon : le score vient de se former sur l'anneau du point forme), les cartes du bilan s'ouvrent directement, AVANT ob_decide (même ordre que l'app, CTA « Continuer ») ; 1re carte « Ta forme » = `RecupRing` ; event `onboarding_insight_reveal_done` disparu. Jamais « ton matin ».
 - Objectifs par famille du catalogue (`goalOptionsFor`) : force, endurance, collectif (« Tenir tout le match »), combat (« Tenir tout le combat »), athlé.
 - Démos coach : le sportif s'appelle Karim (AHA et aperçu des notifications), « ton sportif » dans le texte. Titres neutres si `ob_decide` est passé.
 - `ob_pay` coach : `athleteCount` (réponse `ob_count`) et `hasAthletes` (invitations envoyées) passés à `PrimingJourneyModal`.
@@ -141,3 +141,8 @@ value_intro → decision_2b → account → ob_sport → ob_count → questions 
 Rejeu réel (02/11) : après la connexion Santé dans `ob_health`, `fetchReplay` (`src/lib/healthReplay.ts`) rejoue 30 jours de montre ; avec au moins 7 jours mesurés l'écran devient le rejeu (`ReplayStepBody`, « Ta montre savait. Ta séance, non. ») puis le point forme, sinon le point forme s'ouvre direct. Le titre du paywall reprend le nombre de jours à alléger. Test : `&dbghealth=1&dbgreplay=1`. Event `onboarding_replay_viewed {scored, down, up}`. Demande de note native sur « C'est parti » d'`ob_week` (event `store_review_requested`).
 
 Détails et raisons : grep `historique.md` de ce dossier (sections datées, la plus récente prime).
+
+## État au 06/11/2026
+- Ordre post-signup : … → point forme → `ob_insight` (bilan) → `ob_decide` (« Tu fais quoi ? ») → `ob_week` (anneau de décision) → … Funnels PostHog alignés sur cet ordre.
+- `ob_week` (decide) : même carte de séance que /today (`TodaySessionCard hideGauge`, jetons sur `[data-ex-line='changed']`) ; « la suite de ta semaine » / « Ta première semaine » = colonnes du Planning (`DayColumn`).
+- Textes : surtitre « Ta forme, avec une règle », titre sans « au ressenti » répété ; titre paywall stress sans nom de séance ; plus de badge « Ce que tu viens d'essayer » en sortie d'onboarding (`PrimingJourneyModal`, `hitIndex` -1 quand `tried`).

@@ -1,5 +1,6 @@
 "use client";
 
+import SessionRing from "@/components/calendar/SessionRing";
 import { ExerciseLineView, sessionLineContexts } from "@/components/sessions/ExerciseLineView";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
@@ -96,7 +97,8 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
               {s.done ? "Terminé" : "Prévu"}
             </span>
           </div>
-          {s.difficulty != null && <div style={{ marginBottom: 14 }}><DiffGauge value={s.difficulty} height={10} /></div>}
+          {/* Même anneau que le Planning (06/11) à la place de la barre. */}
+          {s.difficulty != null && <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}><SessionRing session={{ date: "9999-12-31", done: false, target_difficulty: s.difficulty }} today="" size={92} dark /></div>}
           <ShareExerciseList exercises={s.exercises ?? []} renderLine={enrichedLine(s.exercises ?? [])} />
           <div style={{ fontSize: 11, color: "#9a9ea1", marginTop: 14, textAlign: "center" }}>Partagé par {s.authorName}</div>
         </Card>
@@ -180,7 +182,7 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
                   {s.topSession.done ? "Terminé" : "Prévu"}
                 </span>
               </div>
-              {s.topSession.difficulty != null && <div style={{ marginBottom: Array.isArray(s.topSession.exercises) && s.topSession.exercises.length ? 8 : 0 }}><DiffGauge value={s.topSession.difficulty} height={8} /></div>}
+              {s.topSession.difficulty != null && <div style={{ marginBottom: Array.isArray(s.topSession.exercises) && s.topSession.exercises.length ? 8 : 0 }}><SessionRing session={{ date: "9999-12-31", done: false, target_difficulty: s.topSession.difficulty }} today="" size={64} dark /></div>}
               {Array.isArray(s.topSession.exercises) && s.topSession.exercises.length > 0 && <ShareExerciseList exercises={s.topSession.exercises} renderLine={enrichedLine(s.topSession.exercises)} />}
             </div>
           )}

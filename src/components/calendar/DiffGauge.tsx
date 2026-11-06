@@ -1,3 +1,5 @@
+/* Jauge de difficulté d'une séance (barre). Couleurs d'origine gardées (06/11, Gildas : l'orange de charge
+   ne se comprenait pas sur une barre) : facile vert, modérée orange, dure rouge. */
 export default function DiffGauge({ value, height = 11 }: { value: number | null; height?: number }) {
   if (!value) return null;
   const cls = value >= 8 ? "hard" : value >= 5 ? "moderate" : "easy";

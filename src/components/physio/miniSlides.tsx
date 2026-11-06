@@ -9,7 +9,7 @@
 import { sessionQualifier } from "@/lib/metricCards";
 import { DIM_PHOTO, LEVER_PHOTO, PHOTO_ACCENT, SPORT_TINT, sportIllustration } from "@/components/bilan/BilanCarousel";
 import { sportCover } from "@/lib/programCovers";
-import { checkinResult, recoveryGauge, type CheckinResult, type CheckinRow, type InsightTheme } from "@/lib/checkinInsight";
+import { checkinResult, type CheckinResult, type CheckinRow, type InsightTheme } from "@/lib/checkinInsight";
 import { deviceInputsFor, type HealthRow } from "@/lib/deviceWellness";
 import { HEART_CALIBRATION, HEART_FAMILY_LABEL, type HeartResult, type PhysioVerdict, type PhysioWorkout } from "@/lib/physioCompare";
 import type { ResultSession, SessionResult, WeekSession } from "@/lib/sessionInsight";
@@ -17,7 +17,10 @@ import { sessionZone } from "@/lib/sessionInsight";
 import type { TodaySession } from "@/lib/resultContext";
 import { SCALE_WORDS } from "@/lib/wellnessWords";
 import type { DimensionKey } from "@/lib/wellnessBaseline";
-import { BandBar, Chips, Columns, WeekBars, WeekCurve, miniCard, type MiniSlide } from "@/components/physio/MiniBilan";
+import { Chips, Columns, WeekBars, WeekCurve, miniCard, type MiniSlide } from "@/components/physio/MiniBilan";
+import { RecupRing, ScoreRing } from "@/components/wellness/PointFormeRing";
+import { sessionLoad } from "@/lib/sessionLoad";
+import { braiseColor, mixLab } from "@/lib/ringColors";
 
 export const diffWord = (d: number) => (d >= 7.5 ? "Très dure" : d >= 4.5 ? "Dure" : d >= 2.5 ? "Modérée" : "Légère"); // mots de Foster, voir qualitativeDifficulty
 const lw = (d: number) => diffWord(d).toLowerCase();
@@ -92,20 +95,22 @@ export function wellnessSlides(w: WellnessInput, sport: string | null): MiniSlid
   const prior = w.verdict || !w.row || w.row.score == null ? [] : w.history.filter(h => h.date >= since && h.date < w.date && h.score != null).sort((a, b) => a.date.localeCompare(b.date));
   const curve = prior.length >= 3 ? [...prior.map(h => ({ label: dayLetter(h.date), value: Number(h.score) })), { label: dayLetter(w.date), value: Number(w.row!.score) }] : null;
   if (c) {
-    const g = recoveryGauge(c.score);
     const color = RECUP_TEXT(c.score);
     const chips = w.row ? (["sleep", "stress", "recovery", "motivation"] as const).map(k => ({ value: SCALE_WORDS[k].labels[w.row![k]] ?? "", label: k === "sleep" ? "sommeil" : k === "stress" ? "stress" : k === "recovery" ? "corps" : "envie" })) : [];
-    const norm = c.day == null ? null : c.day >= 5 ? "Ta norme est prête : dès demain, ton score se compare à toi-même."
-      : c.day === 1 ? "Pour l'instant, un repère général. Dès ton 5e point forme, on te compare à toi-même."
-      : `Encore ${5 - c.day} point${5 - c.day > 1 ? "s" : ""} forme et ton score se calera sur toi.`;
+    /* Plus d'annonce des données à venir (« Encore X points forme… », 06/11, Gildas). */
+    const norm: string | null = null;
     slides.push({
-      key: "forme", kicker: "TA FORME", ...themePhoto(c.theme, sport),
+      key: "forme", kicker: "" /* « POINT FORME · TA FORME » se répétait (06/11) : le titre suffit */, ...themePhoto(c.theme, sport),
       hero: { big: c.score, unit: "/100", cap: c.relative ? "ta forme ce matin, comparée à ta norme." : "ta forme ce matin, à partir de tes réponses.", color },
-      sub: c.insight,
+      /* Anneau récup à la place du grand chiffre et de la barre Fatigué / Frais (2026-11-06, POC « Le curseur est le
+         formulaire ») : le point forme se fait sur cet anneau, le bilan le reprend avec le vrai score. */
+      heroNode: <RecupRing score={c.score} norm={c.relative ? 50 : undefined} cap={c.relative ? "ta forme ce matin, comparée à ta norme" : undefined} />,
+      /* Constat et conseil du jour en un seul paragraphe (06/11, Gildas : plus clean). */
+      sub: c.advice ? `${c.insight} ${c.advice}` : c.insight,
       body: <>
-        {curve ? <WeekCurve points={curve} color="#6da7ec" dotColor={RECUP_BLUE} /> : g.pos != null && <BandBar pos={g.pos} bands={g.bands} />}
+        {curve && <WeekCurve points={curve} color="#6da7ec" dotColor={RECUP_BLUE} />}
         <Chips items={chips} />
-        {(c.advice || norm) && <div style={{ ...miniCard, gap: 6 }}>{c.advice && <div style={small}>{c.advice}</div>}{norm && <div style={small}>{norm}</div>}</div>}
+        {norm && <div style={{ ...miniCard, gap: 6 }}><div style={small}>{norm}</div></div>}
       </>,
     });
   }
@@ -165,6 +170,15 @@ export type SessionInput = {
   extras: React.ReactNode; recal: React.ReactNode;
 };
 
+/* Photo du sport teintée par le résultat (2026-11-06, POC) : la couleur Braise de l'effort ressenti face à la
+   zone de la séance (jade dans la zone, bleu pétrole en dessous, rouille au-dessus). Doublée par le titre. */
+function resultPhoto(sp: { src: string; tint: [string, string] } | null, s: ResultSession) {
+  const z = sp && s.rpe != null ? sessionZone(s) : null;
+  if (!sp || !z) return sp;
+  const c = braiseColor(s.rpe, z.low, z.high);
+  return { src: sp.src, tint: [mixLab("#05070a", c, 0.22), mixLab(c, "#ffffff", 0.4)] as [string, string] };
+}
+
 /* `subject` = prénom du sportif : écran côté coach, 3e personne (2026-11-04). */
 export function sessionSlides(x: SessionInput, sport: string | null, subject?: string): MiniSlide[] {
   const T = (tu: string, il: string) => (subject ? il : tu);
@@ -188,11 +202,14 @@ export function sessionSlides(x: SessionInput, sport: string | null, subject?: s
       return { label: "LMMJVSD"[i], load: l, today: d === s.date, color: REL_COLOR[q] ?? "rgba(255,255,255,0.35)", word: REL_WORD[q] };
     });
     slides.push({
-      key: "semaine", kicker: T("TA SEMAINE", "SA SEMAINE"), photo: "charge", sportPhoto: sp,
+      key: "semaine", kicker: T("TA SEMAINE", "SA SEMAINE"), photo: "charge", sportPhoto: resultPhoto(sp, s),
       hero: share != null
         ? { big: share, unit: "%", cap: T("de ta charge de la semaine en une séance.", "de sa charge de la semaine en une séance."), color: REL_TEXT[sessionQualifier(load(s), ref).label] ?? LOAD_TEXT(s.rpe) }
         : s.duration ? { big: s.duration, unit: "min", cap: `de séance, ressentie ${lw(s.rpe)}.`, color: LOAD_TEXT(s.rpe) }
         : { big: diffWord(s.rpe), cap: T("c'est ainsi que tu as ressenti ta séance.", `c'est ainsi que ${subject} a ressenti sa séance.`), color: LOAD_TEXT(s.rpe) },
+      /* Anneau charge à la place du « 30 % » (2026-11-06) : la fin de séance se fait sur cet anneau, le bilan le reprend. */
+      /* Charge de la séance en mots, même repère que pendant la notation ; la part de la semaine en 2e ligne quand elle existe. */
+      heroNode: s.duration ? (() => { const L = sessionLoad(s.rpe, s.duration); return <ScoreRing palette="charge" fill={L.fill} big={L.word} cap="charge de la séance" cap2={share != null ? T(`${share} % de ta semaine`, `${share} % de sa semaine`) : undefined} />; })() : undefined,
       sub: x.summary?.title,
       body: <>
         {share != null && <WeekBars days={days} note={ref ? T("Par rapport à ta séance moyenne des 4 dernières semaines.", "Par rapport à sa séance moyenne des 4 dernières semaines.") : undefined} />}
