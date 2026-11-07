@@ -1161,13 +1161,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                       alert={{ border: `${decisionColor}66`, glow: decisionColor, text: withTitle(decision.text, autoregTargetTop ? ringHint : decision.title, autoregTargetTop ? undefined : decision.titleDetail) }}
                     />
                   }
-                  /* Maintenir / Alléger dans la carte sous le conseil ; Démarrer sous la carte (06/11). */
-                  actions={autoregTargetTop ? <div ref={setAutoregActionsSlot} className="autoreg-slot" style={{ marginTop: 4 }} /> : undefined}
-                  below={<>
-                    {/* Démarrer juste sous le conseil (2026-11-05, POC) : une fois la décision prise (ou s'il n'y a
-                       rien à décider), la suite logique est de lancer la séance, sans descendre jusqu'à sa carte. */}
-                    {startFromRing && autoregTargetTop && (
-                      <div style={{ display: "flex", justifyContent: "center", marginTop: 14 }}>
+                  /* Maintenir / Alléger, puis « Démarrer la séance » au même endroit, dans la carte sous le conseil (07/11, Gildas). */
+                  actions={autoregTargetTop ? <>
+                    <div ref={setAutoregActionsSlot} className="autoreg-slot" style={{ marginTop: 4 }} />
+                    {startFromRing && (
+                      <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
                         <button onClick={() => gateInput(() => handleStart(autoregTargetTop))}
                           style={{ width: "100%", maxWidth: 320, height: 46, borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: "pointer", border: "none", fontFamily: "inherit",
                             background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}>
@@ -1175,7 +1173,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                         </button>
                       </div>
                     )}
-                  </>}
+                  </> : undefined}
                   back={!decision.phase ? undefined : analyticsData && (!chargeReady || !recupReady) ? (
                     /* Pas assez d'historique : phase d'exemple derrière le flou (gratuit), ou
                        collecte (Premium / jour 1). Jamais de mention « Exemple ». */
