@@ -181,3 +181,4 @@ Détails et raisons : grep `historique.md` de ce dossier (sections datées, la p
 - Aperçus = mêmes composants : onboarding ob_week (`DayColumnHeader` + `WeekSessionCard`), `/p/[id]` (`DayColumn` entière, lundi fictif 2001).
 - Plus de vue Mois (code retiré le 06/11).
 - Un seul découpage de difficulté : `difficultyWord` / `HARD_FROM` 7 / `MODERATE_FROM` 4 dans `lib/loadRule.ts` (calé sur les libellés CR-10 de l'anneau).
+- 07/11/2026 : éditeur de séance (sportif + coach) sans anneau ; difficulté = `DifficultyCrans` (dix crans) sous le nom et la date (`DifficultyRingInput` supprimé). Barre d'activité du haut (`ActivityPill`) : plus d'icônes ✏️ / ↻, toucher la barre ouvre le tiroir ; « Reconduire la semaine » n'a plus d'entrée visible (événement `ACTIVITY_RECONDUIRE` et `?reconduire=` toujours gérés par /week et /coach/planning).

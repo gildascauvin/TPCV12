@@ -1,6 +1,5 @@
 "use client";
 
-import DifficultyRingInput from "@/components/sessions/DifficultyRingInput";
 import { DifficultyCrans } from "@/components/wellness/PointFormeRing";
 import { CR10_LABELS } from "@/components/ui/ScaleBars";
 
@@ -242,8 +241,6 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
             )}
             {belowTitle && <div style={{ marginTop: 8 }}>{belowTitle}</div>}
             </div>
-            {/* Difficulté prévue (06/11) : à la place du partage, sans encadré ni répétition. */}
-            <div style={{ flexShrink: 0 }}><DifficultyRingInput compact size={112} value={targetDiff} onChange={setTargetDiff} /></div>
           </div>
           {!isEdit && (
             <div style={{ fontSize: 15, color: "#62686e", lineHeight: 1.5, marginTop: 10, marginBottom: 16 }}>

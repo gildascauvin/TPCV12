@@ -1,6 +1,5 @@
 "use client";
 
-import DifficultyRingInput from "@/components/sessions/DifficultyRingInput";
 import { DifficultyCrans } from "@/components/wellness/PointFormeRing";
 import { CR10_LABELS } from "@/components/ui/ScaleBars";
 
@@ -312,8 +311,6 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
         />
             {belowTitle && <div style={{ marginTop: 8 }}>{belowTitle}</div>}
           </div>
-          {/* Difficulté cible (06/11) : à la place du partage. */}
-          <DifficultyRingInput compact size={112} value={difficulty} onChange={setDifficulty} />
           <button onClick={flushAndClose} style={{ alignSelf: "flex-start", width: 34, height: 34, borderRadius: 12, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 16, color: "#62686e", flexShrink: 0 }}>✕</button>
         </div>
         <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 6, marginBottom: reviewContext ? 12 : 20, display: "flex", alignItems: "center", gap: 8 }}>

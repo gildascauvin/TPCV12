@@ -343,16 +343,9 @@ export function ActivityStripBar({ subject, period, athleteId, who, prefix, onOp
   }
 
   let actions: React.ReactNode;
-  if (prog) {
-    // Le programme s'ouvre dans le tiroir (semaines, ajouter, voir le programme), pas de redirection.
-    actions = <IconBtn label="Ouvrir" onClick={() => { posthog.capture("activity_strip_action", { role, action: "edit_program", active, program: true }); onOpen(); }}>✏️</IconBtn>;
-  } else if (active) {
-    actions = (
-      <>
-        <IconBtn label="Ouvrir" onClick={() => { posthog.capture("activity_strip_action", { role, action: "open", active, program: false }); onOpen(); }}>✏️</IconBtn>
-        <IconBtn label="Reconduire la semaine" onClick={reconduire}>↻</IconBtn>
-      </>
-    );
+  if (prog || active) {
+    /* Plus d'icônes ✏️ / ↻ dans la barre (07/11, Gildas) : toucher la barre ouvre déjà le tiroir. */
+    actions = null;
   } else {
     // Même bouton que l'ancienne pilule "Ajouter" : ouvre le tiroir (séance ou programme).
     actions = (
