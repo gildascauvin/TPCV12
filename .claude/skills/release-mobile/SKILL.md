@@ -119,3 +119,9 @@ Identifiants non secrets : bundle/package `com.theperfclub.app`, Team Apple `B4A
 - **Ne jamais lancer `next build` dans le repo pendant que le serveur de dev tourne** : pas de `distDir` configuré, le build écrase `.next` et le serveur local renvoie des 500.
 
 Détails et raisons : grep `historique.md` de ce dossier.
+
+## 9. Lien magique qui ouvre l'app (08/11/2026)
+- Web : `public/.well-known/apple-app-site-association` (appID `B4AJAX65W8.com.theperfclub.app`, chemins `/auth/callback*`, Content-Type JSON dans `next.config.mjs`) et `assetlinks.json` (SHA-256 clé de signature Play `29:F6…` + clé d'importation `C5:BE…`). Le middleware exclut `.well-known`.
+- Natif : `applinks:go.theperfclub.com` dans `App.entitlements` (capability Associated Domains cochée sur l'App ID le 08/11, profils Xcode à régénérer) ; intent-filter `autoVerify` `/auth/callback` dans `AndroidManifest.xml` ; `@capacitor/app` + listener `appUrlOpen` dans `NativeShell` (va sur le même chemin). Effectif seulement à partir du build 1.3 (`npx cap sync` pour le plugin).
+- `/auth/callback` gère `token_hash` + `type` (`verifyOtp`) : marche dans n'importe quel navigateur/app (pas de PKCE). Modèle Supabase Magic Link = `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=magiclink` (appliqué le 08/11 après le déploiement f2067b0, 3 occurrences).
+- Emails auth envoyés par Resend en SMTP (branché le 08/11, `noreply@theperfclub.com`), limite 100/h (avant : 2/h du service intégré).

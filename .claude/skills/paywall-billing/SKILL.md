@@ -109,3 +109,7 @@ description: Paywall, priming Elite, abonnements Stripe et achats intégrés iOS
 - Frise `RiskTimeline` : la 3e étape affiche la vraie date du 1er prélèvement (aujourd'hui + 14 j), plus « Jour 14 ».
 
 Détails et raisons : grep `historique.md` de ce dossier (sections datées, la plus récente prime).
+
+## Gratuit flouté dès J0 (08/11/2026, f2067b0)
+- Plus de jour offert : `useFirstDecision` = `!enabled || isActive` ; `canDecideToday` (Planning) et `canDecideFor` (Coach Control, Planning coach) = `sandboxMode || isActive`.
+- Accueil : anneau dans `LockedBlur` avec `content={<LockedRendezvous/>}` : compte à rebours jusqu'au prochain point forme (`push_hour`, défaut 8 h) + `missedLine()` (ce qu'il rate), CTA « Ajuster mes séances chaque matin » (J0) / « Voir celle d'aujourd'hui ». Coach Control : variante `coach` (« Son prochain point forme », CTA « Ajuster ses séances chaque matin »).

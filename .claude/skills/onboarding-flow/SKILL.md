@@ -31,12 +31,12 @@ Interrupteur `readEliteFlag()` : allumé par défaut. `NEXT_PUBLIC_ELITE_ONBOARD
 value_intro → decision_2a → account
 → ob_sport → ob_program → (ob_import | ob_goal → ob_weak → ob_days)   (« Passer » sur ob_program = obHas "later" : pas de questions)
 → ob_plan → [ob_health si Apple Santé lisible, app iOS] → ob_insight → ob_decide → ob_week
-→ [ob_notif si notifs activables] → ob_pay → app (/today)
+→ ob_pay → app (/today)   (feuille « app » ouverte après le bilan, voir plus bas)
 ```
 **Coach**
 ```
 value_intro → decision_2b → account → ob_sport → ob_count → questions programme
-→ ob_plan → ob_insight → ob_decide → ob_week → ob_invite → [ob_notif] → ob_pay → app (/coach)
+→ ob_plan → ob_insight → ob_decide → ob_week → ob_invite → ob_pay → app (/coach)
 ```
 - **Programme claimé** (`claim_program_id` en localStorage, posé par `/p/[id]`) : pas de questions de programme (coach : `ob_count` seul). Le programme claimé est montré tel quel sur `ob_plan`.
 - **Sportif invité par un coach** (`INVITE_ATHLETE_PATH` = `value_intro → account`) : puis l'app directement, la checklist prend le relais ; si le coach ne paie pas, le paywall arrive par le gating de l'app. Prioritaire sur tout le reste.
@@ -55,7 +55,8 @@ value_intro → decision_2b → account → ob_sport → ob_count → questions 
 - **ob_week** : la jauge de décision de /today (`AutoregButtons` mode `demo`, jamais de décision lue/écrite). Séance figée dès `ob_decide` (`obRingRef`).
   - Textes (31/10, chantier douleur, skill utilisateur `storytelling-tpc`) : titre `contrastTitle(Coach)` inchangé (preuve de valeur, ne pas le remplacer par la douleur). Sous-titre `weekSub()` = `weekCostLine(obPick, dir)` (coût du réflexe, porté par le programme figé / le ressenti / l'œil, jamais par la personne) + enjeu `obStake` : séances d'ici l'échéance (`obGoal === "competition"` + `obDeadline`, semaines entières × `obProgramDays()`), sinon « Sur 3 mois » (13 semaines) ; coach : `ob_count` × séances par semaine. Enjeu masqué si les jours ne sont pas connus (pas de programme généré/importé/claimé, ou `obProgramOk === false`) : jamais le repli « 4 » d'`obProgramDays`. Sous l'anneau : `reliefLine(dir, subject)` (`EliteSteps.tsx`) à la place d'`autoregAdvice`.
 - **ob_invite** (coach) : `InviteForm`, invitations envoyées au clic (`sendObInvites`, `POST /api/invite/create`).
-- **ob_notif** : natif (`enableNotifications`) ; iPhone Safari = bouton App Store ; ordinateur = QR ; heure dans `profiles.push_hour`.
+- **Feuille « app » après le bilan** (08/11, f2067b0, remplace l'étape `ob_notif`, retirée de `onboardingPath.ts` ; `NotifStepBody`/`StreakTitle` supprimés) : `openNotifOrAdvance()` ouvre une bottom sheet blanche en portail (`renderNotifSheet()`), sportif et coach. App native : heures + « Me le rappeler » (`enableNotifications`, `profiles.push_hour`). Web (`appSheet = !isNativeApp()`) : titre « Ton point forme de demain, sur ton téléphone » (coach « Tes sportifs, sur ton téléphone ») ; `sendAppLink()` part tout seul à l'ouverture (`signInWithOtp`, `shouldCreateUser:false`, event `onboarding_app_link_sent`) ; mobile = badges officiels App Store / Google Play (`badge()`, via `/api/telecharger`) ; ordinateur = QR `/app-qr.svg` + option « Recevoir plutôt les rappels sur cet ordinateur » (push web). Pied : « Continuer sur le web » / « Plus tard ». Pas de bouton « M'envoyer le lien » (doublon du QR).
+- **Reprise à l'étape atteinte** (08/11) : chaque `ob_*` écrit `user_metadata.ob_step` (+ `ob_imagined` côté coach). L'effet `resumeRoleApplied` relit : point forme du jour (ou `ob_imagined`), dernier programme (`owner_id`) dans `builtRef`/`obWeekSessions`, `prepareRef = Promise.resolve(id)` + `profileCompleteGuardRef = true` (jamais de programme en double). Étapes reprenables : `ob_decide`, `ob_week`, `ob_invite`, `ob_pay` ; sinon `resumeAfterAccount()`. Event `onboarding_resumed`.
 - **ob_pay** : `PrimingJourneyModal` puis `PaywallModal`, titre `payHeadline` / `payHeadlineCoach` avec le nom de la séance de la jauge. Sous-titre (31/10) : sa réponse (`pickWords`) + le coût de ne rien faire (« Au feeling, c'est le même plateau. » / coach « À l'œil, on voit la blessure trop tard. ») + la promesse. `obStake` passé en `lossStake` à la feuille de perte. La fermeture et l'achat appellent `finishOnboarding`. Contenu du paywall (pas de carte Gratuit, `RiskTimeline`, offre de sortie, feuille de perte) : skill `paywall-billing`.
 - Côté coach, pas de prénom de sportif : « ton sportif » partout (`capS()` en début de phrase).
 
