@@ -757,24 +757,3 @@ export function hrvSpec(device: DeviceDay[], dates: string[]): ChartSpec {
   };
 }
 
-/* Anneau d'un jour de repos dans le Planning (06/11, Gildas : la décision des jours sans séance, comme
-   /today) : position de charge jour par jour, même calcul que aggregateFor. Le dernier jour reprend
-   aggregateFor tel quel pour coller à /today. Vide si la charge n'a pas assez d'historique. */
-export function chargeByDay(data: ConseilsData, ready: boolean): Record<string, number> {
-  const out: Record<string, number> = {};
-  if (!ready) return out;
-  let acwr: number | null = null;
-  for (const p of data.timeSeries) {
-    if (p.acwr !== null) acwr = p.acwr;
-    const pos = chargeAggregatePos({
-      acwr,
-      monotonySeverity: p.monotony !== null ? severityOf(sigDimInfo("monotony", p.monotony).color) : "good",
-      strainSeverity: p.strain !== null ? severityOf(sigDimInfo("strain", p.strain).color) : "good",
-    });
-    if (pos !== null) out[p.date] = pos;
-  }
-  const last = data.timeSeries[data.timeSeries.length - 1];
-  const agg = aggregateFor("charge", data);
-  if (last && agg) out[last.date] = agg.pos;
-  return out;
-}

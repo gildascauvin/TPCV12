@@ -168,10 +168,18 @@ type BigRingProps = { fluid?: boolean; centerTitle?: string; titleLocked?: boole
   legend?: RingLegend };
 export type RingLegend = { recup: { value: number | null; color?: string; onClick: () => void }; charge: { value: number | null; color?: string; onClick: () => void } };
 
-export function RestDecisionRing({ size, light, hideHint, ...big }: { size?: number; light?: boolean; hideHint?: boolean } & BigRingProps) {
+/* Jour de repos (08/11, Gildas) : même sens que les autres jours, la difficulté de la journée (« Repos », au
+   départ de l'arc) face à ce que la forme permet. `restZoneHigh` absent = pas de zone (forme inconnue). */
+export function restZoneFromRecup(recup: number | null | undefined): number | null {
+  return recup == null ? null : recup >= 58 ? 3 : 1;
+}
+export function restTitle(zoneHigh: number | null): string | undefined {
+  return zoneHigh == null ? undefined : zoneHigh > 1 ? "Tu pourrais bouger un peu" : "Repos bien placé";
+}
+export function RestDecisionRing({ size, light, hideHint, restZoneHigh = null, ...big }: { size?: number; light?: boolean; hideHint?: boolean; restZoneHigh?: number | null } & BigRingProps) {
   return (
     <DecisionRing
-      zoneLow={1} zoneHigh={2} value={1} readOnly hideZone onChange={() => {}}
+      zoneLow={1} zoneHigh={restZoneHigh ?? 2} value={1} readOnly hideZone={restZoneHigh == null} onChange={() => {}}
       size={size} light={light} hideHint={hideHint} {...big}
       centerLabel={{ arrow: "→", verb: "Repos" }}
       hint="Jour de repos"

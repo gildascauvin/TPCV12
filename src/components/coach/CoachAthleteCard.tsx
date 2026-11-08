@@ -8,7 +8,7 @@ import EmptyDayCard from "@/components/sessions/EmptyDayCard";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import type { RingLegend } from "@/components/sessions/DecisionRing";
-import { RestDecisionRing, DoneDecisionRing } from "@/components/sessions/DecisionRing";
+import { RestDecisionRing, DoneDecisionRing, restZoneFromRecup, restTitle } from "@/components/sessions/DecisionRing";
 import { breathForDir } from "@/lib/ringAmbience";
 import { validDecision } from "@/lib/autoregDecisionRecord";
 import LockedBlur from "@/components/paywall/LockedBlur";
@@ -406,7 +406,9 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
          la séance du jour restent lisibles. */}
       {/* Freemium (2026-10-02) : mesures gratuites, décision payante. L'anneau reste net (difficulté
          prévue seule, sans zone ni sens ; repos et séance faite tels quels), le reste est flouté. */}
+      {/* Sans abonnement (08/11, Gildas) : l'anneau de décision est flouté aussi (l'action reste sur la carte). */}
       {locked && (
+        <LockedBlur locked bare surface="coach_card_ring" onUnlock={() => onUnlock?.()} radius={24}>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
           {adjustable ? (
             /* Réglage manuel (entrée) : jauge sans zone ni reco, Appliquer après un déplacement. */
@@ -433,6 +435,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             : todaySessions.length === 0 || !topSession ? <RestDecisionRing size={ringSz} hideHint fluid glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath="flat" centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked />
             : <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} hideZone hideHint fluid glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath={doneGap >= 2 ? "low" : "flat"} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked />}
         </div>
+        </LockedBlur>
       )}
       <LockedBlur locked={!!locked} bare={lockedBare} surface="coach_card" onUnlock={() => onUnlock?.()} title="Décision prête" sub="Vois quoi faire de cette séance." cta="Activer le Coach Control" radius={24}>
       <div style={{ textAlign: "center", marginBottom: 12 }}>
@@ -482,7 +485,8 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               />
             </div>
           ) : todaySessions.length === 0 || !topSession ? (
-            <RestDecisionRing size={ringSz} hideHint fluid glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath="flat" centerTitle={decision.title ?? decision.text.split("\n")[0]} />
+            /* Jour de repos (08/11) : « Repos » face à sa forme, comme /today. */
+            <RestDecisionRing size={ringSz} hideHint fluid glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath="flat" restZoneHigh={restZoneFromRecup(ringLegend?.recup.value)} centerTitle={restTitle(restZoneFromRecup(ringLegend?.recup.value)) ?? decision.title ?? decision.text.split("\n")[0]} />
           ) : (
             <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} zone={decision.doneZone} hideHint fluid glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath={doneGap >= 2 ? "low" : "flat"}
               zoneLabel={decision.doneZone ? "Optimal" : undefined} introFrom={decision.doneZone ? (decision.doneZone.low + decision.doneZone.high) / 2 : undefined}

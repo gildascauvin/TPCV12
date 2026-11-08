@@ -40,7 +40,7 @@ import { findProgramForWeek, programWeekTag } from "@/lib/programAssignment";
 import { revealLabel } from "@/lib/programReveal";
 import { ACTIVITY_LABEL_CHANGED } from "@/components/layout/ActivityPill";
 import { programSportEmoji } from "@/lib/sportCategories";
-import DecisionRing, { RestDecisionRing, DoneDecisionRing, type RingLegend } from "@/components/sessions/DecisionRing";
+import DecisionRing, { RestDecisionRing, DoneDecisionRing, restZoneFromRecup, restTitle, type RingLegend } from "@/components/sessions/DecisionRing";
 import FlipBlock from "@/components/today/FlipBlock";
 import { breathForDir } from "@/lib/ringAmbience";
 import { computeWellnessBaselineAt, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
@@ -57,7 +57,7 @@ import type { RangeMode } from "@/components/calendar/RangeToggle";
 import type { ConseilsData } from "@/lib/conseilsData";
 
 const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
-import { PLANNED_RPE, PLANNED_LABEL, plannedPlaceholderLine, type PlannedIntensity } from "@/lib/plannedIntensity";
+import { PLANNED_RPE, plannedSession, type PlannedIntensity } from "@/lib/plannedIntensity";
 import { isLive, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from "@/lib/liveSession";
 import { isOffline, isNetworkFailure, notifyQueued, updateOwnSession } from "@/lib/offlineSessions";
 import { enqueueOfflineAction, readOfflineQueue } from "@/lib/offlineStore";
@@ -537,8 +537,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const ringAmbient = true;
   /* Jour de repos (2026-11-04, option D2) : l'anneau lit le score de l'onglet Charge (même zone
      « optimal » que l'onglet, mêmes couleurs) au lieu d'un curseur posé au plancher de la difficulté. */
-  const restCharge = !decisionLocked && analyticsData && chargeReady ? aggregateFor("charge", analyticsData) : null;
-  const restChargeZone: [number, number] = [AGG_BANDS.charge[1].from, AGG_BANDS.charge[1].to];
   // dir/reco absents = jauge en mode libre (voir AutoregButtons.tsx).
   const decisionGaugeSlot: React.ReactNode = autoregTargetTop ? (
     <AutoregButtons
@@ -613,14 +611,13 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       }}
     />
   ) : todaySessions.length === 0 ? (
-    /* Jour de repos : l'anneau reste affiché, en lecture seule, dans sa zone (2026-09-30). */
-    restCharge ? (
-      <DecisionRing readOnly fluid hideHint value={restCharge.pos} zoneLow={1} zoneHigh={1} onChange={() => {}}
-        axis={{ zone: restChargeZone, colors: [AGG_BANDS.charge[0].color, restCharge.band.color] }}
-        glow={decisionColor} ambient={ringAmbient} breath="flat" legend={ringLegend}
-        kicker={decision.title ?? undefined}
-        centerTitle={restCharge.pos < restChargeZone[0] ? "Sous la zone" : restCharge.pos > restChargeZone[1] ? "Au-dessus de la zone" : "Dans la zone"} />
-    ) : <RestDecisionRing hideHint fluid glow={decisionColor} ambient={ringAmbient} breath="flat" legend={ringLegend} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked={decisionLocked} />
+    /* Jour de repos (08/11, Gildas) : la difficulté de la journée (« Repos ») face à la forme, plus la charge
+       des 7 jours (elle reste dans la légende « Charge »). */
+    (() => {
+      const zh = decisionLocked ? null : restZoneFromRecup(legendRecup ? Math.round(legendRecup.pos * 100) : null);
+      return <RestDecisionRing hideHint fluid glow={decisionColor} ambient={ringAmbient} breath="flat" legend={ringLegend} restZoneHigh={zh}
+        centerTitle={restTitle(zh) ?? decision.title ?? decision.text.split("\n")[0]} titleLocked={decisionLocked} />;
+    })()
   ) : (() => {
     /* Séance(s) déjà faite(s), aujourd'hui ou dans le passé : anneau en lecture seule sur le RPE
        réel de la plus dure (2026-09-30). */
@@ -782,7 +779,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
        la décision du jour existe même sans programme. Repos = rien. */
     if (plannedIntensity && plannedIntensity !== "rest") {
       try {
-        await saveSession({ name: `Séance du jour ${PLANNED_LABEL[plannedIntensity]}`, notes: plannedPlaceholderLine(profile.sport, plannedIntensity), date: selectedDate, target_difficulty: PLANNED_RPE[plannedIntensity], exercise_media: {} });
+        const planned = plannedSession(profile.sport, plannedIntensity);
+        await saveSession({ name: planned.name, notes: planned.notes, date: selectedDate, target_difficulty: PLANNED_RPE[plannedIntensity], exercise_media: {} });
       } catch (e) { console.error("[checkin] séance prévue non créée", e); }
     }
     setShowWellness(false);
@@ -1125,11 +1123,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
               {/* Freemium (2026-10-02) : les mesures sont gratuites, la décision payante. L'anneau
                   reste net (difficulté prévue seule, sans zone ni sens ; repos et séance faite tels
                   quels), seule la carte décision est floutée. */}
-              {decisionGaugeSlot && decisionLocked && (
-                <div key={`ring-${checkinReplay}`} onClick={e => e.stopPropagation()} style={{ position: "relative", zIndex: 2, marginTop: 26, marginBottom: 26, animation: checkinReplay ? "tpcFadeUp .35s cubic-bezier(.2,0,0,1)" : undefined }}>
-                  {decisionGaugeSlot}
-                </div>
-              )}
+              {/* Sans abonnement (08/11, Gildas) : l'anneau de décision est flouté avec la carte, une seule action. */}
               <LockedBlur
                 locked={decisionLocked}
                 surface="today_decision"
@@ -1138,7 +1132,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 sub={lockedSub}
                 radius={16}
               >
-              {decisionGaugeSlot && !decisionLocked && (
+              {decisionGaugeSlot && (
                 <div key={`ring-${checkinReplay}`} onClick={e => e.stopPropagation()} style={{ position: "relative", zIndex: 2, marginTop: 26, marginBottom: 26, animation: checkinReplay ? "tpcFadeUp .35s cubic-bezier(.2,0,0,1)" : undefined }}>
                   {decisionGaugeSlot}
                 </div>

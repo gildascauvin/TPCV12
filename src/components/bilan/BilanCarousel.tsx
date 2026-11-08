@@ -84,7 +84,8 @@ const round = (x: number) => Math.round(x);
    en bichromie à la couleur du thème et fondue dans le noir, et un grand chiffre à la place du titre.
    Photos dans public/bilan/<thème>.webp. */
 export const DIM_PHOTO: Record<PersonalDim, string> = { stress: "stress", sleep: "sommeil", recovery: "recup", motivation: "envie" };
-export const LEVER_PHOTO: Record<string, string> = { screen_late: "ecran", caffeine_late: "cafeine", heavy_meal: "repas", tobacco: "tabac", travel: "voyage", late_sleep: "sommeil", stretching: "stretch", walk: "marche", reading: "lecture", meditation: "meditation", cold_shower: "douche", hydration: "hydratation" };
+/* Sortie sociale et alcool : photo « soirée » (08/11, bug : la sortie sociale retombait sur l'écran). */
+export const LEVER_PHOTO: Record<string, string> = { alcohol: "soiree", social_out: "soiree", screen_late: "ecran", caffeine_late: "cafeine", heavy_meal: "repas", tobacco: "tabac", travel: "voyage", late_sleep: "sommeil", stretching: "stretch", walk: "marche", reading: "lecture", meditation: "meditation", cold_shower: "douche", hydration: "hydratation" };
 const BLUE = "#9fd0ff", GREEN = "#9ff0ad";
 export const PHOTO_ACCENT: Record<string, string> = {
   raison: "#f3e2bb", stress: "#ffb08a", sommeil: "#b3c6ff", soiree: "#d8b4ff", envie: "#ffd27a", recup: "#9be8f0",

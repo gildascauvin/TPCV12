@@ -1,6 +1,5 @@
 "use client";
 
-import { useChargeDays } from "@/hooks/useChargeDays";
 import { proposalOfDay } from "@/lib/sessionInsight";
 import type { EstimatedSession } from "@/lib/watchEstimates";
 import { openCoachSession } from "@/components/coach/CoachResultHost";
@@ -247,8 +246,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   }, [searchParams]);
 
   const athlete = selectedAthleteId === null ? null : (athletes.find(a => a.id === selectedAthleteId) ?? athletes[0] ?? null);
-  /* Anneau des jours sans séance (06/11) : charge du jour du sportif affiché. */
-  const chargeDays = useChargeDays(!sandboxMode && !!athlete && (isActive || canDecideFor(athlete)), todayStr, sessions.filter(s => s.done && (!athlete || (s as { athlete_id?: string }).athlete_id === athlete.id)).map(s => `${s.date}${s.rpe}${s.duration}`).join(","), athlete?.id ?? null);
 
   function freeLabelsFor(a: CoachAthlete): Record<string, string> {
     return freeLabelOverrides[a.id] ?? (a.free_training_label as Record<string, string> | undefined) ?? {};
@@ -931,9 +928,9 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     return (
       <DroppableDay dstr={dstr}>
       <DayColumn
+        lockDecision={!!athlete && !canDecideFor(athlete)}
         date={date}
         sessions={daySessions}
-        restCharge={chargeDays[dstr] ?? null}
         wellness={wellness !== null ? { score: dayRelativeScore, zoneLabel: dayZoneLabel } : null}
         todayStr={todayStr}
         ctx={ctx}

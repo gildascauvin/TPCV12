@@ -276,25 +276,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
             </div>
           )}
         </div>}
-        {/* Analyses avant 2 semaines (2026-10-01) : on dit qu'elles sont partielles plutôt que
-            d'attendre ou de montrer l'exemple. */}
-        {!example && group === "recup" && lastB?.provisional && (
-          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#7dd3fc" }}>
-            Norme provisoire · {lastB.historyDays}/12 points forme
-          </div>
-        )}
-        {/* Données importées de la montre (2026-10-23) : on ne mélange jamais en silence un ressenti et
-            une estimation. */}
-        {!example && group === "charge" && (data.estimatedSessionCount ?? 0) > 0 && (
-          <div style={{ maxWidth: 360, fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,.65)" }}>
-            {data.estimatedSessionCount} entraînement{data.estimatedSessionCount > 1 ? "s" : ""} de {perspective === "coach" ? "sa" : "ta"} montre compté{data.estimatedSessionCount > 1 ? "s" : ""} avec une difficulté estimée d&apos;après la fréquence cardiaque. {perspective === "coach" ? "Ses notes de séance les remplacent." : "Note tes séances pour les remplacer."}
-          </div>
-        )}
-        {!example && group === "recup" && (data.measuredRecovery ?? []).some(v => v !== null) && (
-          <div style={{ maxWidth: 360, fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,.65)" }}>
-            Avant {perspective === "coach" ? "son" : "ton"} inscription : d&apos;après {perspective === "coach" ? "ses" : "tes"} mesures (nuit, FC au repos, VFC). Le score du jour attend {perspective === "coach" ? "son" : "ton"} point forme.
-          </div>
-        )}
+        {/* Plus de mentions « Norme provisoire », « Avant ton inscription » ni « entraînements de ta montre » (08/11, Gildas). */}
         {!example && group === "charge" && data.loadInfo.label === "HISTORIQUE INSUFFISANT" && (
           <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#7dd3fc" }}>
             Charge habituelle disponible après 14 jours

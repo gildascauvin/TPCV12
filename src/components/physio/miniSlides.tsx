@@ -57,7 +57,7 @@ function themePhoto(t: InsightTheme, sport: string | null): Pick<MiniSlide, "pho
     if (!t.positive) return { photo: DIM_PHOTO[t.key] };
     const p = POSITIVE_PHOTO[t.key];
     if (p) return { photo: p };
-  } else if (t.kind === "behavior") return { photo: LEVER_PHOTO[t.key] ?? (t.key === "alcohol" ? "soiree" : "ecran") };
+  } else if (t.kind === "behavior") return { photo: LEVER_PHOTO[t.key] ?? "ecran" };
   return { photo: "recup", sportPhoto: sportPhoto(sport) };
 }
 

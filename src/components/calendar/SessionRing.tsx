@@ -1,4 +1,3 @@
-import { AGG_BANDS } from "@/lib/metricCards";
 import { difficultyWord } from "@/lib/loadRule";
 import { braiseColor, chargeColor } from "@/lib/ringColors";
 import { sessionZone } from "@/lib/sessionInsight";
@@ -110,33 +109,23 @@ export default function SessionRing({ session, today, size = 44, dark = false, s
   );
 }
 
-/* Jour sans séance (06/11, Gildas : la décision des jours de repos, comme /today) : l'anneau lit la charge
-   de la semaine (onglet Charge) avec sa zone optimale, même style que l'anneau de séance du Planning.
-   Sans charge connue (jour à venir, historique court) : anneau vide « Repos ». */
-export function RestDayRing({ pos, size = 92 }: { pos: number | null; size?: number }) {
-  const [zl, zh] = [AGG_BANDS.charge[1].from, AGG_BANDS.charge[1].to];
-  const toV = (p: number) => MIN + (MAX - MIN) * Math.max(0, Math.min(1, p));
-  const r = 40, sw = 10, cx = 50, cy = 50, VH = 84, n = 22;
-  const status = pos === null ? "Repos" : pos < zl ? "Sous la zone" : pos > zh ? "Au-dessus de la zone" : "Dans la zone";
+/* Jour sans séance (08/11, Gildas) : même sens que les autres jours, la difficulté de la journée (« Repos »,
+   au départ de l'arc) face à ce que la forme permet ; zone en pointillé quand la forme du jour est connue.
+   La charge de la semaine n'est plus ici (elle reste dans la légende « Charge » de /today). */
+export function RestDayRing({ recup, size = 92 }: { recup: number | null; size?: number }) {
+  const zh = recup == null ? null : recup >= 58 ? 3 : 1;
+  const r = 40, sw = 10, cx = 50, cy = 50, VH = 84;
+  const status = zh == null ? "Repos" : zh > 1 ? "Tu peux bouger" : "Repos bien placé";
   const lines = ringLabelLines(status);
-  const label = pos === null ? "Jour de repos" : `Jour de repos, charge de la semaine : ${status.toLowerCase()}`;
-  const v = pos === null ? null : toV(pos), lo = toV(zl), hi = toV(zh);
-  const col = (u: number) => braiseColor(u, lo, hi);
-  const e2 = v !== null ? ang(v) : A0;
-  const [s2x, s2y] = pol(cx, cy, r, A0), [e2x, e2y] = pol(cx, cy, r, e2);
-  const inZ = pos !== null && pos >= zl && pos <= zh;
-  const fs = lines.length > 2 ? 11 : 12.5, lh = lines.length > 2 ? 11.5 : 13;
+  const [s2x, s2y] = pol(cx, cy, r, A0);
+  const label = zh == null ? "Jour de repos" : `Jour de repos : ${status.toLowerCase()}`;
   return (
     <svg viewBox={`0 0 100 ${VH}`} width={size} height={Math.round((size * VH) / 100)} role="img" aria-label={label} style={{ display: "block", flexShrink: 0, overflow: "visible" }}>
       <title>{label}</title>
       <path d={arc(cx, cy, r, A0, A1)} fill="none" stroke="#ebe9e4" strokeWidth={sw} strokeLinecap="round" />
-      {v !== null && Array.from({ length: n }, (_, i) => (
-        <path key={i} d={arc(cx, cy, r, A0 + ((e2 - A0) * i) / n, A0 + ((e2 - A0) * (i + 1.05)) / n)} fill="none" stroke={col(MIN + ((v - MIN) * (i + 0.5)) / n)} strokeWidth={sw} />
-      ))}
-      {v !== null && <circle cx={s2x} cy={s2y} r={sw / 2} fill={col(MIN)} />}
-      {v !== null && <path d={sector(cx, cy, r - sw * 0.95, r + sw * 0.95, ang(lo - 0.35), ang(hi + 0.35))} fill="none" stroke="rgba(23,27,31,.6)" strokeWidth={1.6} strokeDasharray="3 2.5" />}
-      {v !== null && <circle cx={e2x} cy={e2y} r={sw * 0.6} fill={inZ ? "#2a8045" : "#18181b"} stroke="#fff" strokeWidth={1.6} />}
-      {size >= 40 && lines.map((ln, k) => <text key={k} x={cx} y={cy + 4 + (k - (lines.length - 1) / 2) * lh} textAnchor="middle" fontFamily="var(--font-sans), sans-serif" fontWeight={900} fontSize={fs} fill={pos === null ? "#8a8f94" : "#171b1f"}>{ln}</text>)}
+      {zh != null && <path d={sector(cx, cy, r - sw * 0.95, r + sw * 0.95, ang(1 - 0.35), ang(zh + 0.35))} fill="none" stroke="rgba(23,27,31,.6)" strokeWidth={1.6} strokeDasharray="3 2.5" />}
+      <circle cx={s2x} cy={s2y} r={sw * 0.6} fill={zh != null ? "#2a8045" : "#18181b"} stroke="#fff" strokeWidth={1.6} />
+      {size >= 40 && lines.map((ln, k) => <text key={k} x={cx} y={cy + 4 + (k - (lines.length - 1) / 2) * 13} textAnchor="middle" fontFamily="var(--font-sans), sans-serif" fontWeight={900} fontSize={12.5} fill={zh == null ? "#8a8f94" : "#171b1f"}>{ln}</text>)}
     </svg>
   );
 }

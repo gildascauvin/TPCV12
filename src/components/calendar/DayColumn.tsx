@@ -57,27 +57,33 @@ export interface SessionLike {
 
 /* L'anneau du jour (06/11, Gildas) : séance principale (charge prévue à venir, zone + statut aujourd'hui
    et avant), ou décision du jour de repos (charge de la semaine dans sa zone, « Repos » si inconnue). */
-export function DayRing({ date, sessions, todayStr, todayRing, ringState, restCharge, size = 92 }: {
+export function DayRing({ date, sessions, todayStr, todayRing, ringState, restRecup, size = 92, locked = false }: {
   date: Date; sessions: SessionLike[]; todayStr: string; todayRing?: SessionRingState | null;
-  ringState?: SessionRingState | null; restCharge?: number | null; size?: number;
+  ringState?: SessionRingState | null; restRecup?: number | null; size?: number;
+  /* Sans abonnement (08/11, Gildas) : les anneaux de décision (aujourd'hui et avant) sont floutés ; la
+     charge prévue d'un jour à venir reste nette. */
+  locked?: boolean;
 }) {
   const dstr = format(date, "yyyy-MM-dd");
   const top = [...sessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0];
-  return top
+  const ring = top
     ? <SessionRing session={top as unknown as SessionRingSession} today={todayStr} size={size} dark state={ringState ?? (dstr === todayStr ? todayRing : undefined)} />
-    : <RestDayRing pos={dstr <= todayStr ? restCharge ?? null : null} size={size} />;
+    : <RestDayRing recup={dstr <= todayStr ? restRecup ?? null : null} size={size} />;
+  return locked && dstr <= todayStr
+    ? <div aria-hidden style={{ filter: "blur(6px)", opacity: .7, flexShrink: 0, userSelect: "none" }}>{ring}</div>
+    : ring;
 }
 
 /* En-tête d'une colonne du Planning (date + anneau du jour), exporté pour l'aperçu programme de
    l'onboarding (06/11, Gildas : mêmes composants que le Planning). */
-export function DayColumnHeader({ date, sessions, todayStr, todayRing, ringState, restCharge, hideDayNumber, noRing }: {
+export function DayColumnHeader({ date, sessions, todayStr, todayRing, ringState, restRecup, hideDayNumber, noRing }: {
   /* L'anneau passe dans l'encadré du jour (06/11) : l'en-tête ne garde que la date. */
   noRing?: boolean;
   date: Date; sessions: SessionLike[]; todayStr: string; todayRing?: SessionRingState | null;
   /* État d'anneau imposé quel que soit le jour (aperçus : jour conseillé d'un programme, onboarding). */
   ringState?: SessionRingState | null;
   /* Position de charge du jour (0-1, chargeByDay) pour un jour sans séance. */
-  restCharge?: number | null;
+  restRecup?: number | null;
   wellness?: WellnessScoreLike | null; onWellness?: () => void; hideDayNumber?: boolean;
 }) {
   const dstr = format(date, "yyyy-MM-dd");
@@ -100,7 +106,7 @@ export function DayColumnHeader({ date, sessions, todayStr, todayRing, ringState
             </span>
           )}
         </div>
-        {!noRing && <DayRing date={date} sessions={sessions} todayStr={todayStr} todayRing={todayRing} ringState={ringState} restCharge={restCharge} size={92} />}
+        {!noRing && <DayRing date={date} sessions={sessions} todayStr={todayStr} todayRing={todayRing} ringState={ringState} restRecup={restRecup} size={92} />}
 
       </div>
 
@@ -269,12 +275,12 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
 /* ─── Day column — extrait de WeekClient.tsx, réutilisé à l'identique par /coach/planning
    (CoachPlanningClient.tsx, générique sur CoachViewSession) et par l'aperçu programme de
    l'onboarding (WeekPreviewStep.tsx, générique sur Session). ─── */
-export default function DayColumn<T extends SessionLike>({ todayRing, ringState, restCharge, date, sessions, wellness, todayStr, ctx, onAddSession, onComplete, onEdit, onDuplicate, onWellness, hideDayNumber, hideAddSession, emptyToday, emptyPerspective, recoveryAdvice, alert, alertActions, renderSession, columnRef, columnStyle, onProgram }: {
+export default function DayColumn<T extends SessionLike>({ todayRing, ringState, lockDecision = false, date, sessions, wellness, todayStr, ctx, onAddSession, onComplete, onEdit, onDuplicate, onWellness, hideDayNumber, hideAddSession, emptyToday, emptyPerspective, recoveryAdvice, alert, alertActions, renderSession, columnRef, columnStyle, onProgram }: {
   /* Anneau du jour calculé comme /today (WeekClient). */
   todayRing?: SessionRingState | null;
-  /* Jour sans séance : position de charge du jour (chargeByDay), pour l'anneau de repos. */
-  restCharge?: number | null;
   ringState?: SessionRingState | null;
+  /* Sans abonnement : anneaux de décision floutés (DayRing). */
+  lockDecision?: boolean;
   date: Date; sessions: T[]; wellness: WellnessScoreLike | null;
   /* Jours vides : lien "Ou démarrer un programme" sous le CTA (2026-10-02, étendu à tous les jours vides le 2026-10-05). */
   onProgram?: () => void;
@@ -331,11 +337,11 @@ export default function DayColumn<T extends SessionLike>({ todayRing, ringState,
          pastille pulsants (copie exacte de CoachAthleteCard.tsx, showBadge) — la carte du jour reste
          blanche, comme /week et /coach/planning en vrai. */}
       {alert ? (
-        <AlertBox alert={alert} actions={alertActions} lead={<DayRing date={date} sessions={sessions} todayStr={todayStr} todayRing={todayRing} ringState={ringState} restCharge={restCharge} size={84} />} />
+        <AlertBox alert={alert} actions={alertActions} lead={<DayRing date={date} sessions={sessions} todayStr={todayStr} todayRing={todayRing} ringState={ringState} restRecup={wellness?.score ?? null} size={84} locked={lockDecision} />} />
       ) : recoveryAdvice ? (
         <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <DayRing date={date} sessions={sessions} todayStr={todayStr} todayRing={todayRing} ringState={ringState} restCharge={restCharge} size={84} />
+            <DayRing date={date} sessions={sessions} todayStr={todayStr} todayRing={todayRing} ringState={ringState} restRecup={wellness?.score ?? null} size={84} locked={lockDecision} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.09em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#171b1f", marginBottom: 4 }}>🌿 Récupération</div>
               <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{recoveryAdvice}</div>
@@ -346,7 +352,7 @@ export default function DayColumn<T extends SessionLike>({ todayRing, ringState,
         <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
           {/* Anneau du jour + titre (06/11, Gildas) : plus de pastille, l'anneau dit déjà la difficulté. */}
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <DayRing date={date} sessions={sessions} todayStr={todayStr} todayRing={todayRing} ringState={ringState} restCharge={restCharge} size={84} />
+            <DayRing date={date} sessions={sessions} todayStr={todayStr} todayRing={todayRing} ringState={ringState} restRecup={wellness?.score ?? null} size={84} locked={lockDecision} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2, marginBottom: 4 }}>{rule.title}</div>
               <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{rule.text}</div>

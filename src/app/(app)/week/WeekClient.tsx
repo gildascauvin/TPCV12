@@ -54,7 +54,6 @@ import { enqueueOfflineAction } from "@/lib/offlineStore";
 import { localWellness } from "@/lib/offlineWellness";
 import { withDeviceScore } from "@/lib/deviceWellnessDb";
 import { haptic } from "@/lib/native";
-import { useChargeDays } from "@/hooks/useChargeDays";
 import { undoableDelete } from "@/lib/undoable";
 
 /* Modales/drawers ouverts sur demande (état local, jamais montés au premier rendu) — next/dynamic
@@ -121,8 +120,6 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   const weekGridRef  = useRef<HTMLDivElement>(null);
   const dayRefs      = useRef<(HTMLDivElement | null)[]>([]);
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
-  /* Anneau des jours sans séance (06/11) : charge du jour, masquée comme sur /today sans abonnement. */
-  const chargeDays = useChargeDays(!sandboxMode && isActive, todayStr, sessions.filter(s => s.done).map(s => `${s.date}${s.rpe}${s.duration}`).join(","));
   const [wellnessList, setWellnessList] = useState<WellnessDaily[]>(initialWellness);
   // Montre (Apple Santé) avant le point forme du jour : affichée dans la carte "Plan à confirmer" d'aujourd'hui.
   const deviceNote = useDeviceNote(userId, todayStr, !sandboxMode && !wellnessList.some(w => w.date === todayStr && w.bedtime != null));
@@ -815,8 +812,8 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     return (
       <DroppableDay dstr={dstr}>
       <DayColumn
+        lockDecision={!canDecideToday}
         todayRing={todayRing}
-        restCharge={chargeDays[dstr] ?? null}
         date={date}
         sessions={withReveal(sessions.filter(s => s.date === dstr))}
         wellness={dayRow ? { ...dayRow, score: dayRelativeScore, zoneLabel: dayZoneLabel } : null}
