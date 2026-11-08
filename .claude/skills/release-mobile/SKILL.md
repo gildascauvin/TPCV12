@@ -45,7 +45,7 @@ Identifiants non secrets : bundle/package `com.theperfclub.app`, Team Apple `B4A
 
 ## 4. Sortir une version iOS
 
-État au 08/11 : 1.2.2 (build 15) en vente. 1.3 (build 16, plugin @capacitor/app + Associated Domains) envoyée, attachée à la version 1.3 (publication MANUELLE), captures V5 posées (galerie principale + nouvelle version de la page produit « Page coach », ppid 7b7b4b0a-b012-4a28-93ab-0487ab69861f), notes FR + « WHAT'S NEW IN 1.3 » relecteur. Soumission : Gildas, après test TestFlight du lien magique.
+État au 08/11 : 1.2.2 (build 15) en vente. 1.3 (build 16, plugin @capacitor/app + Associated Domains) envoyée, attachée à la version 1.3 (publication MANUELLE), captures V5 posées (galerie principale + nouvelle version de la page produit « Page coach », ppid 7b7b4b0a-b012-4a28-93ab-0487ab69861f), notes FR + « WHAT'S NEW IN 1.3 » relecteur. Soumise par Gildas le 08/11 après test du lien magique.
 
 1. **Version** : `MARKETING_VERSION` (ex. 1.1 → 1.2) si nouvelle version store ; **toujours** incrémenter `CURRENT_PROJECT_VERSION` (12 → 13). Vérifier : `grep -n "CURRENT_PROJECT_VERSION\|MARKETING_VERSION" ios/App/App.xcodeproj/project.pbxproj`.
 2. **Sync** (obligatoire, même sans nouveau plugin : `ios/App/App/capacitor.config.json` est gitignoré) :
@@ -65,7 +65,7 @@ Identifiants non secrets : bundle/package `com.theperfclub.app`, Team Apple `B4A
 
 ## 5. Sortir une version Android
 
-État au 08/11 : 1.2 (versionCode 3) en production ; 1.3 (versionCode 4) en test interne le 08/11, production après test du lien magique par Gildas. Captures V5 (fiche par défaut + fiche « Page coach ») envoyées en examen le 08/11. Publication gérée DÉSACTIVÉE le 03/11 (choix de Gildas) : tout ce que Google valide sort automatiquement. La réactiver (pastille en haut de Vue d ensemble de la publication) avant un envoi dont on veut choisir la date de sortie.
+État au 08/11 : 1.2 (versionCode 3) en production ; 1.3 (versionCode 4) promue en production 100 % et envoyée en examen le 08/11 (lien magique testé OK par Gildas). Captures V5 (fiche par défaut + fiche « Page coach ») envoyées en examen le 08/11. Publication gérée DÉSACTIVÉE le 03/11 (choix de Gildas) : tout ce que Google valide sort automatiquement. La réactiver (pastille en haut de Vue d ensemble de la publication) avant un envoi dont on veut choisir la date de sortie.
 
 1. **Version** : dans `android/app/build.gradle`, **monter `versionCode`** (2 → 3) à chaque envoi, et `versionName` si nouvelle version.
 2. **Sync** : `PATH=~/.nvm/versions/node/v22.23.3/bin:$PATH npx cap sync android`. Vérifier que `android/app/google-services.json` est présent.
