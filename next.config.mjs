@@ -30,6 +30,9 @@ const nextConfig = {
     // autres fonctions n'en ont pas besoin.
     outputFileTracingIncludes: {
       "/share/**": ["./public/fonts/**/*"],
+      // Images d'aperçu des programmes et des invitations (08/11/2026, src/lib/og/ogKit.tsx) : polices + icône.
+      "/p/**": ["./public/fonts/**/*", "./public/icon-192.png"],
+      "/join/**": ["./public/fonts/**/*", "./public/icon-192.png"],
     },
   },
 };
