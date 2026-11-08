@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import type { EmailOtpType } from "@supabase/supabase-js";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -11,6 +12,15 @@ export async function GET(request: Request) {
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) exchangeFailed = true;
+  }
+  /* Lien magique valable sur n'importe quel appareil (08/11) : le modèle d'email envoie token_hash au lieu
+     d'un code lié au navigateur qui l'a demandé. Ouvert dans l'app (lien universel) ou dans le navigateur,
+     il connecte là où il s'ouvre ; un onboarding pas fini reprend à l'étape atteinte. */
+  const tokenHash = searchParams.get("token_hash");
+  if (!code && tokenHash && type) {
+    const supabase = await createClient();
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: type as EmailOtpType });
     if (error) exchangeFailed = true;
   }
 

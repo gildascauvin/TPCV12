@@ -24,7 +24,6 @@ import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler, Plannin
 import DiffGauge from "@/components/calendar/DiffGauge";
 import PlanningRing from "@/components/calendar/PlanningRing";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
-import LockedBlur from "@/components/paywall/LockedBlur";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import type { LoadContext } from "@/lib/loadRule";
@@ -110,7 +109,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   /* Freemium (2026-09-30) : entrées libres (seule la sandbox garde sa porte d'inscription) ; la
      décision du jour ne se lit qu'avec un abonnement, ou le jour de la 1re décision (posé par /today). */
   const gateInput = sandboxMode ? requireSubscription : <T,>(fn: () => T | Promise<T>) => Promise.resolve(fn());
-  const canDecideToday = sandboxMode || isActive || !firstDecisionOn || firstDecisionOn === todayStr;
+  const canDecideToday = sandboxMode || isActive; /* plus de jour offert (08/11) */
 
   const [weekBase, setWeekBase] = useState(initialDate ? new Date(initialDate + "T12:00:00") : new Date());
   const [selectedDate, setSelectedDate] = useState(todayStr);
@@ -754,8 +753,8 @@ export default function WeekClient({ userId, userName, userSport = null, initial
         // sans suggestion (2026-09-25, "même quand ya pas de reco, je veux pouvoir bouger la
         // jauge et avoir le range") — dir/reco undefined = mode libre, voir AutoregButtons.tsx.
         decisionGaugeNode = (
-          <LockedBlur locked={decisionLocked} surface="week_decision" onUnlock={() => setPaywallStep("priming")} cta="Activer l'ajustement" light compact radius={12}>
           <AutoregButtons
+            shape="none"
             key={`${autoregTarget.id}-${decisionTick}`}
             sessionId={autoregTarget.id}
             notes={autoregTarget.notes}
@@ -793,7 +792,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
               setDecisionTick(t => t + 1);
             }}
           />
-          </LockedBlur>
+          
         );
       }
     }
@@ -811,6 +810,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     const dayRelativeScore = dayBaseline?.hasEnoughHistory ? dayBaseline.relativeScore : (dayRow ? wellnessSignal(dayRow) : null);
     return (
       <DroppableDay dstr={dstr}>
+      {decisionGaugeNode /* hors de la carte : sans jauge, il ne rend que ses boutons dans l'encadré (portail) */}
       <DayColumn
         lockDecision={!canDecideToday}
         todayRing={todayRing}
@@ -830,7 +830,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
             onStart={!sandboxMode && s.date === todayStr && !s.done ? (sess) => gateInput(() => handleStart(sess)) : undefined}
             liveLabel={isLive(s) ? `En cours · ${formatChrono(liveElapsedMs(s))}` : null}
             onEdit={(sess) => setEditing(sess)}
-            decisionGauge={s.id === autoregTargetId ? decisionGaugeNode : undefined}
+            
             previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
           />
         )}

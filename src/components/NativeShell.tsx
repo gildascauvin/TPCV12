@@ -25,6 +25,19 @@ export default function NativeShell() {
     if (Capacitor.getPlatform() === "android") SystemBars.setStyle({ style: SystemBarsStyle.Dark }).catch(() => {});
     // Notifications (2026-10-14) : tap sur une notif → sa page ; jeton APNs renvoyé s'il a changé.
     initNativeNotifications((url) => router.push(url)).catch(() => {});
+    /* Lien magique ouvert dans l'app (08/11, lien universel) : on charge la même adresse dans l'app, la route
+       /auth/callback connecte puis renvoie vers l'accueil ou l'étape d'onboarding atteinte. Rien sans le
+       plugin (anciens builds) : le lien s'ouvre alors dans le navigateur, comme avant. */
+    let remove: (() => void) | null = null;
+    if (Capacitor.isPluginAvailable("App")) {
+      import("@capacitor/app").then(({ App }) => App.addListener("appUrlOpen", ({ url }) => {
+        try {
+          const u = new URL(url);
+          if (u.host === "go.theperfclub.com") window.location.href = `${u.pathname}${u.search}`;
+        } catch { /* lien illisible */ }
+      })).then(h => { remove = () => { h.remove(); }; }).catch(() => {});
+    }
+    return () => { remove?.(); };
   }, [router]);
   return null;
 }

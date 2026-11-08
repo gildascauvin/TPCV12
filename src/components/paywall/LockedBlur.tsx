@@ -8,7 +8,7 @@ import { markPrimingSource, sourceFromSurface } from "@/lib/primingSource";
    ce qui entre (point forme, séances, programmes) est gratuit, ce qui sort (décision, analyses) est
    payant. Une sortie verrouillée garde son VRAI contenu, flouté, avec l'action par-dessus — jamais un
    cadenas sur la navigation (voir feedback flou plutôt que cadenas). `locked=false` = rendu brut. */
-export default function LockedBlur({ locked, surface, onUnlock, title, sub, cta = "Activer l'ajustement", compact = false, light = false, bare = false, top = false, radius = 16, children }: {
+export default function LockedBlur({ locked, surface, onUnlock, title, sub, cta = "Activer l'ajustement", compact = false, light = false, bare = false, top = false, radius = 16, content, children }: {
   locked: boolean;
   /** Identifiant PostHog de l'emplacement (today_decision, coach_card, history…). */
   surface: string;
@@ -26,6 +26,8 @@ export default function LockedBlur({ locked, surface, onUnlock, title, sub, cta 
   /** Bloc haut (onglet entier) : l'action se pose en haut plutôt qu'au milieu, hors écran. */
   top?: boolean;
   radius?: number;
+  /** Contenu libre au-dessus du bouton, à la place de title/sub (compte à rebours du gratuit, 08/11). */
+  content?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const tracked = useRef(false);
@@ -49,8 +51,9 @@ export default function LockedBlur({ locked, surface, onUnlock, title, sub, cta 
            voile ni fond ; le titre garde une ombre pour rester lisible. */
         background: light ? "rgba(255,255,255,.4)" : "transparent",
       }}>
-        {title && <div style={{ fontSize: 15, fontWeight: 800, color: light ? "#171b1f" : "#fff", lineHeight: 1.25, maxWidth: 280, textShadow: light ? undefined : "0 2px 12px rgba(0,0,0,.6)" }}>{title}</div>}
-        {sub && <div style={{ fontSize: 12.5, fontWeight: 600, color: light ? "#62686e" : "rgba(255,255,255,.75)", lineHeight: 1.4, maxWidth: 260 }}>{sub}</div>}
+        {content}
+        {!content && title && <div style={{ fontSize: 15, fontWeight: 800, color: light ? "#171b1f" : "#fff", lineHeight: 1.25, maxWidth: 280, textShadow: light ? undefined : "0 2px 12px rgba(0,0,0,.6)" }}>{title}</div>}
+        {!content && sub && <div style={{ fontSize: 12.5, fontWeight: 600, color: light ? "#62686e" : "rgba(255,255,255,.75)", lineHeight: 1.4, maxWidth: 260 }}>{sub}</div>}
         <button
           onClick={e => { e.stopPropagation(); posthog.capture("unlock_click", { surface }); markPrimingSource(sourceFromSurface(surface)); onUnlock(); }}
           style={compact

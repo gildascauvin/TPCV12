@@ -7,6 +7,7 @@ import { proposalPersonal } from "@/lib/autoregPersonal";
 import { markPrimingSource } from "@/lib/primingSource";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { validDecision } from "@/lib/autoregDecisionRecord";
+import { todayRingState, type SessionRingState } from "@/components/calendar/SessionRing";
 import { useSearchParams, useRouter } from "next/navigation";
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import dynamic from "next/dynamic";
@@ -43,7 +44,6 @@ import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import AthleteFilterBar, { useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
-import LockedBlur from "@/components/paywall/LockedBlur";
 import { pickRelevantAssignment, findProgramForWeek, programWeekTag } from "@/lib/programAssignment";
 import { programSportEmoji } from "@/lib/sportCategories";
 import { parseAndApply } from "@/lib/loadAdjust";
@@ -127,8 +127,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
      décision, celle de son propre sportif démo (même règle que Coach Control). */
   const gateInput = sandboxMode ? requireSubscription : <T,>(fn: () => T | Promise<T>) => Promise.resolve(fn());
   // 1re décision de chaque sportif en clair (posée par Coach Control, coach_athletes.first_decision_on).
-  const canDecideFor = (a: { first_decision_on?: string | null }) =>
-    sandboxMode || isActive || !a.first_decision_on || a.first_decision_on === todayStr;
+  const canDecideFor = (_a: { first_decision_on?: string | null }) =>
+    sandboxMode || isActive; /* plus de jour offert (08/11) */
 
   // "Tous" (2026-09-24, voir POC poc-coach-context_6.html, basePlanning() branche selectedAthleteId
   // ==="all") — selectedAthleteId devient explicitement nullable : `null` = Tous, choisi seulement
@@ -834,6 +834,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     let decisionGaugeNode: React.ReactNode;
     let actionsAllowed = true;
     let autoregTargetId: string | null = null;
+    let todayRing: SessionRingState | null = null;
     if (isToday) {
       const baseline = dayBaseline;
       const autoregTarget = [...daySessions].filter(s => !s.done)
@@ -870,6 +871,11 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       const canDecide = canDecideFor(athlete);
       const decisionLocked = !canDecide;
       actionsAllowed = canDecide;
+      /* Même état d'anneau que le Planning sportif et Coach Control (08/11) : sans lui, l'anneau du jour montrait la séance brute. */
+      {
+        const top = [...daySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0];
+        if (top) todayRing = todayRingState(top, { suggestion: decision.suggestion, decided: !!validDecision(top), doneZone: decision.doneZone ?? null, locked: decisionLocked });
+      }
       /* Freemium : côté coach même la zone est cachée — un coach sait s'ajuster dès qu'il voit
          "au-dessus de la zone". Le fait qu'une décision existe reste dit. */
       alert = decisionLocked
@@ -884,8 +890,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         // Montée même sans suggestion (2026-09-25, "même quand ya pas de reco, je veux
         // pouvoir bouger la jauge et avoir le range") — dir/reco undefined = mode libre.
         decisionGaugeNode = (
-          <LockedBlur locked={decisionLocked} surface="coach_planning_decision" onUnlock={() => setPaywallStep("priming")} cta="Activer le Coach Control" light compact radius={12}>
           <AutoregButtons
+            shape="none"
             key={`${autoregTarget.id}-${decisionTick}`}
             sessionId={autoregTarget.id}
             notes={autoregTarget.notes}
@@ -920,15 +926,17 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
               setDecisionTick(t => t + 1);
             }}
           />
-          </LockedBlur>
+          
         );
       }
     }
 
     return (
       <DroppableDay dstr={dstr}>
+      {decisionGaugeNode /* hors de la carte : sans jauge, il ne rend que ses boutons dans l'encadré (portail) */}
       <DayColumn
         lockDecision={!!athlete && !canDecideFor(athlete)}
+        todayRing={todayRing}
         date={date}
         sessions={daySessions}
         wellness={wellness !== null ? { score: dayRelativeScore, zoneLabel: dayZoneLabel } : null}
@@ -943,7 +951,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
             viewerRole="coach"
             onComplete={(sess) => completeOrResult(sess)}
             onEdit={(sess) => openSessionOrResult(sess)}
-            decisionGauge={s.id === autoregTargetId ? decisionGaugeNode : undefined}
+            
             previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
           />
         )}

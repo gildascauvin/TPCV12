@@ -21,6 +21,7 @@ import { withDeviceScore } from "@/lib/deviceWellnessDb";
 import { useDeviceNote } from "@/hooks/useDeviceNote";
 import { useFirstDecision } from "@/hooks/useFirstDecision";
 import LockedBlur from "@/components/paywall/LockedBlur";
+import LockedRendezvous, { missedLine } from "@/components/paywall/LockedRendezvous";
 import AnalyticsCollecting, { PhaseCollecting, phaseProgress } from "@/components/conseils/AnalyticsCollecting";
 import { analyticsReady } from "@/lib/demoAnalytics";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
@@ -597,7 +598,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           changedIdx.forEach((li, k) => window.setTimeout(() => {
             const knob = document.querySelector("[data-ring-knob]"), line = document.querySelector(`[data-session-id="${sid}"] [data-ex-idx="${li}"]`);
             if (knob && line) flyToken(knob, line, label(before[li], after[li]), pct < 0 ? "#d44000" : "#2f9e44");
-          }, (sheetMode ? 1000 : 700) + k * 380));
+          }, 1100 + k * 380)); /* au relâchement de l'essaim (retour à l'équilibre, 08/11) */
           if (celebrationTimer.current) window.clearTimeout(celebrationTimer.current);
           celebrationTimer.current = window.setTimeout(() => setCelebration(null), 6000);
         }
@@ -1130,6 +1131,9 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 onUnlock={unlock}
                 title={autoregTargetTop ? "Ta décision du jour est prête" : "Ton analyse du jour est prête"}
                 sub={lockedSub}
+                /* Gratuit dès le jour 0 (08/11) : compte à rebours vers son prochain point forme + ce qu'il rate. */
+                content={<LockedRendezvous hour={(profile as { push_hour?: number | null }).push_hour ?? 8} missed={missedLine(allSessions, initialDate, profile.created_at ? profile.created_at.slice(0, 10) : null)} />}
+                cta={profile.created_at && profile.created_at.slice(0, 10) >= initialDate ? "Ajuster mes séances chaque matin" : "Voir celle d'aujourd'hui"}
                 radius={16}
               >
               {decisionGaugeSlot && (

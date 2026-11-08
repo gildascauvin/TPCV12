@@ -127,10 +127,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const [athleteFirstDecision, setAthleteFirstDecision] = useState<Record<string, string | null>>(
     () => Object.fromEntries(initialAthletes.map(a => [a.id, a.first_decision_on ?? null])),
   );
-  const canDecideFor = (a: CoachAthlete) => {
-    if (sandboxMode || isActive) return true;
-    const first = athleteFirstDecision[a.id];
-    return !first || first === today;
+  /* Plus de jour offert (08/11, Gildas) : floutée dès le jour 0. */
+  const canDecideFor = (_a: CoachAthlete) => {
+    return sandboxMode || isActive;
   };
   const coachFreeMode = !isActive && !sandboxMode;
   /* Collecte d'un sportif (2026-10-02) : progression vers ses premières analyses, à partir des

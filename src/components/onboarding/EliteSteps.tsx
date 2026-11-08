@@ -4,7 +4,6 @@ import TodaySessionCard from "@/components/sessions/TodaySessionCard";
 import DayColumn, { WeekSessionCard } from "@/components/calendar/DayColumn";
 import type { SessionRingState } from "@/components/calendar/SessionRing";
 import type { DayAlert } from "@/lib/alerts";
-import { PLAY_STORE_URL } from "@/lib/storeLinks";
 import { healthAppName, isAndroidApp } from "@/lib/native";
 import { useEffect, useRef, useState } from "react";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
@@ -13,7 +12,6 @@ import { createPortal } from "react-dom";
 import { flyToken } from "@/lib/flyToken";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import ProgramBanner from "@/components/programs/ProgramBanner";
-import { SessionTemplateCard } from "@/components/programs/SessionTemplateCard";
 import { computeAutoregSuggestion, zoneRange, suggestionSeverityColor, autoregHeadline, autoregAdvice, applyAutoregDifficulty } from "@/lib/autoregulation";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import AlertBox from "@/components/calendar/AlertBox";
@@ -21,9 +19,8 @@ import FlipBlock from "@/components/today/FlipBlock";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import { relativeZoneLabel } from "@/lib/wellnessBaseline";
 import { WELLNESS_RAMP } from "@/lib/wellness";
-import { DARK_CARD_BG } from "@/lib/theme";
 import { parseAndApply } from "@/lib/loadAdjust";
-import type { Program, ProgramTemplate, SessionTemplate, Session } from "@/types";
+import type { Program, ProgramTemplate, Session } from "@/types";
 
 /* Écrans du parcours post-signup Elite (2026-10-17, POC https://claude.ai/artifact/HopwXw7gFnAdRLpB496JvE).
    Contenu seulement : le cadre (QuestionShell), l'état et les écritures vivent dans OnboardingFlow. */
@@ -227,7 +224,7 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
                         const k = document.querySelector("[data-ring-knob]"), lines = cardRef.current ? Array.from(cardRef.current.querySelectorAll("[data-ex-line='changed']")) : [];
                         if (!k) return;
                         (lines.length ? lines : cardRef.current ? [cardRef.current] : []).forEach((el, n) => window.setTimeout(() => flyToken(k, el, `${pct < 0 ? "−" : "+"}${Math.abs(Math.round(pct))} %`, pct < 0 ? "#d44000" : "#2f9e44"), n * 380));
-                      }, 650);
+                      }, 1050); /* au relâchement de l'essaim (retour à l'équilibre, 08/11) */
                       window.setTimeout(() => setFlash(false), 6000);
                     }
                     setCur({ notes: s.notes ? s.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : s.notes, target_difficulty: applyAutoregDifficulty(planned, pct) });
@@ -322,103 +319,3 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
 
 /* ── ob_notif : la carte de prod (NotificationPrompt), version écran. ── */
 export const NOTIF_HOURS = [6, 7, 8, 9];
-/* Série des 5 premiers matins (2026-10-22), fusionnée dans le titre de l'écran notifications :
-   5 petits ronds (jour 1 plein, demain cerclé) devant « Jour 1 sur 5 ». Même repère que l'écran de
-   fin du point forme in-app (« Jour n sur 5 ») ; ici l'argument des notifications : ne pas casser la série. */
-export function StreakTitle({ day = 1 }: { day?: number }) {
-  return (
-    <>
-      <span style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12 }}>
-        {[1, 2, 3, 4, 5].map(d => (
-          <span key={d} style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, boxSizing: "border-box",
-            display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 800,
-            background: d <= day ? "#d44000" : "transparent",
-            border: d <= day ? "none" : d === day + 1 ? "2px dashed #d44000" : "2px solid rgba(0,0,0,.16)" }}>{d <= day ? "✓" : ""}</span>
-        ))}
-      </span>
-      <span style={{ color: "#d44000" }}>Jour {day} sur 5</span> : reviens demain pour le jour {day + 1}.
-    </>
-  );
-}
-
-export function NotifStepBody({ hour, setHour, sessionName, coachName, error, coach, streak, athleteName }: {
-  hour: number; setHour: (h: number) => void; sessionName: string | null; coachName: string | null; error?: string | null;
-  /** Le sportif vient de faire son 1er point forme : les notifs servent à continuer sa série. */
-  streak?: boolean;
-  /** Coach : alerte récup fragile + résumé du matin (notifs de prod depuis iOS 1.1). */
-  coach?: boolean;
-  /** Coach : le sportif qu'il vient d'imaginer, à la place de Karim (le sportif de la démo d'avant l'inscription). */
-  athleteName?: string;
-}) {
-  const clock = `${String(hour).padStart(2, "0")}:00`;
-  const who = athleteName?.trim() || "Karim";
-  const pushes = coach ? [
-    { title: `${who} : récup fragile, séance dure prévue`, body: "ThePerfClub recommande d'alléger. Tu valides ?", when: "maintenant" },
-    { title: "2 sportifs à regarder ce matin", body: `${who === "Karim" ? "Karim H." : who} · Léa G.`, when: clock },
-  ] : streak ? [
-    { title: "Jour 2 sur 5 · Comment tu te sens ?", body: "10 secondes pour continuer ta série et ajuster ta séance.", when: "demain" },
-    { title: "Jour 3 sur 5 · Ta norme se précise", body: sessionName ? `${sessionName} : fais ton point forme pour l'ajuster.` : "Fais ton point forme pour ajuster ta séance.", when: "après-demain" },
-  ] : [
-    { title: "Ta 1re séance ajustée t'attend", body: "Fais ton point forme : ta séance s'ajuste en conséquence.", when: "demain" },
-    { title: sessionName ?? "Comment tu te sens ce matin ?", body: "10 secondes pour l'ajuster à ta forme.", when: "après-demain" },
-  ];
-  return (
-    <div>
-      {coachName && <p style={{ fontSize: 15, color: MUTED, lineHeight: 1.5, margin: "0 0 16px" }}>{coachName} voit comment tu vas dès ton point forme.</p>}
-      {/* L'heure d'abord : c'est le seul choix de l'écran, il doit être visible sans défiler. */}
-      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>{coach ? "Le résumé du matin, à quelle heure ?" : streak ? "À quelle heure on te le rappelle ?" : "À quelle heure ?"}</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
-        {NOTIF_HOURS.map(h => (
-          <button key={h} type="button" onClick={() => setHour(h)}
-            style={{ padding: "10px 16px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 14, color: hour === h ? "#d44000" : "#171b1f",
-              border: hour === h ? "2px solid #d44000" : `1px solid ${LINE}`, background: hour === h ? "rgba(212,64,0,.06)" : "#fff" }}>
-            {h} h
-          </button>
-        ))}
-      </div>
-      <div style={{ borderRadius: 24, padding: "18px 14px 14px", background: DARK_CARD_BG, marginBottom: 18 }}>
-        <div style={{ textAlign: "center", color: "#fff", fontSize: 44, fontWeight: 300, letterSpacing: "-.02em", marginBottom: 10, fontVariantNumeric: "tabular-nums" }}>{clock}</div>
-        {pushes.map(p => (
-          <div key={p.title} style={{ display: "flex", gap: 10, padding: "10px 12px", borderRadius: 16, background: "rgba(255,255,255,.12)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", marginTop: 8 }}>
-            <span style={{ width: 28, height: 28, borderRadius: 8, background: "#d44000", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 14 }}>⚡</span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: "flex", justifyContent: "space-between", gap: 8, color: "#fff", fontSize: 13.5, fontWeight: 700 }}>
-                <span style={{ minWidth: 0 }}>{p.title}</span>
-                <span style={{ color: "rgba(255,255,255,.5)", fontWeight: 500, fontSize: 12, flexShrink: 0 }}>{p.when}</span>
-              </span>
-              <span style={{ display: "block", color: "rgba(255,255,255,.75)", fontSize: 13, lineHeight: 1.4, marginTop: 2 }}>{p.body}</span>
-            </span>
-          </div>
-        ))}
-      </div>
-      {error && <p style={{ fontSize: 13, color: "#b42318", marginTop: 12 }}>{error}</p>}
-    </div>
-  );
-}
-
-/* ── ob_notif sur le web hors Android (iPhone dans Safari, ordinateur) : pas de notification du
-   navigateur (impossible dans Safari hors app, et le point forme se vit sur le téléphone). On pousse
-   l'app iPhone, avec sa montre : l'app lit Apple Santé. Android dans le navigateur : l'app Android
-   (Health Connect) dès qu'elle est sur Google Play (2026-10-28). ── */
-export function AppPushStepBody({ desktop, android = false, hour, setHour, sessionName, coach, streak, athleteName }: {
-  desktop: boolean; android?: boolean; hour: number; setHour: (h: number) => void; sessionName: string | null; coach?: boolean; streak?: boolean; athleteName?: string;
-}) {
-  return (
-    <div>
-      {desktop && (
-        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: 14, borderRadius: 16, border: `1px solid ${LINE}`, background: "#fff", marginBottom: 18 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={PLAY_STORE_URL ? "/app-qr.svg" : "/app-store-qr.svg"} alt="QR code pour télécharger l'app" width={92} height={92} style={{ flexShrink: 0, borderRadius: 8 }} />
-          <span style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.45 }}>Scanne avec ton {PLAY_STORE_URL ? "téléphone" : "iPhone"} et connecte-toi avec le même compte : {coach ? "ton Coach Control" : "ton plan"} t&apos;attend.</span>
-        </div>
-      )}
-      {/* Import de la montre (2026-10-23) : la vraie promesse de l'app pour un sportif équipé. */}
-      {!coach && (
-        <p style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.45, margin: "0 0 16px" }}>
-          ⌚ Tu as une montre ? L&apos;app relit tes 30 derniers jours dans {android ? "Health Connect" : "Apple Santé"} : tes analyses sont prêtes dès l&apos;installation.
-        </p>
-      )}
-      <NotifStepBody hour={hour} setHour={setHour} sessionName={sessionName} coachName={null} coach={coach} streak={streak} athleteName={athleteName} />
-    </div>
-  );
-}

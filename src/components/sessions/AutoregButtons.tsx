@@ -105,7 +105,7 @@ interface Props {
   variant?: "dark" | "light";
   /* "ring" = jauge ronde R2 (DecisionRing.tsx), montée seulement en tête de /today (2026-09-30).
      Défaut "bar" : Coach Control et Planning gardent la barre horizontale dans leur carte. */
-  shape?: "bar" | "ring";
+  shape?: "bar" | "ring" | "none"; /* "none" (Planning, 08/11) : pas de jauge, l'anneau du jour est dans la carte du jour ; seuls les boutons (actionsSlot) restent. */
   /* Couleur du CTA principal ("⬇ Alléger →"), dérivée de la vraie sévérité (suggestionSeverityColor,
      autoregulation.ts) par l'appelant qui connaît la suggestion complète — le cas 🚨 critique a un
      CTA rouge, cohérent avec le bandeau et le halo déjà rouges dans ce cas, pas seulement l'orange
@@ -438,7 +438,7 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
       {mode === "active" && (
         <div>
           <div style={{ marginBottom: nothingToDecide || actionsSlot !== undefined ? 0 : 12 }}>
-            {shape === "ring" ? (
+            {shape === "none" ? null : shape === "ring" ? (
               <DecisionRing
                 recoDir={dir}
                 light={light}
@@ -505,7 +505,7 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
         return (
           <div>
             <div style={{ marginBottom: actionsSlot !== undefined ? 0 : 10 }}>
-              {shape === "ring" ? (
+              {shape === "none" ? null : shape === "ring" ? (
                 <DecisionRing
                   recoDir={decidedPct ? dir : undefined}
                   light={light}

@@ -27,6 +27,8 @@ export function useFirstDecision({ userId, isActive, initial, today, eligible, e
       .then(({ error }) => { if (error) console.error("first_decision_on", error); });
   }, [enabled, isActive, firstOn, eligible, userId, today]);
 
+  /* Gratuit flouté dès le jour 0 (08/11, Gildas) : la décision a déjà été vécue en clair dans l'onboarding.
+     On garde first_decision_on (événement PostHog, email du lendemain), mais plus de jour offert. */
   if (!enabled || isActive) return true;
-  return firstOn === null || firstOn === today;
+  return false;
 }

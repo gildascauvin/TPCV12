@@ -1,0 +1,22 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": [
+          "B4AJAX65W8.com.theperfclub.app"
+        ],
+        "appID": "B4AJAX65W8.com.theperfclub.app",
+        "paths": [
+          "/auth/callback*"
+        ],
+        "components": [
+          {
+            "/": "/auth/callback*",
+            "comment": "Lien magique : connexion dans l'app"
+          }
+        ]
+      }
+    ]
+  }
+}

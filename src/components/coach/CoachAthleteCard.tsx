@@ -12,6 +12,7 @@ import { RestDecisionRing, DoneDecisionRing, restZoneFromRecup, restTitle } from
 import { breathForDir } from "@/lib/ringAmbience";
 import { validDecision } from "@/lib/autoregDecisionRecord";
 import LockedBlur from "@/components/paywall/LockedBlur";
+import LockedRendezvous, { missedLine } from "@/components/paywall/LockedRendezvous";
 import AlertBox from "@/components/calendar/AlertBox";
 import ShareButton from "@/components/sessions/ShareButton";
 import UnseenDot, { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
@@ -437,7 +438,9 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
         </div>
         </LockedBlur>
       )}
-      <LockedBlur locked={!!locked} bare={lockedBare} surface="coach_card" onUnlock={() => onUnlock?.()} title="Décision prête" sub="Vois quoi faire de cette séance." cta="Activer le Coach Control" radius={24}>
+      {/* Gratuit dès le jour 0 (08/11) : compte à rebours vers son prochain point forme + ce qu'il rate, comme /today. */}
+      <LockedBlur locked={!!locked} bare={lockedBare} surface="coach_card" onUnlock={() => onUnlock?.()} title="Décision prête" sub="Vois quoi faire de cette séance." cta="Ajuster ses séances chaque matin" radius={24}
+        content={<LockedRendezvous coach missed={missedLine([...recentSessions, ...sessions], new Date().toLocaleDateString("sv-SE"), athlete.created_at ? athlete.created_at.slice(0, 10) : null, true)} />}>
       <div style={{ textAlign: "center", marginBottom: 12 }}>
         {!locked && <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
           {/* Jauge d'ajustement À LA PLACE du ring de récupération (2026-09-30, Gildas) : la carte

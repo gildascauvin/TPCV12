@@ -41,18 +41,19 @@ const PAL = {
 function ringSvg(f: number | null, score: number | null, final: number, dim: boolean, palette: RingPalette = "recup", ticks = 10, norm?: number, normLabel = "TA NORME") {
   const P = PAL[palette], ANS = P, recupCol = P.score;
   const op = (dim ? 0.3 : 1) * (1 - final);
-  let s = `<g opacity="${op.toFixed(2)}"><path d="${arc(R, A0, A1)}" fill="none" stroke="#1d2226" stroke-width="${SW}" stroke-linecap="round"/>`;
+  const GW = SW;
+  let s = `<g opacity="${op.toFixed(2)}"><path d="${arc(R, A0, A1)}" fill="none" stroke="#1d2226" stroke-width="${GW}" stroke-linecap="round"/>`;
   for (let t = 0; t < ticks; t++) {
     const u = t / (ticks - 1), a = A0 + (A1 - A0) * u, [ax, ay] = polar(R - SW * 0.5 - 5, a), [bx, by] = polar(R - SW * 0.5 - 10, a);
     s += `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${f != null && u <= f + 0.001 ? "rgba(255,255,255,.6)" : "rgba(255,255,255,.18)"}" stroke-width="2" stroke-linecap="round"/>`;
   }
   if (f != null) {
     const end = A0 + (A1 - A0) * f;
-    if (f > 0.003) for (let i = 0; i < 28; i++) s += `<path d="${arc(R, A0 + ((end - A0) * i) / 28, A0 + ((end - A0) * (i + 1.02)) / 28)}" fill="none" stroke="${mixLab(ANS.c0, ANS.c1, ((i + 0.5) / 28) * f)}" stroke-width="${SW}"/>`;
+    if (f > 0.003) for (let i = 0; i < 28; i++) s += `<path d="${arc(R, A0 + ((end - A0) * i) / 28, A0 + ((end - A0) * (i + 1.02)) / 28)}" fill="none" stroke="${mixLab(ANS.c0, ANS.c1, ((i + 0.5) / 28) * f)}" stroke-width="${GW}"/>`;
     const [sx, sy] = polar(R, A0), [mx, my] = polar(R, end), k = SW / 16;
-    s += `<circle cx="${sx}" cy="${sy}" r="${SW / 2}" fill="${ANS.c0}"/><g transform="translate(${mx.toFixed(2)} ${my.toFixed(2)}) scale(${k.toFixed(2)})"><circle r="12.5" fill="rgba(255,255,255,.14)"/><circle r="9.5" fill="#18181b" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>${[-3, 0, 3].map(d => `<line x1="-3.5" x2="3.5" y1="${d}" y2="${d}" stroke="#fff" stroke-width="2" stroke-linecap="round"/>`).join("")}</g>`;
+    s += `<circle cx="${sx}" cy="${sy}" r="${GW / 2}" fill="${ANS.c0}"/><g transform="translate(${mx.toFixed(2)} ${my.toFixed(2)}) scale(${k.toFixed(2)})"><circle r="12.5" fill="rgba(255,255,255,.14)"/><circle r="9.5" fill="#18181b" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>${[-3, 0, 3].map(d => `<line x1="-3.5" x2="3.5" y1="${d}" y2="${d}" stroke="#fff" stroke-width="2" stroke-linecap="round"/>`).join("")}</g>`;
   }
-  const tR = TR + (R - TR) * final, tW = TW + (SW - TW) * final;
+  const tR = TR + (R - TR) * final, tW = TW + (GW - TW) * final;
   s += `</g><path d="${arc(tR, A0, A1)}" fill="none" stroke="rgba(255,255,255,${(0.09 + 0.05 * final).toFixed(2)})" stroke-width="${tW.toFixed(1)}" stroke-linecap="round"/>`;
   if (score != null && score > 0) {
     const e = A0 + ((A1 - A0) * Math.max(0, Math.min(100, score))) / 100;
@@ -105,7 +106,7 @@ function useSwarm(cvRef: React.RefObject<HTMLCanvasElement>, live: React.Mutable
             const u = (((q.ang % TAU) + TAU) % TAU) / TAU, da = ARC_FROM + u * (ARC_TO - ARC_FROM), edge = Math.min(1, u / 0.06, (1 - u) / 0.06);
             const sag = (1 - s) * (6 + 16 * q.sd), x = CX + q.r * Math.cos(da), y = CY + q.r * Math.sin(da) + sag;
             if (edge < 0.02) return;
-            const pal = PAL[L.palette ?? "recup"], rad = 1.1 + 0.9 * s + 0.6 * q.sd * s;
+            const pal = PAL[L.palette ?? "recup"], rad = (1.1 + 0.9 * s + 0.6 * q.sd * s) * 1.3; /* points +30 % (08/11) */
             /* Éclat quand le score est haut : disque doux dessous au lieu de shadowBlur (coûteux sur mobile). */
             if (s > 0.7) { g.beginPath(); g.arc(x, y, rad * 2.6, 0, 2 * Math.PI); g.fillStyle = pal.glow.replace(/[\d.]+\)$/, `${(0.22 * (s - 0.7) / 0.3).toFixed(3)})`); g.fill(); }
             g.beginPath(); g.arc(x, y, rad, 0, 2 * Math.PI);

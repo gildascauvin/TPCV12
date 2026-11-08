@@ -26,6 +26,7 @@ Le code et PostHog gardent `athlete`, `wellness`, `checkin` même si l'UI dit «
 | Paywall | `paywall_priming_viewed`, `paywall_form_viewed`, `paywall_loss_sheet_viewed/stayed/left`, `exit_offer_viewed/accepted/declined` | `src/components/paywall/` |
 | Essai | `trial_started` {plan, billing, method, promo} | `PaywallModal.tsx`, `NativeCheckout.tsx` |
 | Activation | `onboarding_checklist_*`, `first_decision_shown`, `checkin_result_shown`, `session_result_shown` | app |
+| Téléchargement app | `app_download_redirect` {src, os, store} : passage par `/api/telecharger` (QR codes), identifiant anonyme (scans, pas personnes), depuis le 08/11/2026 | `src/app/api/telecharger/route.ts` |
 | Mobile | `notif_prompt_viewed/dismissed/enabled`, `app_banner_viewed/clicked/dismissed`, `pwa_install_cta_viewed/clicked/result`, `pwa_installed`, `garmin_connect_started/connected/disconnected` | app |
 
 Règles :

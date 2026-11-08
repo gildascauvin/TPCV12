@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { programCover, sportCover, DEFAULT_ONBOARDING_COVER } from "@/lib/programCovers";
 import { catalogEntry, findCatalogEntry, weaknessKeyFor } from "@/lib/sportCatalog";
 import { WEAKNESSES_BY_SPORT } from "@/lib/sportCategories";
@@ -25,7 +26,7 @@ import { PAYWALL_AVATARS } from "@/components/paywall/paywallAvatars";
 import Actions from "@/components/onboarding/Actions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, PROGRAM_QUESTION_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
-import { COUNT_OPTIONS, HealthStepBody, WeekStepBody, PlannedWeekBody, NotifStepBody, AppPushStepBody, StreakTitle, type ObCount, type WeekSession } from "@/components/onboarding/EliteSteps";
+import { COUNT_OPTIONS, HealthStepBody, WeekStepBody, PlannedWeekBody, NOTIF_HOURS, type ObCount, type WeekSession } from "@/components/onboarding/EliteSteps";
 import { requestStoreReview } from "@/lib/storeReview";
 import type { HealthRow } from "@/lib/deviceWellness";
 import { onboardingSlides } from "@/components/physio/miniSlides";
@@ -443,23 +444,21 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   /* Écran notifications : "native" (app iOS avec le plugin), "web" (notification du navigateur, Android
      seulement), "app" (iPhone dans Safari ou ordinateur : on pousse l'app iPhone), null (rien). */
   const [notifMode, setNotifMode] = useState<"native" | "web" | "app" | null>(null);
-  const [webIphone, setWebIphone] = useState(false);
-  const [webAndroid, setWebAndroid] = useState(false);
   const pushAvailable = notifMode !== null;
   useEffect(() => {
     // ?dbghealth=1 (dev, avec ?dbgstep) : l'écran Santé comme dans l'app iOS.
     setHealthAvailable(isNativeApp() || new URLSearchParams(window.location.search).get("dbghealth") === "1");
     const n = notificationSupport();
     const ua = navigator.userAgent;
-    setWebIphone(/iPhone|iPad|iPod/.test(ua));
     /* Android dans le navigateur (2026-10-28) : l'app Google Play dès sa publication, comme l'iPhone ;
        avant, notification du navigateur. */
     const android = /Android/.test(ua) && !isNativeApp();
-    setWebAndroid(android && !!PLAY_STORE_URL);
     if (isNativeApp()) setNotifMode(n === "native" ? "native" : null);
     else if (android && PLAY_STORE_URL) setNotifMode("app");
     else if (android) setNotifMode(n === "web" ? "web" : null);
-    else setNotifMode("app");
+    /* Ordinateur (08/11, Gildas) : notifications du navigateur quand il les gère ; iPhone dans Safari : rien
+       tant que le site n'est pas installé (plus d'écran « télécharge l'app » dans l'onboarding). */
+    else setNotifMode(n === "web" ? "web" : null);
   }, []);
   /* Argumentaire avant paywall (2026-10-29) : réponses du check-in, puis sa décision (« Tu fais quoi ? »).
      Côté coach : le check-in imaginé d'un de ses sportifs. La décision est lue par completeProfile()
@@ -497,6 +496,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [obWeekSessions, setObWeekSessions] = useState<WeekSession[]>([]);
   const [obNotifHour, setObNotifHour] = useState(8);
   const [obNotifBusy, setObNotifBusy] = useState(false);
+  /* Rappels en feuille du bas, posée sur le bilan (08/11, Gildas : plus léger qu'un écran dédié). */
+  const [obNotifSheet, setObNotifSheet] = useState(false);
   const [obPayStage, setObPayStage] = useState<"priming" | "paywall">("priming");
   const [obBilling, setObBilling] = useState<"monthly" | "annual">("annual");
   const builtRef = useRef<{ name: string; sport: string; template: ProgramTemplate } | null>(null);
@@ -602,6 +603,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      net juste après account_created avec onboarding_undefined_viewed. */
   const safeStepIdx  = Math.min(stepIdx, path.length - 1);
   const currentStep  = path[safeStepIdx];
+  /* Reprise à la bonne étape (08/11) : l'étape atteinte après l'inscription est gardée sur le compte, pour
+     reprendre au même endroit si l'onboarding continue dans l'app (téléchargée juste après le bilan). */
+  const savedObStepRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!(userId || newUserId) || !currentStep?.startsWith("ob_") || savedObStepRef.current === currentStep) return;
+    savedObStepRef.current = currentStep;
+    createClient().auth.updateUser({ data: { ob_step: currentStep } }).then(({ error }) => { if (error) console.error("[onboarding] ob_step", error.message); });
+  }, [currentStep, userId, newUserId]);
   /* Étape d'insight (2026-11-04) : sa vraie nuit (Apple Santé / Health Connect) pour l'écran « ressenti
      vs mesures » en tête du carrousel. Lu une fois, seulement si la Santé a été connectée (obReplay). */
   const [obHealthRows, setObHealthRows] = useState<HealthRow[] | null>(null);
@@ -1640,6 +1649,48 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
 
   useEffect(() => {
     if (!resumeRoleApplied || !userId) return;
+    /* Reprise après le bilan (08/11) : sportif ou coach qui continue dans l'app. Programme, séances et point forme sont
+       déjà en base (préparation lancée dès ob_plan) : on les relit et on saute à l'étape gardée. */
+    const RESUMABLE = ["ob_decide", "ob_week", "ob_invite", "ob_pay"];
+    {
+      (async () => {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        const meta = (user?.user_metadata ?? {}) as { ob_step?: string; ob_imagined?: { sleep: number; stress: number; recovery: number; motivation: number; score: number } };
+        const saved = meta.ob_step;
+        const at = saved && RESUMABLE.includes(saved) ? path.indexOf(saved as StepId) : -1;
+        if (at < 0) { resumeAfterAccount(); return; }
+        const [{ data: w }, { data: prog }] = await Promise.all([
+          supabase.from("wellness_daily").select("sleep, stress, recovery, motivation, behaviors, score").eq("user_id", userId).eq("date", new Date().toLocaleDateString("sv-SE")).maybeSingle(),
+          supabase.from("programs").select("id, name, sport, template").eq("owner_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        ]);
+        /* Coach : son point forme imaginé (gardé sur le compte) ; sportif : son vrai point forme du jour. */
+        if (role === "coach" && meta.ob_imagined) {
+          const m = meta.ob_imagined;
+          setObAnswers({ sleep: m.sleep, stress: m.stress, recovery: m.recovery, motivation: m.motivation });
+          setObCheckinScore(m.score);
+        } else if (w) {
+          setObAnswers({ sleep: w.sleep, stress: w.stress, recovery: w.recovery, motivation: w.motivation, behaviors: w.behaviors ?? [] });
+          setObCheckinScore(w.score ?? null);
+        }
+        if (prog?.template) {
+          builtRef.current = { name: prog.name, sport: prog.sport ?? "", template: prog.template as ProgramTemplate };
+          setObWeekSessions(templateWeekRows(prog.template as ProgramTemplate));
+          savedProgramIdRef.current = prog.id;
+          prepareRef.current = Promise.resolve(prog.id);
+          setObProgramOk(true);
+        }
+        profileCompleteGuardRef.current = true;
+        posthog.capture("onboarding_resumed", { step: saved, platform: isNativeApp() ? "app" : "web" });
+        setStepIdx(at);
+        setResuming(false);
+      })().catch(() => resumeAfterAccount());
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeRoleApplied]);
+
+  function resumeAfterAccount() {
+    if (!userId) return;
     if (path.indexOf("account") === path.length - 1) {
       // Compte déjà créé qui reprend sans question à poser : directement dans l'app.
       finishOnboarding(userId);
@@ -1651,8 +1702,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     const decisionIdx = path.indexOf(decisionStepIdFor(role));
     setStepIdx(accountIdx >= 0 ? accountIdx + 1 : decisionIdx >= 0 ? decisionIdx + 1 : path.length - 1);
     setResuming(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resumeRoleApplied]);
+  }
 
   const inputStyle: React.CSSProperties = {
     width: "100%", boxSizing: "border-box", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)",
@@ -2243,6 +2293,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                 setObAnswers({ sleep: d.sleep, stress: d.stress, recovery: d.recovery, motivation: d.motivation });
                 setObExample(false); obRingRef.current = null;
                 setObCheckinScore(d.score); setObCheckinOpen(false);
+                /* Gardé sur le compte pour reprendre dans l'app après le bilan (08/11). */
+                createClient().auth.updateUser({ data: { ob_imagined: { sleep: d.sleep, stress: d.stress, recovery: d.recovery, motivation: d.motivation, score: d.score } } })
+                  .then(({ error }) => { if (error) console.error("[onboarding] ob_imagined", error.message); });
                 posthog.capture("onboarding_coach_checkin_imagined", { role });
                 obAdvance();
               }} />
@@ -2331,13 +2384,96 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         </QuestionShell>
       );
     }
+    /* Rappels juste après le bilan (08/11, POC « Demander au bon moment ») : une feuille blanche posée sur le
+       bilan, à la place de l'ancien écran ob_notif en fin de parcours. Mêmes événements PostHog. */
+    /* Juste après le bilan, aligné partout (08/11, Gildas) : dans l'app, les rappels ; sur le web (sportif et
+       coach), télécharger l'app + lien magique qui reprend l'onboarding à l'étape atteinte. */
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const webPhone: "iphone" | "android" | null = isNativeApp() ? null : /iPhone|iPad|iPod/.test(ua) ? "iphone" : /Android/.test(ua) && PLAY_STORE_URL ? "android" : null;
+    const appSheet = !isNativeApp(); /* sportif et coach (08/11) */
+    /* Lien magique pour ouvrir l'app (08/11) : il connecte là où il s'ouvre, l'app (lien universel) ou le
+       navigateur, et l'onboarding reprend à l'étape atteinte. */
+    const sendAppLink = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) return;
+      const { error } = await supabase.auth.signInWithOtp({ email: user.email, options: { shouldCreateUser: false, emailRedirectTo: `${location.origin}/auth/callback` } });
+      if (error) console.error("[onboarding] lien app", error.message);
+      posthog.capture("onboarding_app_link_sent", { device: webPhone ?? "desktop", ok: !error });
+    };
+    const openNotifOrAdvance = () => {
+      if (!appSheet && (!pushAvailable || notifMode === "app")) { obAdvance(); return; }
+      setObNotifSheet(true);
+      /* Web : le lien qui ouvre l'app part tout de suite par email (une seule action à l'écran : installer). */
+      if (appSheet) void sendAppLink();
+      posthog.capture("onboarding_ob_notif_viewed", { role, surface: appSheet ? "sheet_app" : "sheet" });
+    };
+    const closeNotif = () => { setObNotifSheet(false); obAdvance(); };
+    const renderNotifSheet = () => {
+      const snoozeKey = eliteUid ? `tpc_notif_prompt_${eliteUid}` : null;
+      const snooze = () => { try { if (snoozeKey) localStorage.setItem(snoozeKey, String(Date.now())); } catch { /* ignore */ } };
+      const enable = async () => {
+        if (obNotifBusy) return;
+        setObNotifBusy(true);
+        const ok = await Promise.race([
+          enableNotifications(obNotifHour).catch(() => false),
+          new Promise<boolean>(r => setTimeout(() => r(false), 12000)),
+        ]);
+        setObNotifBusy(false);
+        posthog.capture("notif_prompt_enabled", { role, ok, hour: obNotifHour, surface: "onboarding" });
+        if (!ok) snooze();
+        closeNotif();
+      };
+      const title = appSheet ? (coach ? "Tes sportifs, sur ton téléphone" : "Ton point forme de demain, sur ton téléphone")
+        : coach ? "Sois prévenu quand un sportif a besoin de toi" : `Demain à ${obNotifHour} h, ton point forme en 10 secondes`;
+      const sub = coach ? "Chaque matin, tu sauras qui a fait son point forme." : "Il dira si ta forme a changé, et ta séance suivra.";
+      const btn: React.CSSProperties = { width: "100%", padding: "14px 16px", borderRadius: 14, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 15, fontWeight: 800, color: "#fff", background: "linear-gradient(180deg,#f04a08,#d44000)" };
+      const toStore = (url: string) => { posthog.capture("onboarding_app_push", { device: webPhone ?? "desktop", surface: "apres_bilan" }); window.open(url, "_blank"); closeNotif(); };
+      /* Badges officiels des stores (08/11, Gildas). */
+      const badge = (href: string, src: string, alt: string, h: number) => (
+        <a href={href} onClick={e => { e.preventDefault(); toStore(href); }} style={{ display: "flex", justifyContent: "center" }} aria-label={alt}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt={alt} height={h} style={{ height: h, width: "auto" }} />
+        </a>
+      );
+      const cta = !appSheet ? <button type="button" onClick={enable} disabled={obNotifBusy} style={btn}>{obNotifBusy ? "…" : "Me le rappeler"}</button>
+        : webPhone === "iphone" ? badge(APP_STORE_URL, "https://levplovrwwsqvswmolik.supabase.co/storage/v1/object/public/email-assets/emails/app-appstore-badge.png", "Télécharger dans l'App Store", 52)
+        : webPhone === "android" ? badge(PLAY_STORE_URL, "https://play.google.com/intl/en_us/badges/static/images/badges/fr_badge_web_generic.png", "Disponible sur Google Play", 76)
+        : notifMode === "web" ? <button type="button" onClick={enable} disabled={obNotifBusy} style={{ ...btn, background: "#fff", color: "#171b1f", border: "1px solid rgba(0,0,0,.14)" }}>{obNotifBusy ? "…" : "Recevoir plutôt les rappels sur cet ordinateur"}</button>
+        : null;
+      const skip = () => { if (appSheet) posthog.capture("onboarding_app_push_skipped"); else { snooze(); posthog.capture("notif_prompt_dismissed", { role, surface: "onboarding" }); } closeNotif(); };
+      return typeof document === "undefined" ? null : createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 2147483150, display: "flex", alignItems: "flex-end", justifyContent: "center", background: "rgba(7,10,13,.35)" }}>
+          <div role="dialog" aria-label={title} style={{ width: "100%", maxWidth: 520, background: "#fff", color: "#171b1f", borderRadius: "22px 22px 0 0", padding: "10px 20px max(18px, env(safe-area-inset-bottom))", boxShadow: "0 -10px 30px rgba(0,0,0,.35)", animation: "modalIn .3s cubic-bezier(.2,0,0,1)" }}>
+            <div style={{ width: 36, height: 4, borderRadius: 9, background: "rgba(0,0,0,.14)", margin: "0 auto 14px" }} />
+            <div style={{ display: appSheet && !webPhone ? "grid" : "block", gridTemplateColumns: "96px minmax(0,1fr)", gap: 16, alignItems: "center" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {appSheet && !webPhone && <img src={PLAY_STORE_URL ? "/app-qr.svg" : "/app-store-qr.svg"} alt="QR code pour télécharger l'app" width={96} height={96} style={{ borderRadius: 8 }} />}
+              <div>
+                <div style={{ fontSize: 21, fontWeight: 900, lineHeight: 1.15, letterSpacing: "-0.02em" }}>{title}</div>
+                <div style={{ fontSize: 14.5, color: "#5d6166", lineHeight: 1.45, marginTop: 4 }}>{appSheet ? (webPhone ? "Installe l'app, puis touche le lien qu'on vient de t'envoyer par email : tu reprends là où tu en es." : "Scanne pour installer l'app, puis touche sur ton téléphone le lien qu'on vient de t'envoyer par email : tu reprends là où tu en es.") : sub}</div>
+              </div>
+            </div>
+            {appSheet ? <div style={{ height: 14 }} /> : <div style={{ display: "flex", gap: 8, margin: "14px 0" }}>
+              {NOTIF_HOURS.map(h => (
+                <button key={h} type="button" onClick={() => setObNotifHour(h)}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 12, cursor: "pointer", fontFamily: "inherit", fontWeight: 800, fontSize: 14, color: obNotifHour === h ? "#d44000" : "#171b1f", border: obNotifHour === h ? "2px solid #d44000" : "1px solid rgba(0,0,0,.12)", background: obNotifHour === h ? "rgba(212,64,0,.06)" : "#fff" }}>
+                  {h} h
+                </button>
+              ))}
+            </div>}
+            {cta}
+            <button type="button" onClick={skip} style={{ display: "block", margin: "10px auto 0", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700, color: "#8a8f94", textDecoration: "underline" }}>{appSheet ? "Continuer sur le web" : "Plus tard"}</button>
+          </div>
+        </div>, document.body);
+    };
     if (currentStep === "ob_insight") {
       /* Plus d'écran « On lit ton point forme » (06/11, Gildas) : le score vient de se former sur l'anneau du point forme, la relecture faisait doublon. */
       // Bilan avant « Tu fais quoi ? » (06/11) : même ordre que dans l'app, la question arrive juste avant la jauge qui y répond.
       return (
         <QuestionShell {...common} dark
-          onSkip={() => obAdvance()}
-          cta={{ label: "Continuer", onClick: () => obAdvance() }}>
+          onSkip={() => openNotifOrAdvance()}
+          cta={{ label: "Continuer", onClick: () => openNotifOrAdvance() }}>
+          {obNotifSheet && renderNotifSheet()}
           <InsightStepBody answers={answers} name={coach ? coachFirst : undefined} sport={sportForCopy} onIndex={setObInsightIdx}
             real={!coach && obAnswers && obCheckinScore != null ? onboardingSlides({ date: today, score: obCheckinScore, answers: obAnswers, health: obHealthRows }, sportForCopy) : []} />
         </QuestionShell>
@@ -2385,58 +2521,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           } }}>
           <WeekStepBody key={`${ses.name}-${obCheckinScore}`} sessions={[{ id: "ob-ring", date: today, name: ses.name, notes: ses.notes ?? null, target_difficulty: ses.target_difficulty }]}
             program={null} checkinScore={obCheckinScore} acclimatation={false} today={today} decide subject={coach ? coachFirst : undefined} />
-        </QuestionShell>
-      );
-    }
-    if (currentStep === "ob_notif") {
-      // Il vient de faire son 1er point forme : les notifs servent à continuer sa série des 5 premiers matins.
-      const streak = !coach && obCheckinScore != null;
-      const snoozeKey = eliteUid ? `tpc_notif_prompt_${eliteUid}` : null;
-      const snooze = () => { try { if (snoozeKey) localStorage.setItem(snoozeKey, String(Date.now())); } catch { /* ignore */ } };
-      const enable = async () => {
-        if (obNotifBusy) return;
-        setObNotifBusy(true);
-        // Jamais bloquant : sans réponse en 12 s (enregistrement de l'appareil), on continue.
-        const ok = await Promise.race([
-          enableNotifications(obNotifHour).catch(() => false),
-          new Promise<boolean>(r => setTimeout(() => r(false), 12000)),
-        ]);
-        setObNotifBusy(false);
-        posthog.capture("notif_prompt_enabled", { role, ok, hour: obNotifHour, surface: "onboarding" });
-        if (!ok) snooze();
-        obAdvance();
-      };
-      if (notifMode === "app") {
-        // L'heure choisie est gardée sur le profil : l'app iPhone s'en sert dès l'activation des notifs.
-        const saveHour = () => {
-          posthog.capture("onboarding_app_push", { hour: obNotifHour, device: webIphone ? "iphone" : webAndroid ? "android" : "desktop" });
-          if (eliteUid) {
-            let tz = "Europe/Paris"; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { /* repli */ }
-            supabase.from("profiles").update({ push_hour: obNotifHour, push_tz: tz }).eq("user_id", eliteUid)
-              .then(({ error }) => { if (error) console.error("[ob_notif] push_hour update error:", error); });
-          }
-        };
-        return (
-          <QuestionShell {...common}
-            title={coach ? "Sois alerté sur ton téléphone quand un sportif a besoin de toi." : streak ? <StreakTitle day={1} /> : `Reçois ta séance chaque matin sur ton ${webAndroid ? "téléphone" : PLAY_STORE_URL ? "téléphone" : "iPhone"}.`}
-            sub={streak ? "En 5 matins, ThePerfClub apprend ta norme et tes conseils deviennent les tiens. Télécharge l'app pour être prévenu chaque matin." : invitedAthlete && coachInviteName ? `${coachInviteName} voit ta forme dès ton point forme.` : undefined}
-            onSkip={() => { posthog.capture("onboarding_app_push_skipped"); obAdvance(); }} skipLabel="Plus tard" skipBottom
-            cta={webIphone
-              ? { label: "Télécharger dans l'App Store", store: "apple", onClick: () => { saveHour(); window.open(APP_STORE_URL, "_blank"); obAdvance(); } }
-              : webAndroid
-              ? { label: "Disponible sur Google Play", store: "google", onClick: () => { saveHour(); window.open(PLAY_STORE_URL, "_blank"); obAdvance(); } }
-              : { label: "C'est fait, continuer", onClick: () => { saveHour(); obAdvance(); } }}>
-            <AppPushStepBody desktop={!webIphone && !webAndroid} android={webAndroid} hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coach={coach} streak={streak} athleteName={coach ? obAthleteName : undefined} />
-          </QuestionShell>
-        );
-      }
-      return (
-        <QuestionShell {...common}
-          title={coach ? "Sois prévenu quand un sportif a besoin de toi." : streak ? <StreakTitle day={1} /> : `Demain à ${obNotifHour}h, ta séance ajustée à ta forme.`}
-          sub={streak ? "En 5 matins, ThePerfClub apprend ta norme et tes conseils deviennent les tiens. On te prévient chaque matin pour ne pas casser ta série." : undefined}
-          onSkip={() => { snooze(); posthog.capture("notif_prompt_dismissed", { role, surface: "onboarding" }); obAdvance(); }} skipLabel="Plus tard" skipBottom
-          cta={{ label: "Activer les notifications", onClick: enable, busy: obNotifBusy }}>
-          <NotifStepBody hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coachName={invitedAthlete ? coachInviteName : null} coach={coach} streak={streak} athleteName={coach ? obAthleteName : undefined} />
         </QuestionShell>
       );
     }

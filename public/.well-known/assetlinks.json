@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.theperfclub.app",
+      "sha256_cert_fingerprints": [
+        "29:F6:17:13:CB:1A:C0:99:39:22:47:DF:5D:BA:C6:6C:03:F0:6E:B5:A4:7B:FF:E7:2A:07:B6:8C:93:B8:DE:EF",
+        "C5:BE:BC:02:6F:62:75:C4:51:28:BC:0A:D4:93:94:67:0F:67:B6:C6:BE:12:20:7B:57:E2:EE:A8:C8:43:37:2F"
+      ]
+    }
+  }
+]

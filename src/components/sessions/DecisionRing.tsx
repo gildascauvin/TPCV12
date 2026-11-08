@@ -212,7 +212,7 @@ export function DoneDecisionRing({ rpe, planned, size, light, hideZone = false, 
 }
 
 const TAU = 2 * Math.PI, ARC_FROM = ((A0 - 90) * Math.PI) / 180, ARC_TO = ((A1 - 90) * Math.PI) / 180;
-type SwarmLive = { v: number; lo: number; hi: number; drag: boolean; r: number; sw: number; cx: number; cy: number; size: number; h: number };
+type SwarmLive = { v: number; lo: number; hi: number; drag: boolean; r: number; sw: number; cx: number; cy: number; size: number; h: number; magicAt?: number | null };
 function useDecisionSwarm(cvRef: React.RefObject<HTMLCanvasElement> | null, live: React.MutableRefObject<SwarmLive>) {
   useEffect(() => {
     const cv = cvRef?.current; if (!cv) return;
@@ -257,15 +257,34 @@ function useDecisionSwarm(cvRef: React.RefObject<HTMLCanvasElement> | null, live
           q.r += (tr - q.r) * Math.min(1, dt * (4 + hot * 6));
           /* Angle libre → position sur l'arc : le flux coule du début vers la fin et réapparaît au début, en fondu. */
           const u = (((q.ang % TAU) + TAU) % TAU) / TAU, da = ARC_FROM + u * (ARC_TO - ARC_FROM), edge = Math.min(1, u / 0.06, (1 - u) / 0.06);
-          const x = L.cx + q.r * Math.cos(da), y = L.cy + q.r * Math.sin(da);
+          let x = L.cx + q.r * Math.cos(da), y = L.cy + q.r * Math.sin(da);
+          /* Retour à l'équilibre (08/11) : aspiration en spirale vers le curseur, puis relâche en vague. */
+          const me = L.magicAt != null && !reduce ? (now - L.magicAt) / 1000 : 99;
+          const f0 = Math.max(0, Math.min(1, (L.v - 1) / 9));
+          if (me < 2.6) {
+            const ka = ARC_FROM + f0 * (ARC_TO - ARC_FROM), kx = L.cx + L.r * Math.cos(ka), ky = L.cy + L.r * Math.sin(ka);
+            const delay = 0.9 + Math.abs(u - f0) * 1.1, inK = Math.min(1, me / 0.75), outK = Math.min(1, Math.max(0, (me - delay) / 0.7));
+            const kk = (1 - Math.pow(1 - inK, 3)) * (1 - outK * outK * (3 - 2 * outK));
+            const sp = q.phi * 3 + me * (7 - 4 * inK), sr = (4 + 14 * q.sd) * (1 - 0.6 * inK) * scale;
+            x += (kx + sr * Math.cos(sp) - x) * kk; y += (ky + sr * Math.sin(sp) - y) * kk;
+          }
           const dom = q.ty ? hot - cold : cold - hot;
-          const sz = (1.4 + hot * q.sd * 1.2 + cold * 1.1) * (1 + 0.7 * Math.max(0, dom) - 0.4 * Math.max(0, -dom)) * scale;
+          /* Points 30 % plus gros (08/11, POC). */
+          let sz = (1.4 + hot * q.sd * 1.2 + cold * 1.1) * (1 + 0.7 * Math.max(0, dom) - 0.4 * Math.max(0, -dom)) * scale * 1.3;
+          if (me > 1.1 && me < 2.4) { const w = (me - 1.1) / 1.3, front = Math.abs(u - f0) - w * Math.max(f0, 1 - f0); sz *= 1 + 1.1 * Math.exp(-(front * front) / 0.004) * (1 - w); }
           const al = Math.min(1, (0.5 + 0.35 * q.sd * hot + 0.35 * cold + (0.25 * calm * (br + 1)) / 2) * 0.6 + 0.2) * edge;
           /* Lueur des points de charge quand ça chauffe : un disque doux dessous (shadowBlur coûte cher sur mobile). */
           if (hot > 0.3 && q.ty) { g.beginPath(); g.arc(x, y, sz * 2.6, 0, 2 * Math.PI); g.fillStyle = `rgba(255,120,40,${(0.18 * hot).toFixed(3)})`; g.fill(); }
           g.beginPath(); g.arc(x, y, sz, 0, 2 * Math.PI);
           g.fillStyle = q.ty ? `rgba(246,128,64,${al.toFixed(2)})` : `rgba(128,184,204,${al.toFixed(2)})`; g.fill();
         });
+        /* Éclat en particules au cœur de la transition : quelques points s'échappent du curseur puis retombent. */
+        const me2 = L.magicAt != null && !reduce ? (now - L.magicAt) / 1000 : 99;
+        if (me2 > 0.7 && me2 < 1.9) {
+          const f0 = Math.max(0, Math.min(1, (L.v - 1) / 9)), ka = ARC_FROM + f0 * (ARC_TO - ARC_FROM), kx = L.cx + L.r * Math.cos(ka), ky = L.cy + L.r * Math.sin(ka), pe = (me2 - 0.7) / 1.2;
+          for (let k = 0; k < 16; k++) { const a2 = (k / 16) * 2 * Math.PI + k * 0.7, rr = L.sw * (0.6 + 3.2 * pe * (0.6 + 0.4 * Math.sin(k * 3.1))), sa = (1 - pe) * 0.85;
+            g.beginPath(); g.arc(kx + rr * Math.cos(a2), ky + rr * Math.sin(a2), 1.4 * scale, 0, 2 * Math.PI); g.fillStyle = k & 1 ? `rgba(246,128,64,${sa.toFixed(2)})` : `rgba(128,184,204,${sa.toFixed(2)})`; g.fill(); }
+        }
       }
       raf = requestAnimationFrame(frame);
     };
@@ -355,9 +374,9 @@ export default function DecisionRing({
   const introStart = introFrom ?? (axis ? 0 : MIN);
   const drawValue = introRunning ? introStart + (value - introStart) * (1 - Math.pow(1 - intro, 3)) : value;
 
-  const r = Math.round(size * 0.36), sw = Math.round(size * (fluid ? 0.055 : 0.085));
-  const rOut = r + sw * 0.95, rIn = r - sw * 0.95;
-  const cx = size / 2, cy = Math.round(rOut + sw / 2 + 3);
+  const r = Math.round(size * 0.36), swBase = Math.round(size * (fluid ? 0.055 : 0.085)), sw = swBase;
+  const rOut = r + swBase * 0.95, rIn = r - swBase * 0.95;
+  const cx = size / 2, cy = Math.round(rOut + swBase / 2 + 3);
   const h = Math.round(cy + rOut * 0.5 + sw / 2 + 3);
   // Le curseur suit l'épaisseur du trait, pas le diamètre (16 = trait de l'anneau de 188 px).
   const knob = fluid ? Math.max(1, sw / 16) : 1;
@@ -448,11 +467,14 @@ export default function DecisionRing({
      d'autant plus qu'on s'éloigne. Sobre au quotidien (agitation réduite), plein effet en glissant et à l'arrivée. */
   const swarm = fluid && (!hideZone || neutralAt != null);
   const cvRef = useRef<HTMLCanvasElement>(null);
-  const swarmLive = useRef({ v: value, lo: zoneLow, hi: zoneHigh, drag: false, r, sw, cx, cy, size, h });
+  const swarmLive = useRef<SwarmLive>({ v: value, lo: zoneLow, hi: zoneHigh, drag: false, r, sw: swBase, cx, cy, size, h, magicAt: null });
+  /* Retour à l'équilibre (08/11, POC) : la décision déclenche l'aspiration de l'essaim dans le curseur. */
+  const magicAt = useRef<number | null>(null);
+  useEffect(() => { if (celebrate) magicAt.current = performance.now(); }, [celebrate]);
   /* Échelle « axe » (charge de la semaine un jour de repos) : ramenée sur 1..10 pour l'essaim. */
   swarmLive.current = axis
-    ? { v: 1 + 9 * drawValue, lo: 1 + 9 * axis.zone[0], hi: 1 + 9 * axis.zone[1], drag: dragging, r, sw, cx, cy, size, h }
-    : { v: drawValue, lo: hideZone ? (neutralAt ?? value) : zoneLow, hi: hideZone ? (neutralAt ?? value) : zoneHigh, drag: dragging, r, sw, cx, cy, size, h };
+    ? { v: 1 + 9 * drawValue, lo: 1 + 9 * axis.zone[0], hi: 1 + 9 * axis.zone[1], drag: dragging, r, sw: swBase, cx, cy, size, h, magicAt: magicAt.current }
+    : { v: drawValue, lo: hideZone ? (neutralAt ?? value) : zoneLow, hi: hideZone ? (neutralAt ?? value) : zoneHigh, drag: dragging, r, sw: swBase, cx, cy, size, h, magicAt: magicAt.current };
   useDecisionSwarm(swarm ? cvRef : null, swarmLive);
 
   const onHintRef = useRef(onHint);
@@ -536,6 +558,7 @@ export default function DecisionRing({
             Mêmes tailles relatives qu'AggregateGauge (.215 valeur, .063 libellé). */}
         {fluid ? (() => {
           const t = centerTitle ?? hintText;
+          const kickerShown = kicker;
           const titleFont = Math.round(size * (t.length > 16 ? 0.1 : 0.12)) - titleShrink;
           return (
             <div style={{
@@ -543,9 +566,9 @@ export default function DecisionRing({
               display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", pointerEvents: "none",
             }}>
               {/* Gratuit : le chiffre + son mot restent lisibles, le titre (la décision) est flouté. */}
-              {kicker && !(titleLocked && centerLabel) && (
+              {kickerShown && !(titleLocked && centerLabel) && (
                 <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: light ? "rgba(23,27,31,.7)" : "rgba(255,255,255,.75)", marginBottom: 6, maxWidth: Math.round(rIn * 1.7), textAlign: "center", lineHeight: 1.3 }}>
-                  {kicker}
+                  {kickerShown}
                 </span>
               )}
               {titleLocked && centerLabel && (

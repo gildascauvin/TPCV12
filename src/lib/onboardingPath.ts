@@ -7,7 +7,7 @@
      Sportif direct  : value_intro → decision_2a → account → questions programme → ob_plan (son
                        programme tel quel, ouvre le check-in) → ob_health (app iOS) → ob_insight
                        (le bilan de son point forme) → ob_decide (« Tu fais quoi ? ») → ob_week (la
-                       jauge de décision) → ob_notif (notifs possibles) → ob_pay
+                       jauge de décision) → ob_pay ; rappels en feuille sur le bilan (08/11)
      Programme claimé : mêmes écrans sans les questions de programme.
      Sans programme (« plus tard », génération ou import raté) : mêmes écrans, une séance type de son
                        sport à la place du programme.
@@ -16,7 +16,7 @@
      Coach : value_intro → decision_2b → account → ob_sport → ob_count → questions programme →
                        ob_plan (son programme tel quel, puis le prénom d'un de ses sportifs et son point
                        forme imaginé) → ob_insight → ob_decide → ob_week (la séance de ce sportif) →
-                       ob_invite → ob_notif → ob_pay (claimé : ob_count seul). */
+                       ob_invite → ob_pay (claimé : ob_count seul) ; rappels en feuille sur le bilan (08/11). */
 
 export type Role = "athlete" | "coach";
 export type ObHas = "import" | "generate" | "later" | null;
@@ -95,8 +95,8 @@ export function buildOnboardingPath(o: PathOptions): StepId[] {
       if (o.has === "import") post.push("ob_import");
       else if (o.has !== "later") post.push("ob_goal", "ob_weak", "ob_days");
     }
+    /* Rappels : feuille posée sur le bilan (ob_insight), plus d'écran ob_notif (08/11). */
     post.push("ob_plan", "ob_insight", "ob_decide", "ob_week", "ob_invite");
-    if (o.pushAvailable) post.push("ob_notif");
     post.push("ob_pay");
     return [...base, ...post];
   }
@@ -113,7 +113,6 @@ export function buildOnboardingPath(o: PathOptions): StepId[] {
   post.push("ob_plan");
   if (o.healthAvailable) post.push("ob_health");
   post.push("ob_insight", "ob_decide", "ob_week");
-  if (o.pushAvailable) post.push("ob_notif");
   post.push("ob_pay");
   return [...base, ...post];
 }
