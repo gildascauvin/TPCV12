@@ -140,3 +140,8 @@ description: Surfaces publiques et partage de ThePerfClub. Programme public `/p/
 - Boutons de partage séparés Charge / Récupération / signature, et partage wellness sur /today.
 
 Détails et raisons : grep `historique.md` de ce dossier (sections datées, la plus récente prime).
+
+## Images d'aperçu des liens (08/11/2026)
+- `src/lib/og/ogKit.tsx` : `OgFrame` (photo assombrie, texte à gauche, anneau à droite, icône de l'app) + `OgRing` (anneau en grand redessiné en SVG satori d'après `DecisionRing` : palette Braise `braiseColor`, zone en pointillés + « OPTIMAL », curseur 3 traits, essaim figé, halo, pastilles Récup/Charge, titre de la voix). 1200×630.
+- `src/app/opengraph-image.tsx` (défaut de tout go.theperfclub.com, accroche « Ton programme ne sait pas que tu as mal dormi »), `src/app/p/[id]/opengraph-image.tsx` (couverture `programCover`/`SPORT_COVER_PROGRAM`, nom, sport · semaines, séances par semaine ; introuvable = aperçu générique), `src/app/join/[code]/opengraph-image.tsx` (« Prénom t'invite dans son groupe »). `/share` garde son image propre.
+- `metadataBase` + `openGraph` + `twitter: summary_large_image` dans `src/app/layout.tsx` ; `/opengraph-image` dans les `publicPaths` du middleware (sinon les robots sont renvoyés vers /login).

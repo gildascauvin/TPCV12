@@ -78,7 +78,7 @@ export async function updateSession(request: NextRequest) {
      ce qui se manifeste comme "le lien me connecte direct" plutôt que de proposer le
      formulaire. Rien d'insécure à le rendre public : sans session, updateUser() échoue
      simplement côté page avec une erreur, pas de fuite possible. */
-  const publicPaths = ["/login", "/register", "/reset-password", "/auth/callback", "/api/", "/join/", "/p/", "/share/", "/sandbox/"];
+  const publicPaths = ["/login", "/register", "/reset-password", "/auth/callback", "/api/", "/join/", "/p/", "/share/", "/sandbox/", "/opengraph-image"];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
   if (!user && !isPublic) {

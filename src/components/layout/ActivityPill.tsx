@@ -299,13 +299,6 @@ export function ActivityStripBar({ subject, period, athleteId, who, prefix, onOp
     ? Math.round((new Date(period.from + "T12:00:00").getTime() - new Date(monday + "T12:00:00").getTime()) / 86400000)
     : -1;
 
-  function reconduire() {
-    const detail = { monday, athleteId: athleteId ?? null, handled: false };
-    window.dispatchEvent(new CustomEvent(ACTIVITY_RECONDUIRE, { detail }));
-    if (!detail.handled) go(`${planningPath}?${athleteQ}reconduire=${monday}`, "reconduire");
-    else posthog.capture("activity_strip_action", { role, action: "reconduire", active, program: !!prog });
-  }
-
   let viz: React.ReactNode = null;
   if (prog && prog.loads.length) {
     const max = Math.max(...prog.loads, 1);
@@ -596,6 +589,14 @@ export default function ActivityPill({ contentMaxWidth }: { contentMaxWidth?: nu
         {rows(<>
           {planRow}
           <SheetRow icon="📅" title="Voir le planning" sub="Toutes tes séances de la semaine" onClick={() => go("view_planning", role === "coach" ? `/coach/planning?athlete=${s.id}` : "/week")} />
+          {/* Reconduire (08/11, Gildas) : dans le tiroir de la semaine depuis que l'icône ↻ a quitté le bandeau.
+              Le Planning ouvert répond à l'événement ; ailleurs, on y va avec ?reconduire=<lundi>. */}
+          {s.weekTotal > 0 && <SheetRow icon="↻" title="Reconduire la semaine" sub={who ? `Ses séances, sur les semaines suivantes` : "Tes séances, sur les semaines suivantes"} onClick={() => {
+            const detail = { monday: s.weekMonday, athleteId: role === "coach" ? s.id : null, handled: false };
+            window.dispatchEvent(new CustomEvent(ACTIVITY_RECONDUIRE, { detail }));
+            if (detail.handled) { posthog.capture("activity_pill_action", { role, state, action: "reconduire" }); setOpen(false); }
+            else go("reconduire", `${planningPath}?${role === "coach" ? `athlete=${s.id}&` : ""}reconduire=${s.weekMonday}`);
+          }} />}
           {s.program
             ? <SheetRow icon="✏️" title="Voir le programme" sub="Modifier, changer ou arrêter" onClick={() => go("view_program", `${programsPath}?focus=${s.program!.id}`)} />
             : programRow}

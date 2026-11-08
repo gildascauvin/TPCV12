@@ -147,3 +147,6 @@ Détails et raisons : grep `historique.md` de ce dossier (sections datées, la p
 - Ordre post-signup : … → point forme → `ob_insight` (bilan) → `ob_decide` (« Tu fais quoi ? ») → `ob_week` (anneau de décision) → … Funnels PostHog alignés sur cet ordre.
 - `ob_week` (decide) : même carte de séance que /today (`TodaySessionCard hideGauge`, jetons sur `[data-ex-line='changed']`) ; « la suite de ta semaine » / « Ta première semaine » = colonnes du Planning (`DayColumn`).
 - Textes : surtitre « Ta forme, avec une règle », titre sans « au ressenti » répété ; titre paywall stress sans nom de séance ; plus de badge « Ce que tu viens d'essayer » en sortie d'onboarding (`PrimingJourneyModal`, `hitIndex` -1 quand `tried`).
+
+## Note native (08/11/2026)
+`requestStoreReview()` est appelée par `onDecided` de `WeekStepBody` (écran `ob_week`), par-dessus l'écran de décision : 3,2 s après Appliquer (jetons atterris), 0,8 s après Maintenir. Plus au bouton « C'est parti ». Voulu par Gildas (note dans l'onboarding, façon Steven Cravotta) : ne pas la déplacer dans l'usage réel.

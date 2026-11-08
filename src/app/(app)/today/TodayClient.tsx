@@ -41,7 +41,7 @@ import { findProgramForWeek, programWeekTag } from "@/lib/programAssignment";
 import { revealLabel } from "@/lib/programReveal";
 import { ACTIVITY_LABEL_CHANGED } from "@/components/layout/ActivityPill";
 import { programSportEmoji } from "@/lib/sportCategories";
-import DecisionRing, { RestDecisionRing, DoneDecisionRing, restZoneFromRecup, restTitle, type RingLegend } from "@/components/sessions/DecisionRing";
+import DecisionRing, { RestDecisionRing, DoneDecisionRing, restZoneFromFeel, restTitle, type RingLegend } from "@/components/sessions/DecisionRing";
 import FlipBlock from "@/components/today/FlipBlock";
 import { breathForDir } from "@/lib/ringAmbience";
 import { computeWellnessBaselineAt, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
@@ -615,9 +615,9 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     /* Jour de repos (08/11, Gildas) : la difficulté de la journée (« Repos ») face à la forme, plus la charge
        des 7 jours (elle reste dans la légende « Charge »). */
     (() => {
-      const zh = decisionLocked ? null : restZoneFromRecup(legendRecup ? Math.round(legendRecup.pos * 100) : null);
+      const zh = decisionLocked ? null : restZoneFromFeel(decision.restFeel);
       return <RestDecisionRing hideHint fluid glow={decisionColor} ambient={ringAmbient} breath="flat" legend={ringLegend} restZoneHigh={zh}
-        centerTitle={restTitle(zh) ?? decision.title ?? decision.text.split("\n")[0]} titleLocked={decisionLocked} />;
+        centerTitle={decision.title ?? restTitle(zh) ?? decision.text.split("\n")[0]} titleLocked={decisionLocked} />;
     })()
   ) : (() => {
     /* Séance(s) déjà faite(s), aujourd'hui ou dans le passé : anneau en lecture seule sur le RPE

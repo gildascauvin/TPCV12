@@ -2513,14 +2513,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           title={coach ? capS(contrastTitleCoach(obPick as PickCoach | null, sug, coachFirst)) : contrastTitle(obPick as Pick | null, sug)}
           sub={weekSub(sug?.dir ?? null) || undefined}
           onSkip={() => obAdvance()}
-          cta={{ label: coach ? "Continuer" : "C'est parti", onClick: () => {
-            /* Demande de note native juste après sa 1re décision (2026-11-02) : apps seulement, sur le
-               bouton positif, jamais sur « Passer ». La fenêtre du store s'ouvre par-dessus l'écran suivant. */
-            requestStoreReview().then(asked => { if (asked) posthog.capture("store_review_requested", { role, surface: "onboarding" }); });
-            obAdvance();
-          } }}>
+          cta={{ label: coach ? "Continuer" : "C'est parti", onClick: () => obAdvance() }}>
           <WeekStepBody key={`${ses.name}-${obCheckinScore}`} sessions={[{ id: "ob-ring", date: today, name: ses.name, notes: ses.notes ?? null, target_difficulty: ses.target_difficulty }]}
-            program={null} checkinScore={obCheckinScore} acclimatation={false} today={today} decide subject={coach ? coachFirst : undefined} />
+            program={null} checkinScore={obCheckinScore} acclimatation={false} today={today} decide subject={coach ? coachFirst : undefined}
+            /* Note native par-dessus l'écran de décision (08/11, Gildas ; avant : au bouton, donc sur le paywall). Apps seulement, une fois par appareil. */
+            onDecided={() => requestStoreReview().then(asked => { if (asked) posthog.capture("store_review_requested", { role, surface: "onboarding" }); })} />
         </QuestionShell>
       );
     }

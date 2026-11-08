@@ -161,6 +161,26 @@ export function decisionRingCenterY(size = 188) {
    - `kicker` : petit texte au-dessus du titre (repère, ex. « Charge de la semaine ») ;
    - `axis` : la valeur est une position 0..1 sur un autre axe (score de charge un jour de repos), zone et
      couleurs fournies ; même grammaire curseur + zone que l'échelle de difficulté. */
+/* Voix « ingénieur de course » (08/11, Gildas) : impersonnelle, la même côté sportif et côté coach, deux lignes
+   au plus dans l'anneau. Le grand titre dit déjà la position par rapport à la zone : plus de surtitre quand la voix parle. */
+const VOICE: Record<string, string> = {
+  "Au-dessus de la zone": "Gère l'effort",
+  "Sous la zone": "Pousse aujourd'hui",
+  "Dans la zone": "Fenêtre optimale",
+  "Allègement appliqué": "Séance recalibrée",
+  "Surcharge appliquée": "Séance recalibrée",
+  "Difficulté maintenue": "Plan maintenu",
+  "Repos bien placé": "Récup en cours",
+  "Tu pourrais bouger un peu": "Récup active",
+  "Récup à confirmer": "Point forme attendu",
+  "Récup fragile": "Récup prioritaire",
+  "Récup stable": "Récup en cours",
+};
+export function ringVoice(text: string, done = false): string | null {
+  if (done) return text === "Au-dessus de la zone" ? "Plus dur que prévu" : text === "Dans la zone" ? "Bonne séance" : text === "Sous la zone" ? "Plus facile que prévu" : null;
+  return VOICE[text] ?? null;
+}
+
 type BigRingProps = { fluid?: boolean; centerTitle?: string; titleLocked?: boolean; glow?: string; introFrom?: number;
   breath?: RingBreath; ambient?: boolean; zoneLabel?: string; kicker?: string;
   axis?: { zone: [number, number]; colors: [string, string] };
@@ -170,8 +190,11 @@ export type RingLegend = { recup: { value: number | null; color?: string; onClic
 
 /* Jour de repos (08/11, Gildas) : même sens que les autres jours, la difficulté de la journée (« Repos », au
    départ de l'arc) face à ce que la forme permet. `restZoneHigh` absent = pas de zone (forme inconnue). */
-export function restZoneFromRecup(recup: number | null | undefined): number | null {
-  return recup == null ? null : recup >= 58 ? 3 : 1;
+/* Zone et titre du jour de repos depuis le ressenti du point forme du jour (08/11) : basse ou moyenne =
+   repos strict (zone 1), bonne = il peut bouger un peu (zone 1-3). Titre : celui de la carte décision
+   (Récup fragile / stable / à confirmer), sinon celui de la zone. */
+export function restZoneFromFeel(feel: "bad" | "mid" | "good" | null | undefined): number | null {
+  return feel == null ? null : feel === "good" ? 3 : 1;
 }
 export function restTitle(zoneHigh: number | null): string | undefined {
   return zoneHigh == null ? undefined : zoneHigh > 1 ? "Tu pourrais bouger un peu" : "Repos bien placé";
@@ -460,7 +483,8 @@ export default function DecisionRing({
     const el = titleRef.current;
     if (!fluid || !el) return;
     const font = parseFloat(getComputedStyle(el).fontSize);
-    if (el.offsetHeight > font * 1.05 * 2 + 1 && font > 14) setTitleShrink(v => v + 1);
+    /* Plus de 2 lignes, ou un mot plus large que la place : on réduit d'un pixel. */
+    if ((el.offsetHeight > font * 1.05 * 2 + 1 || el.scrollWidth > el.clientWidth + 1) && font > 14) setTitleShrink(v => v + 1);
   });
   /* Essaim F2b sobre (2026-11-06, lot 3) : récup (bleu) et charge (orange) autour de l'anneau. Au-dessus de
      la zone il chauffe et s'agite (la charge domine), en dessous il refroidit et ralentit (la récup domine),
@@ -557,12 +581,17 @@ export default function DecisionRing({
         {/* Arc ouvert en bas : le centre du cercle n'est pas celui de la boîte, on ancre sur cy.
             Mêmes tailles relatives qu'AggregateGauge (.215 valeur, .063 libellé). */}
         {fluid ? (() => {
-          const t = centerTitle ?? hintText;
-          const kickerShown = kicker;
-          const titleFont = Math.round(size * (t.length > 16 ? 0.1 : 0.12)) - titleShrink;
+          const raw = centerTitle ?? hintText;
+          const voice = titleLocked ? null : ringVoice(raw, centerLabel?.verb === "Faite");
+          const t = voice ?? raw;
+          const kickerShown = voice ? undefined : kicker;
+          /* Une seule taille pour tous les titres (08/11, Gildas) : même poids visuel d'un jour à l'autre. */
+          const titleFont = Math.round(size * 0.1) - titleShrink;
           return (
             <div style={{
-              position: "absolute", left: 0, right: 0, top: cy, transform: "translateY(-50%)",
+              /* Centré sur la hauteur de l'arc de 240° (du haut de l'anneau à ses deux bouts, cy + r/2), pas sur le
+                 centre du cercle : remonté de 0,12 rayon, entre les deux (08/11, Gildas : un quart était trop haut). */
+              position: "absolute", left: 0, right: 0, top: cy - Math.round(r * 0.12), transform: "translateY(-50%)",
               display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", pointerEvents: "none",
             }}>
               {/* Gratuit : le chiffre + son mot restent lisibles, le titre (la décision) est flouté. */}

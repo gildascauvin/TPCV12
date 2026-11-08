@@ -142,6 +142,9 @@ export interface DecisionCard {
   /* Ligne 2 affichée avec `title` (séance faite, 2026-10-12) : sans la comparaison, que le titre
      porte déjà. Absente = la ligne 2 de `text` est gardée telle quelle ; "" = plus de ligne 2. */
   titleDetail?: string;
+  /* Jour de repos (08/11) : le ressenti du point forme du jour (null sans point forme). L'anneau de repos s'y
+     cale, pas sur le score Récup lissé de la légende (une mauvaise nuit doit donner « Récup prioritaire »). */
+  restFeel?: "bad" | "mid" | "good" | null;
 }
 
 /* Remplace la 1re ligne (headline) de `text` par `title`, si fourni — et la 2e par `detail`, si fourni. */
@@ -600,7 +603,7 @@ function withPhase(
     /* Plus de « Bonne récup » les jours de repos (06/11, Gildas) : pas de titre quand tout va bien. */
     const restTitle = !params.wellnessFilledToday ? "Récup à confirmer"
       : ({ bad: "Récup fragile", mid: "Récup stable", good: undefined } as const)[feel];
-    return { suggestion: null, icon: params.wellnessFilledToday ? "🟢" : "⚪", title: restTitle, text: `Jour de repos\n${feelLine}${physioLine}${restNudge}${restTomorrow}`, phase };
+    return { suggestion: null, icon: params.wellnessFilledToday ? "🟢" : "⚪", title: restTitle, restFeel: params.wellnessFilledToday ? feel : null, text: `Jour de repos\n${feelLine}${physioLine}${restNudge}${restTomorrow}`, phase };
   }
   if (day.kind === "done") {
     /* Repère = la zone PROPOSÉE (2026-10-04, Gildas : "6 pour 5, plus dure que prévu" alors que la

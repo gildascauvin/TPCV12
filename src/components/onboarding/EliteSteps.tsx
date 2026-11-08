@@ -130,7 +130,9 @@ export function reliefLine(dir: "low" | "high", subject?: string): string {
   return dir === "low" ? "Tu allèges aujourd'hui sans culpabiliser. Tu pousseras les bons jours." : "Tu pousses sans hésiter : ta forme le permet aujourd'hui.";
 }
 
-export function WeekStepBody({ sessions, program, checkinScore, acclimatation, today, decide = false, subject }: {
+export function WeekStepBody({ sessions, program, checkinScore, acclimatation, today, decide = false, subject, onDecided }: {
+  /* Décision prise (Appliquer ou Maintenir), une fois l'animation finie : la note native s'ouvre par-dessus cet écran (08/11). */
+  onDecided?: () => void;
   sessions: WeekSession[];
   program: { name: string; sport: string; template: ProgramTemplate } | null;
   checkinScore: number | null;
@@ -227,11 +229,13 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
                       }, 1050); /* au relâchement de l'essaim (retour à l'équilibre, 08/11) */
                       window.setTimeout(() => setFlash(false), 6000);
                     }
+                    /* Après l'atterrissage des jetons (relâchement 1,05 s + un jeton par ligne). */
+                    window.setTimeout(() => onDecided?.(), pct ? 3200 : 800);
                     setCur({ notes: s.notes ? s.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : s.notes, target_difficulty: applyAutoregDifficulty(planned, pct) });
                     return { notes: s.notes ?? "", target_difficulty: planned };
                   }}
                   onUndo={async () => { setApplied(null); setCur(null); setFlash(false); }}
-                  onMaintenir={() => setApplied(0)} />
+                  onMaintenir={() => { setApplied(0); window.setTimeout(() => onDecided?.(), 800); }} />
               </div>
               {/* Comme /today depuis le 2026-10-28 : anneau en grand, titre au centre, plus d'encart. */}
               {/* Même carte que /today (06/11) : surface légère, étiquette, boutons sous le conseil. Pas de dos : rien ne pivote. */}
