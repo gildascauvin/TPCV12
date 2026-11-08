@@ -23,7 +23,7 @@ export default async function Image({ params }: { params: { id: string } }) {
     <OgFrame photo={photo} icon={icon} eyebrow={data ? meta || "Programme" : "Ton point forme, 10 secondes"}
       title={!data ? "Un programme qui s'ajuste à ta forme" : name.length > 70 ? `${name.slice(0, 68).replace(/\s\S*$/, "")}…` : name}
       sub={data ? perWeek : "Chaque matin, ta séance suit ta récupération."}
-      ring={<OgRing size={440} value={6} zone={[5, 6]} title="Séance recalibrée" glow="#2f9e44" recup={48} charge={52} />} />,
+      ring={<OgRing size={440} value={6} zone={[5, 6]} title={"Séance\nrecalibrée"} glow="#2f9e44" recup={48} charge={52} />} />,
     { ...OG_SIZE, fonts },
   );
 }

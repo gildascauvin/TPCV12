@@ -163,21 +163,22 @@ export function decisionRingCenterY(size = 188) {
      couleurs fournies ; même grammaire curseur + zone que l'échelle de difficulté. */
 /* Voix « ingénieur de course » (08/11, Gildas) : impersonnelle, la même côté sportif et côté coach, deux lignes
    au plus dans l'anneau. Le grand titre dit déjà la position par rapport à la zone : plus de surtitre quand la voix parle. */
+/* Coupure fixe (\n) : toujours 2 lignes, le même bloc sur tous les écrans et dans les captures (08/11, Gildas). */
 const VOICE: Record<string, string> = {
-  "Au-dessus de la zone": "Gère l'effort",
-  "Sous la zone": "Pousse aujourd'hui",
-  "Dans la zone": "Fenêtre optimale",
-  "Allègement appliqué": "Séance recalibrée",
-  "Surcharge appliquée": "Séance recalibrée",
-  "Difficulté maintenue": "Plan maintenu",
-  "Repos bien placé": "Récup en cours",
-  "Tu pourrais bouger un peu": "Récup active",
-  "Récup à confirmer": "Point forme attendu",
-  "Récup fragile": "Récup prioritaire",
-  "Récup stable": "Récup en cours",
+  "Au-dessus de la zone": "Gère\nl'effort",
+  "Sous la zone": "Pousse\naujourd'hui",
+  "Dans la zone": "Fenêtre\noptimale",
+  "Allègement appliqué": "Séance\nrecalibrée",
+  "Surcharge appliquée": "Séance\nrecalibrée",
+  "Difficulté maintenue": "Plan\nmaintenu",
+  "Repos bien placé": "Récup\nen cours",
+  "Tu pourrais bouger un peu": "Récup\nactive",
+  "Récup à confirmer": "Point forme\nattendu",
+  "Récup fragile": "Récup\nprioritaire",
+  "Récup stable": "Récup\nen cours",
 };
 export function ringVoice(text: string, done = false): string | null {
-  if (done) return text === "Au-dessus de la zone" ? "Plus dur que prévu" : text === "Dans la zone" ? "Bonne séance" : text === "Sous la zone" ? "Plus facile que prévu" : null;
+  if (done) return text === "Au-dessus de la zone" ? "Plus dur\nque prévu" : text === "Dans la zone" ? "Bonne\nséance" : text === "Sous la zone" ? "Plus facile\nque prévu" : null;
   return VOICE[text] ?? null;
 }
 
@@ -267,7 +268,9 @@ function useDecisionSwarm(cvRef: React.RefObject<HTMLCanvasElement> | null, live
         /* Essaim coupé comme la jauge (06/11, Gildas) : il ne vit que sur l'arc de 240°, l'ouverture du bas reste vide. */
         if (calm > 0.05) { g.beginPath(); g.arc(L.cx, L.cy, Rorb + calm * br * 2 * scale, ARC_FROM, ARC_TO); g.strokeStyle = `rgba(255,255,255,${(calm * (0.1 + 0.06 * br) * 0.6).toFixed(3)})`; g.lineWidth = 1; g.stroke(); }
         P.forEach((q, i) => {
-          if (!q.r) q.r = Rorb;
+          /* Arrivée de l'essaim à l'affichage (08/11, Gildas : comme les anneaux Charge et Récup) : les points
+             partent loin autour de l'anneau, invisibles, et convergent sur l'orbite en apparaissant (~1 s). */
+          if (!q.r) q.r = reduce ? Rorb : Rorb + (60 + 80 * q.sd) * scale;
           q.ang += dt * hot * (q.sd - 0.5) * 5 + hot * 0.05 * Math.sin(t * (6 + 5 * q.sd) + 9 * q.sd);
           const clusterA = (q.cl / 7) * 2 * Math.PI + T + (q.sd - 0.5) * 0.18;
           const home = q.phi + T, toCl = Math.atan2(Math.sin(clusterA - home), Math.cos(clusterA - home)) * Math.min(1, cold * 1.3);
@@ -277,7 +280,8 @@ function useDecisionSwarm(cvRef: React.RefObject<HTMLCanvasElement> | null, live
           const tr = Rorb + (hot * 26 * Math.sin(t * (3 + 5 * q.sd) + 10 * q.sd) + cold * (2 + 6 * q.sd) + calm * br * 2) * scale;
           const dA = Math.atan2(Math.sin(tg - q.ang), Math.cos(tg - q.ang));
           q.ang += dA * Math.min(1, dt * (2.5 * (1 - hot) + 0.3));
-          q.r += (tr - q.r) * Math.min(1, dt * (4 + hot * 6));
+          const arrive = reduce ? 1 : Math.min(1, (now - born) / 1100);
+          q.r += (tr - q.r) * Math.min(1, dt * (arrive < 1 ? 2.5 : 4 + hot * 6));
           /* Angle libre → position sur l'arc : le flux coule du début vers la fin et réapparaît au début, en fondu. */
           const u = (((q.ang % TAU) + TAU) % TAU) / TAU, da = ARC_FROM + u * (ARC_TO - ARC_FROM), edge = Math.min(1, u / 0.06, (1 - u) / 0.06);
           let x = L.cx + q.r * Math.cos(da), y = L.cy + q.r * Math.sin(da);
@@ -295,7 +299,7 @@ function useDecisionSwarm(cvRef: React.RefObject<HTMLCanvasElement> | null, live
           /* Points 30 % plus gros (08/11, POC). */
           let sz = (1.4 + hot * q.sd * 1.2 + cold * 1.1) * (1 + 0.7 * Math.max(0, dom) - 0.4 * Math.max(0, -dom)) * scale * 1.3;
           if (me > 1.1 && me < 2.4) { const w = (me - 1.1) / 1.3, front = Math.abs(u - f0) - w * Math.max(f0, 1 - f0); sz *= 1 + 1.1 * Math.exp(-(front * front) / 0.004) * (1 - w); }
-          const al = Math.min(1, (0.5 + 0.35 * q.sd * hot + 0.35 * cold + (0.25 * calm * (br + 1)) / 2) * 0.6 + 0.2) * edge;
+          const al = Math.min(1, (0.5 + 0.35 * q.sd * hot + 0.35 * cold + (0.25 * calm * (br + 1)) / 2) * 0.6 + 0.2) * edge * Math.min(1, arrive * 1.4);
           /* Lueur des points de charge quand ça chauffe : un disque doux dessous (shadowBlur coûte cher sur mobile). */
           if (hot > 0.3 && q.ty) { g.beginPath(); g.arc(x, y, sz * 2.6, 0, 2 * Math.PI); g.fillStyle = `rgba(255,120,40,${(0.18 * hot).toFixed(3)})`; g.fill(); }
           g.beginPath(); g.arc(x, y, sz, 0, 2 * Math.PI);
@@ -605,7 +609,7 @@ export default function DecisionRing({
                   {centerLabel.arrow} · {centerLabel.verb}
                 </span>
               )}
-              <span ref={titleRef} style={{ fontWeight: 900, fontSize: titleFont, lineHeight: 1.05, letterSpacing: "-0.025em", maxWidth: Math.round(rIn * 1.85), textWrap: "balance", color: light ? "#171b1f" : "#fff", filter: titleLocked ? "blur(7px)" : undefined, userSelect: titleLocked ? "none" : undefined } as React.CSSProperties}>
+              <span ref={titleRef} style={{ whiteSpace: voice ? "pre-line" : undefined, fontWeight: 900, fontSize: titleFont, lineHeight: 1.05, letterSpacing: "-0.025em", maxWidth: Math.round(rIn * 1.85), textWrap: "balance", color: light ? "#171b1f" : "#fff", filter: titleLocked ? "blur(7px)" : undefined, userSelect: titleLocked ? "none" : undefined } as React.CSSProperties}>
                 {t}
               </span>
             </div>

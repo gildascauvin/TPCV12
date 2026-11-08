@@ -125,7 +125,7 @@ export function OgRing({ size, value, zone, title, glow, recup, charge }: { size
         ))}
       </div>
       <div style={{ position: "absolute", left: 0, top: cy - Math.round(r * 0.12), width: size, display: "flex", justifyContent: "center", transform: "translateY(-50%)" }}>
-        <div style={{ display: "flex", textAlign: "center", justifyContent: "center", fontSize: titleSize, fontWeight: 900, lineHeight: 1.05, letterSpacing: -1, color: "#fff", width: Math.round(rIn * 1.85) }}>{title}</div>
+        <div style={{ display: "flex", whiteSpace: "pre-wrap", textAlign: "center", justifyContent: "center", fontSize: titleSize, fontWeight: 900, lineHeight: 1.05, letterSpacing: -1, color: "#fff", width: Math.round(rIn * 1.85) }}>{title}</div>
       </div>
     </div>
   );

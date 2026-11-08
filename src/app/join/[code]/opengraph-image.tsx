@@ -18,7 +18,7 @@ export default async function Image({ params }: { params: { code: string } }) {
     <OgFrame photo={photo} icon={icon} eyebrow="Invitation"
       title={first ? `${first} t'invite dans son groupe` : "Ton coach t'invite dans son groupe"}
       sub="Ton point forme en 10 secondes, ta séance ajustée chaque matin."
-      ring={<OgRing size={440} value={5} zone={[5, 6]} title="Fenêtre optimale" glow="#2f9e44" recup={62} charge={45} />} />,
+      ring={<OgRing size={440} value={5} zone={[5, 6]} title={"Fenêtre\noptimale"} glow="#2f9e44" recup={62} charge={45} />} />,
     { ...OG_SIZE, fonts },
   );
 }

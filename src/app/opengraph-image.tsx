@@ -14,7 +14,7 @@ export default async function Image() {
     <OgFrame photo={photo} icon={icon} eyebrow="Ton point forme, 10 secondes"
       title="Ton programme ne sait pas que tu as mal dormi. ThePerfClub, si."
       sub="Chaque matin, ta séance s'ajuste à ta forme."
-      ring={<OgRing size={440} value={8} zone={[5, 6]} title="Gère l'effort" glow="#d44000" recup={19} charge={56} />} />,
+      ring={<OgRing size={440} value={8} zone={[5, 6]} title={"Gère\nl'effort"} glow="#d44000" recup={19} charge={56} />} />,
     { ...OG_SIZE, fonts },
   );
 }
