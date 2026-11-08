@@ -31,7 +31,7 @@ description: Mode opératoire des apps natives iOS et Android (coque Capacitor) 
 | RevenueCat ↔ Play | `~/.config/theperfclub/revenuecat-play-service-account.json` |
 | Clés App Store Connect (.p8) | `~/.appstoreconnect/private_keys/` + récap `~/.appstoreconnect/README.txt` (téléchargeables une seule fois chez Apple : ne jamais supprimer ni committer) |
 | Seed des comptes de revue | `~/Desktop/Captures App Store/.seed_review.mjs` (hors repo) |
-| Visuels stores | `~/Desktop/Captures App Store/Store`, `~/Desktop/Captures Play Store/` |
+| Visuels stores | `~/Desktop/Captures stores V5` (08/11 ; outillage dans le scratchpad de la session, photo hero d'origine perdue) |
 | Secrets serveur | Vercel (`APNS_*`, `FCM_SERVICE_ACCOUNT`, `REVENUECAT_*`, `GARMIN_*`, `PUSH_CRON_SECRET`) : écriture bloquée pour Claude, Gildas les pose |
 
 Identifiants non secrets : bundle/package `com.theperfclub.app`, Team Apple `B4AJAX65W8`, app Play `4972249096511590966`.
@@ -45,7 +45,7 @@ Identifiants non secrets : bundle/package `com.theperfclub.app`, Team Apple `B4A
 
 ## 4. Sortir une version iOS
 
-État au 05/11 : 1.2.1 (build 14) publiée (ASO). 1.2.2 (build 15, même code natif) envoyée en revue le 05/11 pour les nouvelles captures (galerie V4) avec la page produit personnalisée « Page coach » (ppid 7b7b4b0a-b012-4a28-93ab-0487ab69861f, liée depuis la landing coach) ; publication automatique.
+État au 08/11 : 1.2.2 (build 15) en vente. 1.3 (build 16, plugin @capacitor/app + Associated Domains) envoyée, attachée à la version 1.3 (publication MANUELLE), captures V5 posées (galerie principale + nouvelle version de la page produit « Page coach », ppid 7b7b4b0a-b012-4a28-93ab-0487ab69861f), notes FR + « WHAT'S NEW IN 1.3 » relecteur. Soumission : Gildas, après test TestFlight du lien magique.
 
 1. **Version** : `MARKETING_VERSION` (ex. 1.1 → 1.2) si nouvelle version store ; **toujours** incrémenter `CURRENT_PROJECT_VERSION` (12 → 13). Vérifier : `grep -n "CURRENT_PROJECT_VERSION\|MARKETING_VERSION" ios/App/App.xcodeproj/project.pbxproj`.
 2. **Sync** (obligatoire, même sans nouveau plugin : `ios/App/App/capacitor.config.json` est gitignoré) :
@@ -65,7 +65,7 @@ Identifiants non secrets : bundle/package `com.theperfclub.app`, Team Apple `B4A
 
 ## 5. Sortir une version Android
 
-État au 03/11 : 1.2 (versionCode 3) publiée en production France (1re publication publique le 02/11 en 1.1). Publication gérée DÉSACTIVÉE le 03/11 (choix de Gildas) : tout ce que Google valide sort automatiquement. La réactiver (pastille en haut de Vue d ensemble de la publication) avant un envoi dont on veut choisir la date de sortie.
+État au 08/11 : 1.2 (versionCode 3) en production ; 1.3 (versionCode 4) en test interne le 08/11, production après test du lien magique par Gildas. Captures V5 (fiche par défaut + fiche « Page coach ») envoyées en examen le 08/11. Publication gérée DÉSACTIVÉE le 03/11 (choix de Gildas) : tout ce que Google valide sort automatiquement. La réactiver (pastille en haut de Vue d ensemble de la publication) avant un envoi dont on veut choisir la date de sortie.
 
 1. **Version** : dans `android/app/build.gradle`, **monter `versionCode`** (2 → 3) à chaque envoi, et `versionName` si nouvelle version.
 2. **Sync** : `PATH=~/.nvm/versions/node/v22.23.3/bin:$PATH npx cap sync android`. Vérifier que `android/app/google-services.json` est présent.
@@ -125,3 +125,4 @@ Détails et raisons : grep `historique.md` de ce dossier.
 - Natif : `applinks:go.theperfclub.com` dans `App.entitlements` (capability Associated Domains cochée sur l'App ID le 08/11, profils Xcode à régénérer) ; intent-filter `autoVerify` `/auth/callback` dans `AndroidManifest.xml` ; `@capacitor/app` + listener `appUrlOpen` dans `NativeShell` (va sur le même chemin). Effectif seulement à partir du build 1.3 (`npx cap sync` pour le plugin).
 - `/auth/callback` gère `token_hash` + `type` (`verifyOtp`) : marche dans n'importe quel navigateur/app (pas de PKCE). Modèle Supabase Magic Link = `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=magiclink` (appliqué le 08/11 après le déploiement f2067b0, 3 occurrences).
 - Emails auth envoyés par Resend en SMTP (branché le 08/11, `noreply@theperfclub.com`), limite 100/h (avant : 2/h du service intégré).
+- **Captures via l'API iris** (08/11) : un `<input type=file>` créé dans la page App Store Connect + `file_upload`, puis `POST /iris/v1/appScreenshots` → PUT des `uploadOperations` → `PATCH uploaded:true` + MD5 ; 10 captures max par jeu (supprimer avant d'ajouter), ordre via `PATCH appScreenshotSets/{id}/relationships/appScreenshots`. Page produit : créer une nouvelle `appCustomProductPageVersions` (copie les captures). Play : importer une capture à la fois (attendre ~7 s), sinon la précédente ne s'attache pas ; noms uniques (`v5_…`) pour éviter la déduplication.
