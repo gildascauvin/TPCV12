@@ -6,7 +6,7 @@ import { parseLine, type ParsedLine } from "@/lib/exerciseParser";
    `sessions.live_sets` garde le prévu d'origine, les ressentis et le repos en cours. */
 
 export type Feel = "facile" | "prevu" | "dur";
-export type SetKind = "load" | "reps" | "pace" | "count";
+export type SetKind = "load" | "pct" | "reps" | "pace" | "count";
 
 export interface LineLog {
   key: string;
@@ -48,7 +48,24 @@ function workTxt(p: ParsedLine): string | undefined {
 /* Séries lisibles sur une ligne, ou null si la ligne ne se découpe pas en séries sûres. */
 function extract(line: string): Omit<LineLog, "key" | "feels" | "done" | "net" | "cut" | "orig"> | null {
   const p = parseLine(line);
-  if (!p.ok || p.kind !== "full" || p.ambiguous || p.pct != null) return null;
+  if (!p.ok || p.kind !== "full" || p.ambiguous) return null;
+  if (p.pct != null) {
+    if (p.entries.length) return null;
+    const pctToks = p.toks.filter(t => t.k === "pct");
+    const sch = p.schemes;
+    if (!sch.length || pctToks.length !== sch.length || sch.some(s => !s.sets)) return null;
+    const vals: number[] = [];
+    const reps: (string | null)[] = [];
+    for (let i = 0; i < sch.length; i++) {
+      const v = parseFloat((pctToks[i].src.match(/\d+(?:[.,]\d+)?/)?.[0] ?? "").replace(",", "."));
+      if (!v) return null;
+      const r = sch[i].reps ?? (sch[i].sec != null || sch[i].dist != null ? null : undefined);
+      if (r === undefined) return null;
+      for (let k = 0; k < sch[i].sets!; k++) { vals.push(v); reps.push(r); }
+    }
+    if (vals.length > 20) return null;
+    return { kind: "pct", vals, reps, work: workTxt(p) };
+  }
   if (p.entries.length) {
     const vals: number[] = [];
     const reps: (string | null)[] = [];
@@ -148,6 +165,10 @@ export function applyFeel(log: LineLog, feel: Feel, sessPct: number): FeelOutcom
     if (i < nd) return v;
     if (log.kind === "pace") return Math.max(60, v + (step > 0 ? -5 : 10));
     if (log.kind === "reps") return Math.max(1, v + step);
+    if (log.kind === "pct") {
+      const t = Math.round(v * (1 + (step > 0 ? UP_PCT : -DOWN_PCT) / 100));
+      return Math.max(1, step > 0 ? Math.max(t, v + 1) : Math.min(t, v - 1));
+    }
     return scaleLoad(v, step > 0);
   });
   return { log: { ...base, vals, net: log.net + step }, capped: null, msg: "" };
@@ -157,6 +178,7 @@ export function valueTxt(log: LineLog, v: number): string {
   if (log.kind === "pace") return `${paceTxt(v)}/km`;
   if (log.kind === "reps") return `${v} rep${v > 1 ? "s" : ""}`;
   if (log.kind === "count") return log.work ?? fmtNum(v);
+  if (log.kind === "pct") return `${fmtNum(v)} %`;
   return `${fmtNum(v)} kg`;
 }
 
@@ -176,6 +198,7 @@ function volumeText(log: LineLog): string {
   const gs = groups(log, n);
   if (log.kind === "reps") return gs.map(g => `${g.n}x${g.v}`).join(" ");
   if (log.kind === "pace") return gs.map(g => `${g.n}x${log.work} ${paceTxt(g.v)}/km`).join(", ");
+  if (log.kind === "pct") return gs.map(g => `${g.n}x${g.reps ?? log.work}@${fmtNum(g.v)}%`).join(", ");
   return gs.map(g => {
     if (g.reps == null) return g.n > 1 ? `${g.n}x${fmtNum(g.v)}kg` : `${fmtNum(g.v)}kg`;
     const r = /^\d+$/.test(g.reps) ? g.reps : `(${g.reps})`;
@@ -183,7 +206,7 @@ function volumeText(log: LineLog): string {
   }).join(log.reps.some(r => r != null) ? ", " : " ");
 }
 
-const VOLUME_TOKS = new Set(["complex", "scheme", "series", "count", "reps", "time", "dist", "load", "atload", "mult", "interval", "pace", "bare"]);
+const VOLUME_TOKS = new Set(["complex", "scheme", "series", "count", "reps", "time", "dist", "load", "atload", "mult", "interval", "pace", "bare", "pct"]);
 
 /* Réécrit la partie volume de la ligne. Si le texte obtenu ne se relit pas exactement en ces séries,
    la ligne reste telle quelle (le journal garde la vérité). */

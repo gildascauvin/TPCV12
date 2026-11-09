@@ -34,6 +34,7 @@ function cellValue(log: LineLog, v: number): string {
   if (log.kind === "pace") return paceTxt(v);
   if (log.kind === "reps") return String(v);
   if (log.kind === "count") return log.work ?? fmtNum(v);
+  if (log.kind === "pct") return `${fmtNum(v)}%`;
   return fmtNum(v);
 }
 
@@ -182,7 +183,7 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
 
   const cranLabel = !log ? "" : log.net === 0 ? "Au plan" : `${log.net > 0 ? "+" : "−"}${Math.abs(log.net)} cran${Math.abs(log.net) > 1 ? "s" : ""}${Math.abs(log.net) >= 2 ? " (max)" : ""}`;
   const leftCount = log ? nSets - log.done : 0;
-  const unit = log?.kind === "reps" ? "Reps" : log?.kind === "pace" ? "Allure" : log?.kind === "count" ? "Volume" : "Charge";
+  const unit = log?.kind === "reps" ? "Reps" : log?.kind === "pace" ? "Allure" : log?.kind === "count" ? "Volume" : log?.kind === "pct" ? "Intensité" : "Charge";
 
   function saveNotes(text: string) {
     setLive(prev => prev ? { ...prev, notes: text } : prev);
