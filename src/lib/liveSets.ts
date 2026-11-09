@@ -15,6 +15,8 @@ export interface LineLog {
   vals: number[];
   reps: (string | null)[];
   work?: string;
+  /* Séries comptées par un mot (« 5 reps@90% », « 3 séries ») : la réécriture change ce nombre. */
+  countWord?: boolean;
   feels: (Feel | null)[];
   done: number;
   net: number;
@@ -46,9 +48,27 @@ function workTxt(p: ParsedLine): string | undefined {
 }
 
 /* Séries lisibles sur une ligne, ou null si la ligne ne se découpe pas en séries sûres. */
+const WOD_RE = /\b(for time|amrap|e\d?mom|tabata|wod|chipper)\b/i;
+
 function extract(line: string): Omit<LineLog, "key" | "feels" | "done" | "net" | "cut" | "orig"> | null {
   const p = parseLine(line);
-  if (!p.ok || p.kind !== "full" || p.ambiguous) return null;
+  if (!p.ok || p.kind !== "full" || p.ambiguous || p.header || p.otm || WOD_RE.test(line)) return null;
+  // Nombre nu ou multiplicateur isolé = lecture incertaine ; tours = circuit, pas des séries.
+  // Deux exercices sur une ligne (« Tractions 4×5 + Dips 3×8 ») : pas de séries communes.
+  const firstTok = p.toks.length ? Math.min(...p.toks.map(t => t.start)) : line.length;
+  if (/\s\+\s/.test(line.slice(firstTok))) return null;
+  if (p.toks.some(t => t.k === "bare" || t.k === "mult" || t.k === "otm" || t.k === "interval" || (t.k === "series" && /tour|round/i.test(t.src)))) return null;
+  const word = p.toks.filter(t => t.k === "series" || t.k === "reps");
+  if (word.length === 1 && !p.toks.some(t => t.k === "scheme" || t.k === "complex" || t.k === "load" || t.k === "atload")) {
+    const n = parseInt(word[0].src, 10);
+    const pctTok = p.toks.find(t => t.k === "pct");
+    const distTok = p.toks.find(t => t.k === "dist" || t.k === "time");
+    if (n >= 1 && n <= 20 && (word[0].k === "series" || pctTok || distTok)) {
+      const work = pctTok ? pctTok.src.replace(/^@\s*/, "").replace(/\s+/g, "") : distTok ? distTok.src.replace(/\s+/g, "") : undefined;
+      return { kind: "count", vals: Array(n).fill(1), reps: Array(n).fill(null), work, countWord: true };
+    }
+    return null;
+  }
   if (p.pct != null) {
     if (p.entries.length) return null;
     const pctToks = p.toks.filter(t => t.k === "pct");
@@ -67,6 +87,7 @@ function extract(line: string): Omit<LineLog, "key" | "feels" | "done" | "net" |
     return { kind: "pct", vals, reps, work: workTxt(p) };
   }
   if (p.entries.length) {
+    if (!p.toks.some(t => t.k === "load" || t.k === "atload")) return null;
     const vals: number[] = [];
     const reps: (string | null)[] = [];
     for (const e of p.entries) for (let i = 0; i < e.n; i++) { vals.push(e.load); reps.push(e.item.scheme?.reps ?? null); }
@@ -97,16 +118,12 @@ function extract(line: string): Omit<LineLog, "key" | "feels" | "done" | "net" |
 }
 
 export function restSecOf(line: string): number | null {
-  const p = parseLine(line);
-  const r = p.extras.find(x => x.k === "rest");
-  if (!r) return null;
-  const t = (r.raw ?? r.t).toLowerCase();
-  let m = t.match(/(\d+)\s*['’]\s*(\d{1,2})/);
-  if (m) return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-  m = t.match(/(\d+(?:[.,]\d+)?)\s*(min|mn|m\b|')/);
-  if (m) return Math.round(parseFloat(m[1].replace(",", ".")) * 60);
-  m = t.match(/(\d+)\s*(s|sec|")/);
-  if (m) return parseInt(m[1], 10);
+  const m = line.match(/\b(?:r[ée]cup(?:[ée]ration)?|repos|rest)\s*:?\s*(\d+(?:[.,]\d+)?)\s*(min|mn|['’]|s\b|sec|")?\s*(\d{1,2})?(?!\s*-)/i);
+  if (!m) return null;
+  const v = parseFloat(m[1].replace(",", "."));
+  const unit = (m[2] ?? "").toLowerCase();
+  if (/^(min|mn|'|’)$/.test(unit)) return Math.round(v * 60) + (m[3] ? parseInt(m[3], 10) : 0);
+  if (/^(s|sec|")$/.test(unit)) return Math.round(v);
   return null;
 }
 
@@ -120,7 +137,7 @@ export function logFor(line: string, saved: LineLog | undefined): LineLog | null
   const vals = saved ? [...saved.vals.slice(0, done), ...x.vals.slice(done)] : x.vals;
   const orig = saved ? [...saved.orig.slice(0, done), ...x.vals.slice(done)] : x.vals.slice();
   return {
-    key: line, kind: x.kind, vals, orig, reps: x.reps, work: x.work,
+    key: line, kind: x.kind, vals, orig, reps: x.reps, work: x.work, countWord: x.countWord,
     feels: saved ? saved.feels.slice(0, done) : [], done, net: saved?.net ?? 0, cut: 0, skipped: saved?.skipped,
   };
 }
@@ -177,7 +194,7 @@ export function applyFeel(log: LineLog, feel: Feel, sessPct: number): FeelOutcom
 export function valueTxt(log: LineLog, v: number): string {
   if (log.kind === "pace") return `${paceTxt(v)}/km`;
   if (log.kind === "reps") return `${v} rep${v > 1 ? "s" : ""}`;
-  if (log.kind === "count") return log.work ?? fmtNum(v);
+  if (log.kind === "count") return log.work ?? "";
   if (log.kind === "pct") return `${fmtNum(v)} %`;
   return `${fmtNum(v)} kg`;
 }
@@ -212,12 +229,27 @@ const VOLUME_TOKS = new Set(["complex", "scheme", "series", "count", "reps", "ti
    la ligne reste telle quelle (le journal garde la vérité). */
 export function rewriteLineFor(line: string, log: LineLog): string {
   const p = parseLine(line);
+  if (log.countWord) {
+    const t = p.toks.find(x => x.k === "series" || x.k === "reps");
+    if (!t) return line;
+    const n = activeCount(log);
+    let src = t.src.replace(/^\d+/, String(n));
+    src = n > 1 ? src.replace(/\b(rep|série|serie|essai|tentative)\b/i, "$1s") : src.replace(/\b(rep|série|serie|essai|tentative)s\b/i, "$1");
+    const next = line.slice(0, t.start) + src + line.slice(t.end);
+    const check = extract(next);
+    return check && check.kind === "count" && check.vals.length === n ? next : line;
+  }
   const toks = p.toks.filter(t => VOLUME_TOKS.has(t.k));
   if (!toks.length) return line;
   const start = Math.min(...toks.map(t => t.start));
   const end = Math.max(...toks.map(t => t.end));
   if (p.toks.some(t => !VOLUME_TOKS.has(t.k) && t.start > start && t.end < end)) return line;
-  const next = (line.slice(0, start) + volumeText(log) + line.slice(end)).replace(/\s{2,}/g, " ");
+  // Entre les nombres, seulement des séparateurs : sinon on effacerait du texte du coach.
+  let between = line.slice(start, end);
+  for (const t of [...toks].sort((a, b) => b.start - a.start)) between = between.slice(0, t.start - start) + between.slice(t.end - start);
+  if (!/^[\s,;·/@à]*$/i.test(between)) return line;
+  const after = line.slice(end);
+  const next = (line.slice(0, start) + volumeText(log) + (/^[A-Za-zÀ-ÿ\d]/.test(after) ? " " : "") + after).replace(/\s{2,}/g, " ");
   const check = extract(next);
   const n = activeCount(log);
   if (!check || check.kind !== log.kind || check.vals.length !== n || check.vals.some((v, i) => Math.abs(v - log.vals[i]) > 0.01)) return line;

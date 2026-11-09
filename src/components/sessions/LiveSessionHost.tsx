@@ -22,7 +22,6 @@ import {
 } from "@/lib/liveSets";
 import { parseLine } from "@/lib/exerciseParser";
 
-const TIP_KEY = "tpc_live_sets_tip";
 const mmss = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
 
 function replaceNonEmptyLine(notes: string, idx: number, text: string): string {
@@ -33,7 +32,7 @@ function replaceNonEmptyLine(notes: string, idx: number, text: string): string {
 function cellValue(log: LineLog, v: number): string {
   if (log.kind === "pace") return paceTxt(v);
   if (log.kind === "reps") return String(v);
-  if (log.kind === "count") return log.work ?? fmtNum(v);
+  if (log.kind === "count") return log.work ?? "";
   if (log.kind === "pct") return `${fmtNum(v)}%`;
   return fmtNum(v);
 }
@@ -61,8 +60,7 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
   const [editorRev, setEditorRev] = useState(0);
   const [feelToast, setFeelToast] = useState<{ text: string; undo: { notes: string; ls: LiveSets | null } } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [tipSeen, setTipSeen] = useState(true);
-  useEffect(() => { try { setTipSeen(!!localStorage.getItem(TIP_KEY)); } catch { /* stockage indisponible */ } }, []);
+
 
   const refresh = useCallback(async () => {
     const s = await fetchLiveSession(supabase, userId);
@@ -117,10 +115,6 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
   const restElapsed = rest ? Math.max(0, (Date.now() - Date.parse(rest.at)) / 1000) : 0;
   const restLeft = rest && rest.sec != null ? rest.sec - restElapsed : null;
 
-  function hideTip() {
-    setTipSeen(true);
-    try { localStorage.setItem(TIP_KEY, "1"); } catch { /* stockage indisponible */ }
-  }
 
   /* Un tap = une écriture (notes + journal ensemble), mise en file d'attente sans réseau. */
   function commit(patch: { notes?: string; live_sets: LiveSets | null }) {
@@ -135,9 +129,16 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
 
   function tapFeel(feel: Feel) {
     if (!log || !curLine || log.done >= nSets) return;
-    if (!tipSeen) hideTip();
-    const out = applyFeel(log, feel, sessionPct(ls));
-    const newLine = rewriteLineFor(curLine, out.log);
+    let out = applyFeel(log, feel, sessionPct(ls));
+    let newLine = rewriteLineFor(curLine, out.log);
+    const moved = out.log.cut !== log.cut || out.log.vals.some((v, i) => v !== log.vals[i]);
+    // Ligne trop libre pour être réécrite sans abîmer le texte : ressenti noté, suite inchangée.
+    let frozen = false;
+    if (moved && newLine === curLine) {
+      out = { log: { ...log, feels: out.log.feels, done: out.log.done, skipped: false }, capped: null, msg: "" };
+      newLine = curLine;
+      frozen = true;
+    }
     const nl: LineLog = { ...out.log, key: newLine };
     const nd = nl.done;
     const pn = activeCount(nl);
@@ -151,7 +152,8 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
     const notes = live!.notes ?? "";
     const newNotes = newLine === curLine ? notes : replaceNonEmptyLine(notes, safeIdx, newLine);
     let tail = "";
-    if (out.capped === "ex") tail = " · plafond de l'exercice atteint, suite inchangée";
+    if (frozen) tail = " · noté, la ligne reste comme écrite";
+    else if (out.capped === "ex") tail = " · plafond de l'exercice atteint, suite inchangée";
     else if (out.capped === "session") tail = " · plafond de la séance atteint, suite inchangée";
     else if (out.msg) tail = ` · ${out.msg}`;
     else if (feel !== "prevu" && nd < pn) tail = ` · suite à ${valueTxt(nl, nl.vals[nd])}`;
@@ -181,9 +183,58 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
     setIdx(j);
   }
 
-  const cranLabel = !log ? "" : log.net === 0 ? "Au plan" : `${log.net > 0 ? "+" : "−"}${Math.abs(log.net)} cran${Math.abs(log.net) > 1 ? "s" : ""}${Math.abs(log.net) >= 2 ? " (max)" : ""}`;
   const leftCount = log ? nSets - log.done : 0;
   const unit = log?.kind === "reps" ? "Reps" : log?.kind === "pace" ? "Allure" : log?.kind === "count" ? "Volume" : log?.kind === "pct" ? "Intensité" : "Charge";
+  const setCells = log ? (
+
+                      <div style={{ marginTop: 12, marginBottom: 12 }}>
+                        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 6 }}>
+                          {unit} par série · {Math.min(log.done, nSets)} / {nSets} faite{log.done > 1 ? "s" : ""}
+                        </div>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {log.vals.map((v, i) => {
+                            if (i >= nSets) {
+                              return (
+                                <div key={i} aria-label={`Série ${i + 1}, retirée`} style={{ minWidth: 56, minHeight: 58, padding: "6px 8px", borderRadius: 12, boxSizing: "border-box", border: "1.5px dashed rgba(0,0,0,.14)", color: "#9a9ea1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, fontFamily: "var(--font-mono), monospace", textDecoration: "line-through" }}>
+                                  <span style={{ fontSize: 10.5, fontWeight: 700 }}>S{i + 1} ✕</span>
+                                  <span style={{ fontSize: 14, fontWeight: 800 }}>{cellValue(log, v)}</span>
+                                </div>
+                              );
+                            }
+                            const isDone = i < log.done;
+                            const skip = !!log.skipped && i >= log.done;
+                            const cur = i === log.done && !skip;
+                            const o = log.orig[i];
+                            const changed = o != null && v !== o;
+                            const sign = o == null ? " +" : changed ? ((log.kind === "pace" ? v < o : v > o) ? " ↑" : " ↓") : "";
+                            const bg = isDone ? "#1f2428" : changed ? "rgba(212,64,0,.10)" : "#f4f4f2";
+                            const color = isDone ? "#fff" : changed ? "#d44000" : "#1f2428";
+                            let border = "1.5px solid transparent";
+                            if (cur) border = "2px solid #171b1f";
+                            if (isDone && changed) border = "2px solid #d44000";
+                            if (skip) border = "1.5px dashed rgba(0,0,0,.28)";
+                            return (
+                              <div key={i} aria-label={`Série ${i + 1}, ${valueTxt(log, v)}${skip ? ", non notée" : isDone ? ", faite" : cur ? ", en cours" : ", à faire"}${changed ? ", ajustée" : ""}`}
+                                style={{ minWidth: 56, minHeight: 58, padding: "6px 8px", borderRadius: 12, boxSizing: "border-box", background: bg, color, border, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, fontFamily: "var(--font-mono), monospace" }}>
+                                <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".04em", color: isDone ? "rgba(255,255,255,.75)" : changed ? "#d44000" : "#8a8f94" }}>
+                                  {skip ? `S${i + 1} –` : `${isDone ? "✓ " : ""}S${i + 1}${sign}`}
+                                </span>
+                                {changed && <s style={{ fontSize: 10.5, fontWeight: 500, opacity: 0.6 }}>{cellValue(log, o!)}</s>}
+                                <span style={{ fontSize: 14, fontWeight: 800 }}>{cellValue(log, v)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {log.skipped && leftCount > 0 && (
+                          <div style={{ fontSize: 12.5, color: "#62686e", lineHeight: 1.4, marginTop: 8 }}>
+                            {leftCount} série{leftCount > 1 ? "s" : ""} non notée{leftCount > 1 ? "s" : ""} : la suite n&apos;a pas bougé. Un tap ci-dessous pour les noter quand même.
+                          </div>
+                        )}
+                      </div>
+                    
+  ) : null;
+
+  const cranLabel = !log ? "" : log.net === 0 ? "Au plan" : `${log.net > 0 ? "+" : "−"}${Math.abs(log.net)} cran${Math.abs(log.net) > 1 ? "s" : ""}${Math.abs(log.net) >= 2 ? " (max)" : ""}`;
 
   function saveNotes(text: string) {
     setLive(prev => prev ? { ...prev, notes: text } : prev);
@@ -329,53 +380,8 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
                       initialMedia={live.exercise_media}
                       onMediaChange={saveMedia}
                       sessionDate={live.date}
+                      focusSlot={setCells}
                     />
-                    {log && (
-                      <div style={{ marginTop: 14 }}>
-                        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 6 }}>
-                          {unit} par série · {Math.min(log.done, nSets)} / {nSets} faite{log.done > 1 ? "s" : ""}
-                        </div>
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          {log.vals.map((v, i) => {
-                            if (i >= nSets) {
-                              return (
-                                <div key={i} aria-label={`Série ${i + 1}, retirée`} style={{ minWidth: 56, minHeight: 58, padding: "6px 8px", borderRadius: 12, boxSizing: "border-box", border: "1.5px dashed rgba(0,0,0,.14)", color: "#9a9ea1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, fontFamily: "var(--font-mono), monospace", textDecoration: "line-through" }}>
-                                  <span style={{ fontSize: 10.5, fontWeight: 700 }}>S{i + 1} ✕</span>
-                                  <span style={{ fontSize: 14, fontWeight: 800 }}>{cellValue(log, v)}</span>
-                                </div>
-                              );
-                            }
-                            const isDone = i < log.done;
-                            const skip = !!log.skipped && i >= log.done;
-                            const cur = i === log.done && !skip;
-                            const o = log.orig[i];
-                            const changed = o != null && v !== o;
-                            const sign = o == null ? " +" : changed ? ((log.kind === "pace" ? v < o : v > o) ? " ↑" : " ↓") : "";
-                            const bg = isDone ? "#1f2428" : changed ? "rgba(212,64,0,.10)" : "#f4f4f2";
-                            const color = isDone ? "#fff" : changed ? "#d44000" : "#1f2428";
-                            let border = "1.5px solid transparent";
-                            if (cur) border = "2px solid #171b1f";
-                            if (isDone && changed) border = "2px solid #d44000";
-                            if (skip) border = "1.5px dashed rgba(0,0,0,.28)";
-                            return (
-                              <div key={i} aria-label={`Série ${i + 1}, ${valueTxt(log, v)}${skip ? ", non notée" : isDone ? ", faite" : cur ? ", en cours" : ", à faire"}${changed ? ", ajustée" : ""}`}
-                                style={{ minWidth: 56, minHeight: 58, padding: "6px 8px", borderRadius: 12, boxSizing: "border-box", background: bg, color, border, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, fontFamily: "var(--font-mono), monospace" }}>
-                                <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".04em", color: isDone ? "rgba(255,255,255,.75)" : changed ? "#d44000" : "#8a8f94" }}>
-                                  {skip ? `S${i + 1} –` : `${isDone ? "✓ " : ""}S${i + 1}${sign}`}
-                                </span>
-                                {changed && <s style={{ fontSize: 10.5, fontWeight: 500, opacity: 0.6 }}>{cellValue(log, o!)}</s>}
-                                <span style={{ fontSize: 14, fontWeight: 800 }}>{cellValue(log, v)}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        {log.skipped && leftCount > 0 && (
-                          <div style={{ fontSize: 12.5, color: "#62686e", lineHeight: 1.4, marginTop: 8 }}>
-                            {leftCount} série{leftCount > 1 ? "s" : ""} non notée{leftCount > 1 ? "s" : ""} : la suite n&apos;a pas bougé. Un tap ci-dessous pour les noter quand même.
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </>
                 ) : (
                   <>
@@ -404,12 +410,6 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
 
             {tracking ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 16px calc(14px + env(safe-area-inset-bottom,0px))", borderTop: "1px solid rgba(255,255,255,.08)" }}>
-                {!tipSeen && log!.done === 0 && (
-                  <div style={{ display: "flex", gap: 10, alignItems: "center", background: "#fff", color: "#171b1f", borderRadius: 16, padding: "8px 8px 8px 12px" }}>
-                    <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 1.4 }}><b>Un tap après chaque série</b> : elle est validée, le repos démarre et la suite s&apos;ajuste à ton ressenti. Tu peux aussi ne rien noter.</div>
-                    <button onClick={hideTip} style={{ flexShrink: 0, minHeight: 44, border: "none", background: "none", color: "#d44000", fontSize: 13, fontWeight: 800, cursor: "pointer", padding: "0 6px", fontFamily: "inherit" }}>Compris</button>
-                  </div>
-                )}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                   <div style={{ fontSize: 13, fontWeight: 800 }}>Série {log!.done + 1} faite ? C&apos;était…</div>
                   <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,.6)", whiteSpace: "nowrap" }}>{cranLabel}</div>

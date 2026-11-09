@@ -574,9 +574,11 @@ interface CardProps {
   sessionDate: string;
   /* Séance en direct (2026-10-02) : un seul exercice affiché en grand, sans poignée de drag. */
   large?: boolean;
+  /* Séance en direct : contenu posé entre la ligne et la démo (cases des séries, lib/liveSets). */
+  belowLine?: React.ReactNode;
 }
 
-function ExerciseCard({ line, lineCtx, editing, onStartEdit, onCommitEdit, onLiveEdit, onDeleteEmpty, onDelete, attachments, authorRole, authorName, onUpdateAttachments, isPanelOwner, requestPanel, releasePanel, ownerId, testSubject, sessionDate, large = false }: CardProps) {
+function ExerciseCard({ line, lineCtx, editing, onStartEdit, onCommitEdit, onLiveEdit, onDeleteEmpty, onDelete, attachments, authorRole, authorName, onUpdateAttachments, isPanelOwner, requestPanel, releasePanel, ownerId, testSubject, sessionDate, large = false, belowLine }: CardProps) {
   const { isMd } = useBreakpoint();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: line.id });
   const [open, setOpen] = useState<"media" | "comments" | null>(null);
@@ -1053,6 +1055,7 @@ function ExerciseCard({ line, lineCtx, editing, onStartEdit, onCommitEdit, onLiv
       </div>
 
       {/* Séance en direct : la démo (ou l'illustration) en grand sous l'exercice. */}
+      {large && belowLine}
       {large && !editing && <DemoBlock text={line.text} />}
       {/* Séance en direct : les actions du menu ⋯ en boutons visibles, mêmes blocs ouverts. */}
       {large && (
@@ -1379,9 +1382,10 @@ interface Props {
   /* Séance en direct (2026-10-02) : n'affiche que l'exercice à cet index, en grand, sans en-tête
      ni composeur — mêmes tokens, médias, commentaires et tests que l'éditeur complet. */
   focusIndex?: number;
+  focusSlot?: React.ReactNode;
 }
 
-export default function ExerciseBlockEditor({ value, onChange, authorRole, authorName, initialMedia, onMediaChange, sessionDate, testSubject, disableLiveTestSync, focusIndex }: Props) {
+export default function ExerciseBlockEditor({ value, onChange, authorRole, authorName, initialMedia, onMediaChange, sessionDate, testSubject, disableLiveTestSync, focusIndex, focusSlot }: Props) {
   const [lines, setLines] = useState<Line[]>(() =>
     value.split("\n").filter(l => l.trim()).map(text => ({ id: crypto.randomUUID(), text }))
   );
@@ -1490,6 +1494,7 @@ export default function ExerciseBlockEditor({ value, onChange, authorRole, autho
               <ExerciseCard
                 key={l.id}
                 large={focused}
+                belowLine={focusSlot}
                 line={l}
                 lineCtx={lineCtxById[l.id]}
                 editing={editingId === l.id}
