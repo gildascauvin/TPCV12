@@ -119,9 +119,17 @@ const spanOf = (toks: (Token | null | undefined)[]): Span | null => {
 
 function chipsOf(p: ParsedLine) {
   const out: Chip[] = [];
+  // Un % par groupe de séries (« 2×1@85%, 1×1@81% », réécrit par la séance en direct) : chacun à côté
+  // de son volume, au lieu du seul dernier %.
+  const pctToks = p.toks.filter(t => t.k === "pct");
+  const pctPerScheme = pctToks.length > 1 && pctToks.length === p.schemes.length;
   p.schemes.forEach((sc, i) => {
     const t = schemeText(sc, p.perSide);
     if (t) out.push({ k: "v" + i, t, cls: "vol", span: spanOf([sc.tok, sc.setsRef?.t, sc.secRef?.t]) });
+    if (pctPerScheme) {
+      const v = parseFloat((pctToks[i].src.match(/\d+(?:[.,]\d+)?/)?.[0] ?? "").replace(",", "."));
+      if (v) out.push({ k: "pct" + i, t: `${fmt(v)} %`, span: spanOf([pctToks[i]]) });
+    }
     if (sc.range) {
       const own = sc.items.filter(x => !x.rangeStart && !x.rangeEnd).map(x => x.v);
       const covered = own.length && Math.min(...own) === sc.range[0].v && Math.max(...own) === sc.range[1].v;
@@ -132,7 +140,7 @@ function chipsOf(p: ParsedLine) {
       out.push({ k: `l${i}-${j}`, t: loadText(x), span: spanOf([x.ref?.t, x.nRef?.t]) });
     });
   });
-  if (p.pct != null) out.push({ k: "pct", t: `${fmt(p.pct)}${p.pct2 != null ? "-" + fmt(p.pct2) : ""} %${p.pctRef ? " " + p.pctRef : ""}`, span: spanOf([p.pctRefs?.[0].t]) });
+  if (p.pct != null && !pctPerScheme) out.push({ k: "pct", t: `${fmt(p.pct)}${p.pct2 != null ? "-" + fmt(p.pct2) : ""} %${p.pctRef ? " " + p.pctRef : ""}`, span: spanOf([p.pctRefs?.[0].t]) });
   if (p.rpe) {
     const v = p.rpe.v2 ?? p.rpe.v;
     out.push({ k: "rpe", t: `${p.rpe.k} ${fmt(p.rpe.v)}${p.rpe.v2 != null ? "-" + fmt(p.rpe.v2) : ""}`, cls: p.rpe.k === "RPE" ? (v <= 4 ? "rpe-lo" : v <= 7 ? "rpe-mid" : "rpe-hi") : undefined, span: spanOf([p.rpe.ref.t]) });
