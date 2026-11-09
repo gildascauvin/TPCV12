@@ -18,9 +18,11 @@ import { DARK_CARD_BG } from "@/lib/theme";
 import { isOffline, rememberLive, updateOwnSession } from "@/lib/offlineSessions";
 import {
   logFor, applyFeel, rewriteLineFor, restSecOf, valueTxt, activeCount, sessionPct, sessionSummary,
-  fmtNum, paceTxt, FEEL_LABEL, restorePlan, type Feel, type LineLog, type LiveSets,
+  fmtNum, paceTxt, FEEL_LABEL, FEEL_ORDER, stepBadge, restorePlan, type Feel, type LineLog, type LiveSets,
 } from "@/lib/liveSets";
 import { parseLine } from "@/lib/exerciseParser";
+import { flyToken } from "@/lib/flyToken";
+import { chargeColor } from "@/lib/ringColors";
 
 const mmss = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
 
@@ -58,7 +60,7 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
   const [, setTick] = useState(0);
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editorRev, setEditorRev] = useState(0);
-  const [feelToast, setFeelToast] = useState<{ text: string; undo: { notes: string; ls: LiveSets | null } } | null>(null);
+  const [feelToast, setFeelToast] = useState<{ text: string; feel: Feel; idx: number; undo: { notes: string; ls: LiveSets | null } } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
@@ -127,7 +129,7 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
     updateOwnSession(supabase, base, full).then(s => { if (!s) toast("Série non enregistrée. Réessaie dans un instant."); });
   }
 
-  function tapFeel(feel: Feel) {
+  function tapFeel(feel: Feel, from: HTMLElement) {
     if (!log || !curLine || log.done >= nSets) return;
     let out = applyFeel(log, feel, sessionPct(ls));
     let newLine = rewriteLineFor(curLine, out.log);
@@ -135,7 +137,7 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
     // Ligne trop libre pour être réécrite sans abîmer le texte : ressenti noté, suite inchangée.
     let frozen = false;
     if (moved && newLine === curLine) {
-      out = { log: { ...log, feels: out.log.feels, done: out.log.done, skipped: false }, capped: null, msg: "" };
+      out = { log: { ...log, feels: out.log.feels, done: out.log.done, skipped: false }, capped: null, msg: "", step: 0 };
       newLine = curLine;
       frozen = true;
     }
@@ -160,7 +162,17 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
     haptic("light");
     commit({ notes: newNotes, live_sets: newLs });
     if (newNotes !== notes) setEditorRev(r => r + 1);
-    const t = { text: `Série ${nd} faite · ${FEEL_LABEL[feel]}${tail}`, undo: { notes, ls: live!.live_sets ?? null } };
+    const t = { text: `Série ${nd} faite · ${FEEL_LABEL[feel]}${tail}`, feel, idx: safeIdx, undo: { notes, ls: live!.live_sets ?? null } };
+    /* Badge qui part du bloc tapé et se pose sur la série suivante, comme l'ajustement de l'anneau
+       (flyToken). La case est relue après le remontage de l'éditeur. */
+    const badge = !frozen && nd < pn ? stepBadge(nl, out.step) : null;
+    if (badge) {
+      const color = out.step > 0 ? "#2f9e44" : "#d44000";
+      window.setTimeout(() => {
+        const to = document.querySelector(`[data-live-set="${nd}"]`);
+        if (to) flyToken(from, to, badge, color, "center");
+      }, 90);
+    }
     setFeelToast(t);
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setFeelToast(cur => (cur === t ? null : cur)), 4000);
@@ -184,6 +196,7 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
   }
 
   const leftCount = log ? nSets - log.done : 0;
+  const shownFeel = feelToast && feelToast.idx === safeIdx ? feelToast.feel : null;
   const unit = log?.kind === "reps" ? "Reps" : log?.kind === "pace" ? "Allure" : log?.kind === "count" ? "Volume" : log?.kind === "pct" ? "Intensité" : "Charge";
   const setCells = log ? (
 
@@ -214,7 +227,7 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
                             if (isDone && changed) border = "2px solid #d44000";
                             if (skip) border = "1.5px dashed rgba(0,0,0,.28)";
                             return (
-                              <div key={i} aria-label={`Série ${i + 1}, ${valueTxt(log, v)}${skip ? ", non notée" : isDone ? ", faite" : cur ? ", en cours" : ", à faire"}${changed ? ", ajustée" : ""}`}
+                              <div key={i} data-live-set={i} aria-label={`Série ${i + 1}, ${valueTxt(log, v)}${skip ? ", non notée" : isDone ? ", faite" : cur ? ", en cours" : ", à faire"}${changed ? ", ajustée" : ""}`}
                                 style={{ minWidth: 56, minHeight: 58, padding: "6px 8px", borderRadius: 12, boxSizing: "border-box", background: bg, color, border, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, fontFamily: "var(--font-mono), monospace" }}>
                                 <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".04em", color: isDone ? "rgba(255,255,255,.75)" : changed ? "#d44000" : "#8a8f94" }}>
                                   {skip ? `S${i + 1} –` : `${isDone ? "✓ " : ""}S${i + 1}${sign}`}
@@ -410,19 +423,32 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
             )}
 
             {tracking ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 16px calc(14px + env(safe-area-inset-bottom,0px))", borderTop: "1px solid rgba(255,255,255,.08)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <div style={{ fontSize: 13, fontWeight: 800 }}>Série {log!.done + 1} faite ? C&apos;était…</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "14px 16px calc(10px + env(safe-area-inset-bottom,0px))", background: "#1a1f24", borderRadius: "22px 22px 0 0", borderTop: "1px solid rgba(255,255,255,.12)", boxShadow: "0 -12px 34px rgba(0,0,0,.55)" }}>
+                {/* Jauge de fin de séance à 5 niveaux (POC T3, 09/11) : rien de prérempli (une échelle remplie
+                    se lirait comme une réponse déjà donnée), la zone prévue en pointillés, la réponse
+                    remplace la question le temps du toast. */}
+                <div style={{ textAlign: "center", fontSize: 14, fontWeight: 900, letterSpacing: "-0.01em" }}>
+                  {shownFeel ? FEEL_LABEL[shownFeel] : <>Série {log!.done + 1} faite ? C&apos;était…</>}
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.35fr) minmax(0,1fr)", gap: 8 }}>
-                  {([["facile", "↑"], ["prevu", "="], ["dur", "↓"]] as [Feel, string][]).map(([f, icon]) => (
-                    <button key={f} onClick={() => tapFeel(f)}
-                      style={{ height: 64, borderRadius: 16, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 5, cursor: "pointer", color: "#fff", fontFamily: "inherit",
-                        ...(f === "prevu" ? { border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", boxShadow: "0 8px 20px rgba(212,64,0,.3)" } : { border: "1px solid rgba(255,255,255,.16)", background: "rgba(255,255,255,.08)" }) }}>
-                      <span aria-hidden="true" style={{ fontSize: 18, lineHeight: 1, fontWeight: 800 }}>{icon}</span>
-                      <span style={{ fontSize: 12.5, fontWeight: 800 }}>{FEEL_LABEL[f]}</span>
-                    </button>
-                  ))}
+                <div style={{ display: "flex", gap: 5 }}>
+                  {FEEL_ORDER.map((f, k) => {
+                    const sel = shownFeel ? FEEL_ORDER.indexOf(shownFeel) : -1;
+                    const filled = sel >= 0 && k <= sel;
+                    const col = chargeColor(0.15 + 0.85 * (k / 4));
+                    return (
+                      <button key={f} onClick={e => tapFeel(f, e.currentTarget)} aria-label={FEEL_LABEL[f]}
+                        style={{ flex: 1, minWidth: 0, height: 48, borderRadius: 8, boxSizing: "border-box", cursor: "pointer", padding: 0,
+                          transition: "background .15s, transform .15s",
+                          border: `1px solid ${filled ? col : "rgba(255,255,255,.16)"}`, background: filled ? col : "rgba(255,255,255,.08)",
+                          outline: sel < 0 && f === "prevu" ? "1.5px dashed rgba(255,255,255,.85)" : "none", outlineOffset: 3,
+                          boxShadow: k === sel ? "0 0 0 2px #fff" : "none", transform: k === sel ? "scaleY(1.08)" : "none" }} />
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-mono), monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "rgba(255,255,255,.5)" }}>
+                  <span style={{ flex: 1 }}>+ facile</span>
+                  <span style={{ flex: "0 0 auto", color: "rgba(255,255,255,.85)" }}>Comme prévu</span>
+                  <span style={{ flex: 1, textAlign: "right" }}>+ dur</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <button onClick={() => go(Math.max(0, safeIdx - 1))} aria-label="Exercice précédent"

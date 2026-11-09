@@ -5,7 +5,7 @@ import { parseLine, type ParsedLine } from "@/lib/exerciseParser";
    La ligne de notes est réécrite avec le prévu restant (elle reste la source de vérité) ; le journal
    `sessions.live_sets` garde le prévu d'origine, les ressentis et le repos en cours. */
 
-export type Feel = "facile" | "prevu" | "dur";
+export type Feel = "tfacile" | "facile" | "prevu" | "dur" | "tdur";
 export type SetKind = "load" | "pct" | "reps" | "pace" | "count";
 
 export interface LineLog {
@@ -32,7 +32,10 @@ export interface LiveSets {
   rest?: { at: string; sec: number | null; next: string } | null;
 }
 
-export const FEEL_LABEL: Record<Feel, string> = { facile: "Plus facile", prevu: "Comme prévu", dur: "Plus dur" };
+export const FEEL_LABEL: Record<Feel, string> = { tfacile: "Beaucoup plus facile", facile: "Plus facile", prevu: "Comme prévu", dur: "Plus dur", tdur: "Beaucoup plus dur" };
+export const FEEL_ORDER: Feel[] = ["tfacile", "facile", "prevu", "dur", "tdur"];
+/* « Beaucoup » = 2 crans (09/11, jauge à 5 niveaux). */
+const FEEL_STEP: Record<Feel, number> = { tfacile: 2, facile: 1, prevu: 0, dur: -1, tdur: -2 };
 const EX_CAP = 2;
 const SESSION_CAP_PCT = 10;
 const UP_PCT = 2.5;
@@ -158,39 +161,54 @@ export function sessionPct(ls: LiveSets | null | undefined): number {
   return Object.values(ls?.lines ?? {}).reduce((a, l) => a + pctOfNet(l.net), 0);
 }
 
-export type FeelOutcome = { log: LineLog; capped: "ex" | "session" | null; msg: string };
+export type FeelOutcome = { log: LineLog; capped: "ex" | "session" | null; msg: string; step: number };
 
 export function applyFeel(log: LineLog, feel: Feel, sessPct: number): FeelOutcome {
   const n = activeCount(log);
-  if (log.done >= n) return { log, capped: null, msg: "" };
+  if (log.done >= n) return { log, capped: null, msg: "", step: 0 };
   const nd = log.done + 1;
   const feels = [...log.feels.slice(0, log.done), feel];
   const base: LineLog = { ...log, feels, done: nd, skipped: false };
-  const step = feel === "facile" ? 1 : feel === "dur" ? -1 : 0;
-  if (step === 0) return { log: base, capped: null, msg: "" };
-  if ((step > 0 && log.net >= EX_CAP) || (step < 0 && log.net <= -EX_CAP)) return { log: base, capped: "ex", msg: "" };
-  if (Math.abs(sessPct + (step > 0 ? UP_PCT : -DOWN_PCT)) > SESSION_CAP_PCT) return { log: base, capped: "session", msg: "" };
-  if (nd >= n) return { log: base, capped: null, msg: "" };
+  const want = FEEL_STEP[feel];
+  if (want === 0) return { log: base, capped: null, msg: "", step: 0 };
+  // Plafond par exercice : « beaucoup » n'avance que d'un cran s'il n'en reste qu'un.
+  const step = Math.max(-EX_CAP, Math.min(EX_CAP, log.net + want)) - log.net;
+  if (step === 0) return { log: base, capped: "ex", msg: "", step: 0 };
+  if (Math.abs(sessPct + (step > 0 ? UP_PCT * step : DOWN_PCT * step)) > SESSION_CAP_PCT) return { log: base, capped: "session", msg: "", step: 0 };
+  if (nd >= n) return { log: base, capped: null, msg: "", step: 0 };
 
   if (log.kind === "count") {
     if (step > 0) {
-      if (log.cut > 0) return { log: { ...base, cut: log.cut - 1, net: log.net + 1 }, capped: null, msg: "une série rendue" };
-      return { log: base, capped: null, msg: "on garde le volume prévu" };
+      if (log.cut > 0) return { log: { ...base, cut: log.cut - 1, net: log.net + 1 }, capped: null, msg: "une série rendue", step: 1 };
+      return { log: base, capped: null, msg: "on garde le volume prévu", step: 0 };
     }
-    if (n - nd >= 1 && n > 2) return { log: { ...base, cut: log.cut + 1, net: log.net - 1 }, capped: null, msg: "une série en moins" };
-    return { log: base, capped: null, msg: "" };
+    if (n - nd >= 1 && n > 2) return { log: { ...base, cut: log.cut + 1, net: log.net - 1 }, capped: null, msg: "une série en moins", step: -1 };
+    return { log: base, capped: null, msg: "", step: 0 };
   }
   const vals = log.vals.map((v, i) => {
     if (i < nd) return v;
-    if (log.kind === "pace") return Math.max(60, v + (step > 0 ? -5 : 10));
+    if (log.kind === "pace") return Math.max(60, v + (step > 0 ? -5 * step : -10 * step));
     if (log.kind === "reps") return Math.max(1, v + step);
-    if (log.kind === "pct") {
-      const t = Math.round(v * (1 + (step > 0 ? UP_PCT : -DOWN_PCT) / 100));
-      return Math.max(1, step > 0 ? Math.max(t, v + 1) : Math.min(t, v - 1));
+    let w = v;
+    for (let k = 0; k < Math.abs(step); k++) {
+      if (log.kind === "pct") {
+        const t = Math.round(w * (1 + (step > 0 ? UP_PCT : -DOWN_PCT) / 100));
+        w = Math.max(1, step > 0 ? Math.max(t, w + 1) : Math.min(t, w - 1));
+      } else w = scaleLoad(w, step > 0);
     }
-    return scaleLoad(v, step > 0);
+    return w;
   });
-  return { log: { ...base, vals, net: log.net + step }, capped: null, msg: "" };
+  return { log: { ...base, vals, net: log.net + step }, capped: null, msg: "", step };
+}
+
+/* Texte du badge qui vole jusqu'à la série suivante (même grammaire que l'ajustement de l'anneau). */
+export function stepBadge(log: LineLog, step: number): string | null {
+  if (!step) return null;
+  const a = Math.abs(step), up = step > 0;
+  if (log.kind === "count") return `${up ? "+" : "−"}1 série`;
+  if (log.kind === "reps") return `${up ? "+" : "−"}${a} rep${a > 1 ? "s" : ""}`;
+  if (log.kind === "pace") return up ? `−${5 * a} s` : `+${10 * a} s`;
+  return up ? `+${fmtNum(UP_PCT * a)} %` : `−${fmtNum(DOWN_PCT * a)} %`;
 }
 
 export function valueTxt(log: LineLog, v: number): string {
