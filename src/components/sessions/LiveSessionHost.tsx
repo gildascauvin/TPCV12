@@ -62,6 +62,11 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
   const [editorRev, setEditorRev] = useState(0);
   const [feelToast, setFeelToast] = useState<{ text: string; feel: Feel; idx: number; undo: { notes: string; ls: LiveSets | null } } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* Jauge de ressenti : toucher OU glisser, comme le point forme et l'effort de fin de séance ; la
+     réponse est validée au relâchement. */
+  const [feelDrag, setFeelDrag] = useState<number | null>(null);
+  const feelBarRef = useRef<HTMLDivElement>(null);
+  const feelDragging = useRef(false);
 
 
   const refresh = useCallback(async () => {
@@ -196,7 +201,16 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
   }
 
   const leftCount = log ? nSets - log.done : 0;
-  const shownFeel = feelToast && feelToast.idx === safeIdx ? feelToast.feel : null;
+  const shownFeel = feelDrag != null ? FEEL_ORDER[feelDrag] : feelToast && feelToast.idx === safeIdx ? feelToast.feel : null;
+  const feelIdxAt = (clientX: number) => {
+    const r = feelBarRef.current!.getBoundingClientRect();
+    return Math.max(0, Math.min(FEEL_ORDER.length - 1, Math.floor(((clientX - r.left) / r.width) * FEEL_ORDER.length)));
+  };
+  const releaseFeel = (i: number) => {
+    setFeelDrag(null);
+    const el = feelBarRef.current?.children[i] as HTMLElement | undefined;
+    if (el) tapFeel(FEEL_ORDER[i], el);
+  };
   const unit = log?.kind === "reps" ? "Reps" : log?.kind === "pace" ? "Allure" : log?.kind === "count" ? "Volume" : log?.kind === "pct" ? "Intensité" : "Charge";
   const setCells = log ? (
 
@@ -238,11 +252,6 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
                             );
                           })}
                         </div>
-                        {log.skipped && leftCount > 0 && (
-                          <div style={{ fontSize: 12.5, color: "#62686e", lineHeight: 1.4, marginTop: 8 }}>
-                            {leftCount} série{leftCount > 1 ? "s" : ""} non notée{leftCount > 1 ? "s" : ""} : la suite n&apos;a pas bougé. Un tap ci-dessous pour les noter quand même.
-                          </div>
-                        )}
                       </div>
                     
   ) : null;
@@ -430,15 +439,28 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
                 <div style={{ textAlign: "center", fontSize: 14, fontWeight: 900, letterSpacing: "-0.01em" }}>
                   {shownFeel ? FEEL_LABEL[shownFeel] : <>Série {log!.done + 1} faite ? C&apos;était…</>}
                 </div>
-                <div style={{ display: "flex", gap: 5 }}>
+                <div ref={feelBarRef} role="slider" tabIndex={0} aria-label="Ressenti de la série"
+                  aria-valuemin={1} aria-valuemax={5} aria-valuenow={shownFeel ? FEEL_ORDER.indexOf(shownFeel) + 1 : undefined}
+                  aria-valuetext={shownFeel ? FEEL_LABEL[shownFeel] : undefined}
+                  onPointerDown={e => { feelDragging.current = true; try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ } setFeelDrag(feelIdxAt(e.clientX)); haptic("light"); }}
+                  onPointerMove={e => { if (!feelDragging.current) return; const i = feelIdxAt(e.clientX); if (i !== feelDrag) { setFeelDrag(i); haptic("light"); } }}
+                  onPointerUp={e => { if (!feelDragging.current) return; feelDragging.current = false; releaseFeel(feelDrag ?? feelIdxAt(e.clientX)); }}
+                  onPointerCancel={() => { feelDragging.current = false; setFeelDrag(null); }}
+                  onKeyDown={e => {
+                    const cur = feelDrag ?? 2;
+                    if (e.key === "ArrowLeft") { e.preventDefault(); setFeelDrag(Math.max(0, cur - 1)); }
+                    else if (e.key === "ArrowRight") { e.preventDefault(); setFeelDrag(Math.min(4, cur + 1)); }
+                    else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); releaseFeel(cur); }
+                  }}
+                  style={{ display: "flex", gap: 5, touchAction: "none", userSelect: "none", WebkitUserSelect: "none", cursor: "pointer", outline: "none" }}>
                   {FEEL_ORDER.map((f, k) => {
                     const sel = shownFeel ? FEEL_ORDER.indexOf(shownFeel) : -1;
                     const filled = sel >= 0 && k <= sel;
                     const col = chargeColor(0.15 + 0.85 * (k / 4));
                     return (
-                      <button key={f} onClick={e => tapFeel(f, e.currentTarget)} aria-label={FEEL_LABEL[f]}
-                        style={{ flex: 1, minWidth: 0, height: 48, borderRadius: 8, boxSizing: "border-box", cursor: "pointer", padding: 0,
-                          transition: "background .15s, transform .15s",
+                      <span key={f} aria-hidden="true"
+                        style={{ flex: 1, minWidth: 0, height: 48, borderRadius: 8, boxSizing: "border-box",
+                          transition: "background .12s, transform .12s",
                           border: `1px solid ${filled ? col : "rgba(255,255,255,.16)"}`, background: filled ? col : "rgba(255,255,255,.08)",
                           outline: sel < 0 && f === "prevu" ? "1.5px dashed rgba(255,255,255,.85)" : "none", outlineOffset: 3,
                           boxShadow: k === sel ? "0 0 0 2px #fff" : "none", transform: k === sel ? "scaleY(1.08)" : "none" }} />
