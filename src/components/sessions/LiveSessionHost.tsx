@@ -23,6 +23,8 @@ import {
 import { parseLine } from "@/lib/exerciseParser";
 import { flyToken } from "@/lib/flyToken";
 import { chargeColor } from "@/lib/ringColors";
+import { OPEN_PRIMING } from "@/lib/onboardingProgress";
+import { markPrimingSource } from "@/lib/primingSource";
 
 const mmss = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
 
@@ -47,7 +49,7 @@ const CompleteModal = dynamic(() => import("@/components/sessions/CompleteModal"
    - Écran plein : chrono, un exercice à la fois en grand (ExerciseBlockEditor en mode focus : mêmes
      tokens, médias, commentaires, tests), Terminer avec la durée du chrono pré-remplie.
    Démarrer/Reprendre viennent des cartes séance via openLiveSession() (lib/liveSession). */
-export default function LiveSessionHost({ userId, userName }: { userId: string; userName: string }) {
+export default function LiveSessionHost({ userId, userName, elite = true }: { userId: string; userName: string; elite?: boolean }) {
   const supabase = useRef(createClient()).current;
   const router = useRouter();
   const pathname = usePathname();
@@ -60,7 +62,9 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
   const [, setTick] = useState(0);
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editorRev, setEditorRev] = useState(0);
-  const [feelToast, setFeelToast] = useState<{ text: string; feel: Feel; idx: number; undo: { notes: string; ls: LiveSets | null } } | null>(null);
+  const [feelToast, setFeelToast] = useState<{ text: string; feel: Feel; idx: number; elite?: boolean; undo: { notes: string; ls: LiveSets | null } } | null>(null);
+  /* Gratuit : ce qu'Elite aurait fait de la suite, montré flouté dans les cases jusqu'au tap suivant. */
+  const [elitePreview, setElitePreview] = useState<{ idx: number; log: LineLog } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /* Jauge de ressenti : toucher OU glisser, comme le point forme et l'effort de fin de séance ; la
      réponse est validée au relâchement. */
@@ -137,6 +141,11 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
   function tapFeel(feel: Feel, from: HTMLElement) {
     if (!log || !curLine || log.done >= nSets) return;
     let out = applyFeel(log, feel, sessionPct(ls));
+    // Gratuit : la mesure est notée, la décision (ajuster la suite) reste Elite.
+    const wouldMove = out.step !== 0;
+    const preview = !elite && wouldMove ? out.log : null;
+    if (!elite) out = { log: { ...log, feels: out.log.feels, done: out.log.done, skipped: false }, capped: out.capped, msg: "", step: elite ? out.step : 0 };
+    setElitePreview(preview ? { idx: safeIdx, log: preview } : null);
     let newLine = rewriteLineFor(curLine, out.log);
     const moved = out.log.cut !== log.cut || out.log.vals.some((v, i) => v !== log.vals[i]);
     // Ligne trop libre pour être réécrite sans abîmer le texte : ressenti noté, suite inchangée.
@@ -159,7 +168,8 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
     const notes = live!.notes ?? "";
     const newNotes = newLine === curLine ? notes : replaceNonEmptyLine(notes, safeIdx, newLine);
     let tail = "";
-    if (frozen) tail = " · noté, la ligne reste comme écrite";
+    if (preview) tail = ". Elite ajusterait la suite pour toi.";
+    else if (frozen) tail = " · noté, la ligne reste comme écrite";
     else if (out.capped === "ex") tail = " · plafond de l'exercice atteint, suite inchangée";
     else if (out.capped === "session") tail = " · plafond de la séance atteint, suite inchangée";
     else if (out.msg) tail = ` · ${out.msg}`;
@@ -167,15 +177,16 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
     haptic("light");
     commit({ notes: newNotes, live_sets: newLs });
     if (newNotes !== notes) setEditorRev(r => r + 1);
-    const t = { text: `Série ${nd} faite · ${FEEL_LABEL[feel]}${tail}`, feel, idx: safeIdx, undo: { notes, ls: live!.live_sets ?? null } };
+    const t = { text: `Série ${nd} faite · ${FEEL_LABEL[feel]}${tail}`, feel, idx: safeIdx, elite: !!preview, undo: { notes, ls: live!.live_sets ?? null } };
     /* Badge qui part du bloc tapé et se pose sur la série suivante, comme l'ajustement de l'anneau
        (flyToken). La case est relue après le remontage de l'éditeur. */
-    const badge = !frozen && nd < pn ? stepBadge(nl, out.step) : null;
+    const flyStep = preview ? applyFeel(log, feel, sessionPct(ls)).step : out.step;
+    const badge = !frozen && nd < pn ? stepBadge(preview ?? nl, flyStep) : null;
     if (badge) {
-      const color = out.step > 0 ? "#2f9e44" : "#d44000";
+      const color = flyStep > 0 ? "#2f9e44" : "#d44000";
       window.setTimeout(() => {
         const to = document.querySelector(`[data-live-set="${nd}"]`);
-        if (to) flyToken(from, to, badge, color, "center");
+        if (to) flyToken(from, to, badge, color, "center", !!preview);
       }, 90);
     }
     setFeelToast(t);
@@ -199,6 +210,14 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
     haptic("light");
   }
 
+  /* Gratuit : l'écran d'offre s'ouvre sur l'étape « Ajuste » ; la séance se réduit pour le laisser voir. */
+  function tryElite() {
+    setFeelToast(null);
+    setOpen(false);
+    markPrimingSource("decision");
+    window.dispatchEvent(new CustomEvent(OPEN_PRIMING, { detail: { source: "live_sets" } }));
+  }
+
   function undoFeel() {
     if (!feelToast) return;
     const u = feelToast.undo;
@@ -210,6 +229,7 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
   function setRest(r: LiveSets["rest"]) { commit({ live_sets: { ...ls, rest: r } }); }
 
   function go(j: number) {
+    setElitePreview(null);
     if (j > safeIdx && log && log.done < nSets && !log.skipped) {
       commit({ live_sets: { ...ls, lines: { ...ls.lines, [String(safeIdx)]: { ...log, skipped: true } } } });
     }
@@ -249,6 +269,8 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
                             const cur = i === log.done && !skip;
                             const o = log.orig[i];
                             const changed = o != null && v !== o;
+                            const pv = elitePreview && elitePreview.idx === safeIdx && i >= log.done ? elitePreview.log : null;
+                            const teased = !!pv && (i >= activeCount(pv) || pv.vals[i] !== v);
                             const sign = o == null ? " +" : changed ? ((log.kind === "pace" ? v < o : v > o) ? " ↑" : " ↓") : "";
                             const bg = isDone ? "#1f2428" : changed ? "rgba(212,64,0,.10)" : "#f4f4f2";
                             const color = isDone ? "#fff" : changed ? "#d44000" : "#1f2428";
@@ -256,14 +278,17 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
                             if (cur) border = "2px solid #171b1f";
                             if (isDone && changed) border = "2px solid #d44000";
                             if (skip) border = "1.5px dashed rgba(0,0,0,.28)";
+                            if (teased) border = "1.5px dashed rgba(212,64,0,.55)";
                             return (
                               <div key={i} data-live-set={i} aria-label={`Série ${i + 1}, ${valueTxt(log, v)}${skip ? ", non notée" : isDone ? ", faite" : cur ? ", en cours" : ", à faire"}${changed ? ", ajustée" : ""}`}
                                 style={{ minWidth: 56, minHeight: 58, padding: "6px 8px", borderRadius: 12, boxSizing: "border-box", background: bg, color, border, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, fontFamily: "var(--font-mono), monospace" }}>
                                 <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".04em", color: isDone ? "rgba(255,255,255,.75)" : changed ? "#d44000" : "#8a8f94" }}>
-                                  {skip ? `S${i + 1} –` : `${isDone ? "✓ " : ""}S${i + 1}${sign}`}
+                                  {teased ? "Elite" : skip ? `S${i + 1} –` : `${isDone ? "✓ " : ""}S${i + 1}${sign}`}
                                 </span>
                                 {changed && <s style={{ fontSize: 10.5, fontWeight: 500, opacity: 0.6 }}>{cellValue(log, o!)}</s>}
-                                <span style={{ fontSize: 14, fontWeight: 800 }}>{cellValue(log, v)}</span>
+                                <span aria-hidden={teased || undefined} style={{ fontSize: 14, fontWeight: 800, filter: teased ? "blur(4px)" : undefined, userSelect: teased ? "none" : undefined }}>
+                                  {cellValue(log, teased && pv && i < activeCount(pv) ? pv.vals[i] : v)}
+                                </span>
                               </div>
                             );
                           })}
@@ -447,9 +472,13 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
             </div>
 
             {feelToast && (
-              <div role="status" style={{ margin: "0 16px 6px", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 999, background: "#fff", color: "#171b1f", boxShadow: "0 12px 30px rgba(0,0,0,.35)" }}>
+              <div role="status" style={{ margin: "0 16px 6px", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: feelToast.elite ? 16 : 999, background: "#fff", color: "#171b1f", boxShadow: "0 12px 30px rgba(0,0,0,.35)" }}>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700 }}>{feelToast.text}</span>
-                <button onClick={undoFeel} style={{ border: "none", background: "none", padding: "4px 2px", color: "#d44000", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>Annuler</button>
+                {feelToast.elite ? (
+                  <button onClick={tryElite} style={{ border: "none", background: "none", padding: "4px 2px", color: "#d44000", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>Essayer Elite</button>
+                ) : (
+                  <button onClick={undoFeel} style={{ border: "none", background: "none", padding: "4px 2px", color: "#d44000", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>Annuler</button>
+                )}
               </div>
             )}
 

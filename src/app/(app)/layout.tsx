@@ -4,6 +4,7 @@ import BottomNav from "@/components/layout/BottomNav";
 import HealthSyncOnOpen from "@/components/layout/HealthSyncOnOpen";
 import OfflineSync from "@/components/layout/OfflineSync";
 import LiveSessionHost from "@/components/sessions/LiveSessionHost";
+import { coachIsPaying } from "@/lib/access";
 import InviteHost from "@/components/coach/InviteHost";
 import PhysioRevealHost from "@/components/physio/PhysioRevealHost";
 import CoachResultHost from "@/components/coach/CoachResultHost";
@@ -24,11 +25,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("mode, name")
+    .select("mode, name, subscription_status, invited_by_coach_id")
     .eq("user_id", user.id)
     .maybeSingle();
 
   const role = (profile?.mode as "athlete" | "coach") ?? "athlete";
+  /* Ressenti par série (09/11) : l'ajustement de la suite est Elite (mesure gratuite, décision payante).
+     Même règle que usePaywall : payant, ou gratuit dont le coach paie. */
+  const status = (profile as { subscription_status?: string | null } | null)?.subscription_status ?? "free";
+  const elite = status === "athlete" || status === "coach"
+    || (role === "athlete" && status === "free" && await coachIsPaying((profile as { invited_by_coach_id?: string | null } | null)?.invited_by_coach_id));
 
   return (
     <div className="min-h-screen pb-[132px]" style={{ background: "#070a0d" }}>
@@ -45,7 +51,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {role === "coach" && <CoachResultHost />}
       {role === "athlete" && <PhysioRevealHost userId={user.id} />}
       {role === "athlete" && <PointFormeGate userId={user.id} />}
-      {role === "athlete" && <LiveSessionHost userId={user.id} userName={(profile as { name?: string | null } | null)?.name ?? "Toi"} />}
+      {role === "athlete" && <LiveSessionHost userId={user.id} elite={elite} userName={(profile as { name?: string | null } | null)?.name ?? "Toi"} />}
     </div>
   );
 }
