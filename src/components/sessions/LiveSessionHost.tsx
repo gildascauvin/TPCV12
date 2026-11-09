@@ -234,7 +234,6 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
                     
   ) : null;
 
-  const cranLabel = !log ? "" : log.net === 0 ? "Au plan" : `${log.net > 0 ? "+" : "−"}${Math.abs(log.net)} cran${Math.abs(log.net) > 1 ? "s" : ""}${Math.abs(log.net) >= 2 ? " (max)" : ""}`;
 
   function saveNotes(text: string) {
     setLive(prev => prev ? { ...prev, notes: text } : prev);
@@ -414,7 +413,6 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
               <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 16px calc(14px + env(safe-area-inset-bottom,0px))", borderTop: "1px solid rgba(255,255,255,.08)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                   <div style={{ fontSize: 13, fontWeight: 800 }}>Série {log!.done + 1} faite ? C&apos;était…</div>
-                  <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,.6)", whiteSpace: "nowrap" }}>{cranLabel}</div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.35fr) minmax(0,1fr)", gap: 8 }}>
                   {([["facile", "↑"], ["prevu", "="], ["dur", "↓"]] as [Feel, string][]).map(([f, icon]) => (
