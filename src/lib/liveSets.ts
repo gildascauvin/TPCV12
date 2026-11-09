@@ -17,6 +17,8 @@ export interface LineLog {
   work?: string;
   /* Séries comptées par un mot (« 5 reps@90% », « 3 séries ») : la réécriture change ce nombre. */
   countWord?: boolean;
+  /* Texte de la ligne avant le 1er tap : remis tel quel si la séance est annulée. */
+  src?: string;
   feels: (Feel | null)[];
   done: number;
   net: number;
@@ -137,7 +139,7 @@ export function logFor(line: string, saved: LineLog | undefined): LineLog | null
   const vals = saved ? [...saved.vals.slice(0, done), ...x.vals.slice(done)] : x.vals;
   const orig = saved ? [...saved.orig.slice(0, done), ...x.vals.slice(done)] : x.vals.slice();
   return {
-    key: line, kind: x.kind, vals, orig, reps: x.reps, work: x.work, countWord: x.countWord,
+    key: line, kind: x.kind, vals, orig, reps: x.reps, work: x.work, countWord: x.countWord, src: line,
     feels: saved ? saved.feels.slice(0, done) : [], done, net: saved?.net ?? 0, cut: 0, skipped: saved?.skipped,
   };
 }
@@ -279,4 +281,20 @@ export function sessionSummary(lines: string[], ls: LiveSets | null | undefined,
   let s = parts.length ? `Ajustée en séance : ${parts.join(" ; ")}.` : "";
   if (skipped.length) s += `${s ? " " : ""}Séries non notées : ${skipped.join(", ")}.`;
   return s || null;
+}
+
+/* Annuler la séance : chaque ligne ajustée par les taps (et pas retouchée à la main depuis) reprend
+   son texte d'avant la séance. */
+export function restorePlan(notes: string, ls: LiveSets | null | undefined): string {
+  if (!ls) return notes;
+  let k = -1;
+  return notes.split("\n").map(raw => {
+    if (!raw.trim()) return raw;
+    k++;
+    const l = ls.lines[String(k)];
+    if (!l || l.key !== raw.trim() && l.key !== raw) return raw;
+    if (l.src) return l.src;
+    if (l.orig.some(v => v == null)) return raw;
+    return rewriteLineFor(raw, { ...l, vals: l.orig as number[], cut: 0 });
+  }).join("\n");
 }

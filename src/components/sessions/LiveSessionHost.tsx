@@ -18,7 +18,7 @@ import { DARK_CARD_BG } from "@/lib/theme";
 import { isOffline, rememberLive, updateOwnSession } from "@/lib/offlineSessions";
 import {
   logFor, applyFeel, rewriteLineFor, restSecOf, valueTxt, activeCount, sessionPct, sessionSummary,
-  fmtNum, paceTxt, FEEL_LABEL, type Feel, type LineLog, type LiveSets,
+  fmtNum, paceTxt, FEEL_LABEL, restorePlan, type Feel, type LineLog, type LiveSets,
 } from "@/lib/liveSets";
 import { parseLine } from "@/lib/exerciseParser";
 
@@ -275,7 +275,9 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
      Les exercices modifiés pendant la séance restent tels quels. */
   async function cancelLive() {
     if (notesTimer.current) clearTimeout(notesTimer.current);
-    const saved = await updateOwnSession(supabase, live!, { started_at: null, paused_at: null, paused_ms: 0, notes: live!.notes });
+    // Les ajustements série par série sont retirés ; les retouches à la main restent.
+    const notes = restorePlan(live!.notes ?? "", live!.live_sets);
+    const saved = await updateOwnSession(supabase, live!, { started_at: null, paused_at: null, paused_ms: 0, notes, live_sets: null });
     if (!saved) return;
     rememberLive(null);
     setStopAsk(null);
@@ -460,7 +462,7 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
             {stopAsk === "choice" ? (
               <>
                 <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Arrêter la séance</div>
-                <div style={{ fontSize: 13, color: "#62686e", marginBottom: 16 }}>Tes modifications d&apos;exercices sont gardées dans les deux cas.</div>
+                <div style={{ fontSize: 13, color: "#62686e", marginBottom: 16 }}>Si tu annules, les séries ajustées reviennent comme prévu. Tes autres modifications d&apos;exercices restent.</div>
                 <button onClick={() => { setStopAsk(null); setCompleting(true); }} style={{ width: "100%", height: 50, borderRadius: 16, border: "none", cursor: "pointer", color: "#fff", fontSize: 15, fontWeight: 800, background: "linear-gradient(180deg,#f04a08,#d44000)", marginBottom: 8 }}>
                   Terminer et enregistrer
                 </button>
@@ -472,7 +474,7 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
             ) : (
               <>
                 <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Annuler la séance en cours ?</div>
-                <div style={{ fontSize: 13, color: "#62686e", marginBottom: 16 }}>Le chrono est effacé et la séance redevient « Prévu ». Rien n&apos;est compté dans ta charge.</div>
+                <div style={{ fontSize: 13, color: "#62686e", marginBottom: 16 }}>Le chrono est effacé, la séance redevient « Prévu » et les séries ajustées reviennent comme prévu. Rien n&apos;est compté dans ta charge.</div>
                 <button onClick={cancelLive} style={{ width: "100%", height: 50, borderRadius: 16, border: "none", cursor: "pointer", color: "#fff", fontSize: 15, fontWeight: 800, background: "#b42318", marginBottom: 8 }}>
                   Oui, annuler la séance
                 </button>
