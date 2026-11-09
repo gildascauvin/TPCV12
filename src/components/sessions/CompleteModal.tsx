@@ -23,9 +23,11 @@ interface CompleteModalProps {
   /* false = non enregistrée (31/10) : la fenêtre reste ouverte, pas d'écran de résultat. */
   onSave: (data: { rpe: number; duration: number }) => Promise<void | boolean>;
   onClose: () => void;
+  /* Séance en direct : ce qui a bougé en séance, en mots (lib/liveSets sessionSummary). */
+  summary?: string | null;
 }
 
-export default function CompleteModal({ session, onSave, onClose }: CompleteModalProps) {
+export default function CompleteModal({ session, onSave, onClose, summary }: CompleteModalProps) {
   /* Note en un tap (2026-10-17) : jamais de valeur par défaut pour une 1re note (le 6 d'avant
      était enregistré tel quel si on validait sans toucher). Une séance déjà notée garde sa note. */
   const { close, exitClass } = useExitAnimation(onClose);
@@ -132,6 +134,9 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", paddingBottom: 24 }}>
           {stage === 0 ? (
             <div key="effort" style={{ animation: "modalIn 0.25s cubic-bezier(0.2,0,0,1)" }}>
+              {summary && (
+                <div style={{ fontSize: 13, lineHeight: 1.45, color: "rgba(255,255,255,.85)", background: "rgba(255,255,255,.07)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 14, padding: "10px 12px", marginBottom: 14 }}>{summary}</div>
+              )}
               <div style={{ marginTop: 4 }}>
                 <PointFormeRing value={rpe} labels={CR10_LABELS} kicker="Effort" placeholder="Touche ou glisse sur l'anneau" palette="charge" sheet="seg"
                   sheetTitle="Comment as-tu vécu ta séance ?" sheetSub="L'effort ressenti, sur toute la séance"

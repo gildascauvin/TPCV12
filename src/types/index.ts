@@ -74,6 +74,8 @@ export interface Session {
   exercise_media?: Record<string, ExerciseAttachments> | null;
   /* Séance en direct (2026-10-02, migration 029) : en cours = started_at && !done. */
   started_at?: string | null;
+  /* Ressenti par série en séance en direct (2026-11-09, migration 048), voir lib/liveSets. */
+  live_sets?: import("@/lib/liveSets").LiveSets | null;
   paused_at?: string | null;
   paused_ms?: number | null;
   viewed_by_athlete_at?: string | null;

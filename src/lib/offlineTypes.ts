@@ -1,3 +1,4 @@
+import type { LiveSets } from "@/lib/liveSets";
 /* Mode hors ligne (2026-10-02) — format partagé entre le serveur (/api/offline/*), la synchro dans
    l'app (offlineStore.ts) et la page hors ligne statique (public/offline.html, recopiée dans
    capacitor-www pour l'app iOS). La page statique n'importe pas ce fichier : si le format change,
@@ -50,10 +51,11 @@ export type OfflineAction =
     };
 
 /* Champs qu'une modification hors ligne a le droit de toucher (liste blanche, côté serveur aussi). */
-export const OFFLINE_PATCH_FIELDS = ["started_at", "paused_at", "paused_ms", "done", "rpe", "duration", "notes", "target_difficulty"] as const;
+export const OFFLINE_PATCH_FIELDS = ["started_at", "paused_at", "paused_ms", "done", "rpe", "duration", "notes", "target_difficulty", "live_sets"] as const;
 export type OfflineSessionPatch = Partial<{
   started_at: string | null; paused_at: string | null; paused_ms: number;
   done: boolean; rpe: number | null; duration: number | null; notes: string | null; target_difficulty: number | null;
+  live_sets: LiveSets | null;
 }>;
 
 export type OfflineFlushResult = { id: string; status: "ok" | "skipped" | "error"; reason?: string };
