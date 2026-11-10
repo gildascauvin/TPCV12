@@ -69,6 +69,10 @@ export default function LiveSessionHost({ userId, userName, elite = true }: { us
   /* Jauge de ressenti : toucher OU glisser, comme le point forme et l'effort de fin de séance ; la
      réponse est validée au relâchement. */
   const [feelDrag, setFeelDrag] = useState<number | null>(null);
+  /* La réponse reste affichée sur la jauge un court instant seulement (10/11, Gildas : « trop long ») ;
+     le toast et son Annuler gardent leurs 4 s. */
+  const [feelFlash, setFeelFlash] = useState<{ feel: Feel; idx: number } | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const feelBarRef = useRef<HTMLDivElement>(null);
   const feelDragging = useRef(false);
 
@@ -190,6 +194,9 @@ export default function LiveSessionHost({ userId, userName, elite = true }: { us
       }, 90);
     }
     setFeelToast(t);
+    setFeelFlash({ feel, idx: safeIdx });
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFeelFlash(null), 900);
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setFeelToast(cur => (cur === t ? null : cur)), 4000);
   }
@@ -237,7 +244,7 @@ export default function LiveSessionHost({ userId, userName, elite = true }: { us
   }
 
   const leftCount = log ? nSets - log.done : 0;
-  const shownFeel = feelDrag != null ? FEEL_ORDER[feelDrag] : feelToast && feelToast.idx === safeIdx ? feelToast.feel : null;
+  const shownFeel = feelDrag != null ? FEEL_ORDER[feelDrag] : feelFlash && feelFlash.idx === safeIdx ? feelFlash.feel : null;
   const feelIdxAt = (clientX: number) => {
     const r = feelBarRef.current!.getBoundingClientRect();
     return Math.max(0, Math.min(FEEL_ORDER.length - 1, Math.floor(((clientX - r.left) / r.width) * FEEL_ORDER.length)));
