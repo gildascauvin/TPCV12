@@ -359,3 +359,18 @@ export function restorePlan(notes: string, ls: LiveSets | null | undefined): str
     return rewriteLineFor(raw, { ...l, vals: l.orig as number[], cut: 0 });
   }).join("\n");
 }
+
+/* Corriger un ressenti déjà donné (10/11) : on rejoue tous les ressentis de l'exercice depuis le prévu,
+   pour que la suite soit celle qu'on aurait eue en répondant juste dès le départ. `othersPct` = la part
+   de la séance prise par les autres exercices (plafond ±10 %). */
+export function replayFeels(log: LineLog, feels: (Feel | null)[], othersPct: number): LineLog {
+  let r: LineLog = { ...log, vals: log.vals.map((v, i) => log.orig[i] ?? v), cut: 0, net: 0, done: 0, feels: [] };
+  for (let j = 0; j < log.done; j++) {
+    const f = feels[j];
+    if (!f) { r = { ...r, done: j + 1, feels: [...r.feels, null] }; continue; }
+    r = applyFeel(r, f, othersPct + pctOfNet(r.net)).log;
+  }
+  return { ...r, skipped: log.skipped };
+}
+
+export const linePct = (log: LineLog) => pctOfNet(log.net);

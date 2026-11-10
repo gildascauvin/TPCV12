@@ -18,7 +18,7 @@ import { DARK_CARD_BG } from "@/lib/theme";
 import { isOffline, rememberLive, updateOwnSession } from "@/lib/offlineSessions";
 import {
   logFor, applyFeel, rewriteLineFor, restSecOf, valueTxt, activeCount, sessionPct, sessionSummary,
-  fmtNum, paceTxt, FEEL_LABEL, FEEL_ORDER, stepBadge, restorePlan, type Feel, type LineLog, type LiveSets,
+  fmtNum, paceTxt, FEEL_LABEL, FEEL_ORDER, stepBadge, restorePlan, replayFeels, linePct, type Feel, type LineLog, type LiveSets,
 } from "@/lib/liveSets";
 import { parseLine } from "@/lib/exerciseParser";
 import { flyToken } from "@/lib/flyToken";
@@ -69,6 +69,8 @@ export default function LiveSessionHost({ userId, userName, elite = true }: { us
   /* Jauge de ressenti : toucher OU glisser, comme le point forme et l'effort de fin de séance ; la
      réponse est validée au relâchement. */
   const [feelDrag, setFeelDrag] = useState<number | null>(null);
+  /* Série déjà faite dont on corrige le ressenti (tap sur sa case). */
+  const [editSet, setEditSet] = useState<number | null>(null);
   /* La réponse reste affichée sur la jauge un court instant seulement (10/11, Gildas : « trop long ») ;
      le toast et son Annuler gardent leurs 4 s. */
   const [feelFlash, setFeelFlash] = useState<{ feel: Feel; idx: number } | null>(null);
@@ -203,7 +205,8 @@ export default function LiveSessionHost({ userId, userName, elite = true }: { us
 
   /* Revenir au prévu (09/11) : les séries restantes de l'exercice reprennent leur valeur d'avant les
      taps ; les séries faites et les ressentis restent. */
-  const adjustedLeft = !!log && (log.cut > 0 || log.vals.some((v, i) => i >= log.done && log.orig[i] != null && v !== log.orig[i]));
+  const adjustedLeft = !!log && log.done < activeCount(log) + log.cut
+    && (log.net !== 0 || log.cut > 0 || log.vals.some((v, i) => i >= log.done && log.orig[i] != null && v !== log.orig[i]));
   function resetToPlan() {
     if (!log || !curLine || !adjustedLeft) return;
     const vals = log.vals.map((v, i) => (i < log.done ? v : (log.orig[i] ?? v)));
@@ -225,6 +228,25 @@ export default function LiveSessionHost({ userId, userName, elite = true }: { us
     window.dispatchEvent(new CustomEvent(OPEN_PRIMING, { detail: { source: "live_sets" } }));
   }
 
+  function correctFeel(k: number, feel: Feel) {
+    setEditSet(null);
+    if (!log || !curLine || k >= log.done) return;
+    const feels = [...log.feels];
+    feels[k] = feel;
+    const othersPct = sessionPct(ls) - linePct(log);
+    // Gratuit : le ressenti est corrigé, la suite ne bouge pas (la décision reste Elite).
+    const replayed = elite ? replayFeels(log, feels, othersPct) : { ...log, feels };
+    let newLine = rewriteLineFor(curLine, replayed);
+    const moved = replayed.cut !== log.cut || replayed.vals.some((v, i) => v !== log.vals[i]);
+    const nl: LineLog = moved && newLine === curLine ? { ...log, feels } : { ...replayed, key: newLine };
+    if (moved && newLine === curLine) newLine = curLine;
+    const notes = live!.notes ?? "";
+    commit({ notes: newLine === curLine ? notes : replaceNonEmptyLine(notes, safeIdx, newLine), live_sets: { ...ls, lines: { ...ls.lines, [String(safeIdx)]: nl } } });
+    if (newLine !== curLine) setEditorRev(r => r + 1);
+    haptic("light");
+    toast(`Série ${k + 1} corrigée · ${FEEL_LABEL[feel]}`);
+  }
+
   function undoFeel() {
     if (!feelToast) return;
     const u = feelToast.undo;
@@ -237,6 +259,7 @@ export default function LiveSessionHost({ userId, userName, elite = true }: { us
 
   function go(j: number) {
     setElitePreview(null);
+    setEditSet(null);
     if (j > safeIdx && log && log.done < nSets && !log.skipped) {
       commit({ live_sets: { ...ls, lines: { ...ls.lines, [String(safeIdx)]: { ...log, skipped: true } } } });
     }
@@ -244,13 +267,15 @@ export default function LiveSessionHost({ userId, userName, elite = true }: { us
   }
 
   const leftCount = log ? nSets - log.done : 0;
-  const shownFeel = feelDrag != null ? FEEL_ORDER[feelDrag] : feelFlash && feelFlash.idx === safeIdx ? feelFlash.feel : null;
+  const editFeel = editSet != null && log ? log.feels[editSet] ?? null : null;
+  const shownFeel = feelDrag != null ? FEEL_ORDER[feelDrag] : feelFlash && feelFlash.idx === safeIdx ? feelFlash.feel : editFeel;
   const feelIdxAt = (clientX: number) => {
     const r = feelBarRef.current!.getBoundingClientRect();
     return Math.max(0, Math.min(FEEL_ORDER.length - 1, Math.floor(((clientX - r.left) / r.width) * FEEL_ORDER.length)));
   };
   const releaseFeel = (i: number) => {
     setFeelDrag(null);
+    if (editSet != null) { correctFeel(editSet, FEEL_ORDER[i]); return; }
     const el = feelBarRef.current?.children[i] as HTMLElement | undefined;
     if (el) tapFeel(FEEL_ORDER[i], el);
   };
@@ -286,9 +311,14 @@ export default function LiveSessionHost({ userId, userName, elite = true }: { us
                             if (isDone && changed) border = "2px solid #d44000";
                             if (skip) border = "1.5px dashed rgba(0,0,0,.28)";
                             if (teased) border = "1.5px dashed rgba(212,64,0,.55)";
+                            if (editSet === i) border = "2px solid #ff8a55";
                             return (
-                              <div key={i} data-live-set={i} aria-label={`Série ${i + 1}, ${valueTxt(log, v)}${skip ? ", non notée" : isDone ? ", faite" : cur ? ", en cours" : ", à faire"}${changed ? ", ajustée" : ""}`}
-                                style={{ minWidth: 56, minHeight: 58, padding: "6px 8px", borderRadius: 12, boxSizing: "border-box", background: bg, color, border, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, fontFamily: "var(--font-mono), monospace" }}>
+                              <div key={i} data-live-set={i}
+                                role={isDone ? "button" : undefined} tabIndex={isDone ? 0 : undefined}
+                                onClick={isDone ? () => setEditSet(editSet === i ? null : i) : undefined}
+                                onKeyDown={isDone ? e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setEditSet(editSet === i ? null : i); } } : undefined}
+                                aria-label={`Série ${i + 1}, ${valueTxt(log, v)}${skip ? ", non notée" : isDone ? ", faite" : cur ? ", en cours" : ", à faire"}${changed ? ", ajustée" : ""}`}
+                                style={{ minWidth: 56, minHeight: 58, padding: "6px 8px", borderRadius: 12, boxSizing: "border-box", background: bg, color, border, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, fontFamily: "var(--font-mono), monospace", cursor: isDone ? "pointer" : undefined }}>
                                 <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".04em", color: isDone ? "rgba(255,255,255,.75)" : changed ? "#d44000" : "#8a8f94" }}>
                                   {teased ? "Elite" : skip ? `S${i + 1} –` : `${isDone ? "✓ " : ""}S${i + 1}${sign}`}
                                 </span>
@@ -489,13 +519,15 @@ export default function LiveSessionHost({ userId, userName, elite = true }: { us
               </div>
             )}
 
-            {tracking ? (
+            {tracking || editSet != null ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "14px 16px calc(10px + env(safe-area-inset-bottom,0px))", background: "#1a1f24", borderRadius: "22px 22px 0 0", borderTop: "1px solid rgba(255,255,255,.12)", boxShadow: "0 -12px 34px rgba(0,0,0,.55)" }}>
                 {/* Jauge de fin de séance à 5 niveaux (POC T3, 09/11) : rien de prérempli (une échelle remplie
                     se lirait comme une réponse déjà donnée), la zone prévue en pointillés, la réponse
                     remplace la question le temps du toast. */}
                 <div style={{ textAlign: "center", fontSize: 14, fontWeight: 900, letterSpacing: "-0.01em" }}>
-                  {shownFeel ? FEEL_LABEL[shownFeel] : <>Série {log!.done + 1} faite ? C&apos;était…</>}
+                  {editSet != null && feelDrag == null
+                    ? <>Série {editSet + 1} : corrige ton ressenti{editFeel ? ` (${FEEL_LABEL[editFeel].toLowerCase()})` : ""}</>
+                    : shownFeel ? FEEL_LABEL[shownFeel] : <>Série {log!.done + 1} faite ? C&apos;était…</>}
                 </div>
                 <div ref={feelBarRef} role="slider" tabIndex={0} aria-label="Ressenti de la série"
                   aria-valuemin={1} aria-valuemax={5} aria-valuenow={shownFeel ? FEEL_ORDER.indexOf(shownFeel) + 1 : undefined}
@@ -530,6 +562,11 @@ export default function LiveSessionHost({ userId, userName, elite = true }: { us
                   <span style={{ flex: "0 0 auto", color: "rgba(255,255,255,.85)" }}>Comme prévu</span>
                   <span style={{ flex: 1, textAlign: "right" }}>+ dur</span>
                 </div>
+                {editSet != null && (
+                  <button onClick={() => setEditSet(null)} style={{ alignSelf: "center", border: "none", background: "none", padding: "6px 10px", color: "rgba(255,255,255,.75)", fontSize: 12.5, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+                    Ne rien changer
+                  </button>
+                )}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <button onClick={() => go(Math.max(0, safeIdx - 1))} aria-label="Exercice précédent"
                     style={{ border: "none", background: "none", padding: "8px 0", fontSize: 12.5, fontWeight: 700, cursor: "pointer", color: "rgba(255,255,255,.75)", fontFamily: "inherit", visibility: safeIdx === 0 ? "hidden" : "visible" }}>‹ Précédent</button>
