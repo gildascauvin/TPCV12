@@ -187,9 +187,9 @@ export async function upsertTestResult(
   ownerId: string,
   subject: TestSubject,
   params: { name: string; unit: string; value: number; date: string; videoUrl?: string | null; qualities?: string[] }
-): Promise<void> {
+): Promise<boolean> {
   const test = await resolveTest(ownerId, params.name, params.unit, params.qualities);
-  if (!test) return;
+  if (!test) return false;
   const supabase = createClient();
   const subjectCols = "subjectUserId" in subject
     ? { subject_user_id: subject.subjectUserId, subject_coach_athlete_id: null }
@@ -199,6 +199,7 @@ export async function upsertTestResult(
     { onConflict: "test_id,date,subject_key" }
   );
   if (error) console.error("[test_results] upsert a échoué pour", test.name_key, params.date, error);
+  return !error;
 }
 
 /* Bug réel corrigé (2026-09) : supprimer le DERNIER résultat d'un test (deleteTestResult, ou "Retirer

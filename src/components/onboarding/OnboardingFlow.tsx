@@ -16,6 +16,7 @@ import posthog from "posthog-js";
 import { createClient } from "@/lib/supabase/client";
 import { getSessionTemplates } from "@/lib/sessionTemplates";
 import { buildCoachDemoSessions } from "@/lib/coachDemoSessions";
+import { stashPendingOTest, savePendingOTest } from "@/lib/oTestPending";
 import type { ProgramTemplate, ProgramFocus, SessionTemplate } from "@/types";
 import Link from "next/link";
 import Image from "next/image";
@@ -719,6 +720,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     if (inviteAthleteId) setClaimedAthleteUserId(inviteAthleteId);
     if (inviteAthleteName) setClaimedAthleteName(inviteAthleteName);
 
+    /* Résultat d'un outil public /o/ (« Enregistrer ce résultat ») : enregistré une fois le compte
+       prêt (prepareOnboarding), chez le sportif ou sur Thomas (démo) côté coach. */
+    const oTest = stashPendingOTest(params);
+    if (oTest) {
+      posthog.setPersonProperties({ onboarding_test: oTest });
+      posthog.capture("test_onboarding_start", { tool: oTest });
+    }
+
     const claimParam = params.get("claim");
     if (claimParam && !localStorage.getItem("claim_program_id")) {
       localStorage.setItem("claim_program_id", claimParam);
@@ -1118,6 +1127,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         profileCompleteGuardRef.current = true;
         demoAthleteId = await completeProfile(uid, { skipDemoProgram: role === "coach" && !!built });
       }
+      await savePendingOTest(uid, role, demoAthleteId).catch(e => console.error("[prepareOnboarding] test /o/ :", e));
       if (built) {
         const week1 = built.template.weeks[0] ?? {};
         const res = await fetchWithTimeout("/api/programs", {

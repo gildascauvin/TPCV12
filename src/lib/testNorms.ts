@@ -1126,6 +1126,10 @@ export interface CardInsight {
       utilisateur (voir formatAbsoluteRef). Absent si refValue est absent, ou si la référence manque
       encore (carte verrouillée, aucune valeur absolue calculable). */
   refValueDisplay?: string;
+  /** Libellé du repère sous la jauge à la place de « cible vs X » (ex. « Moyenne internationaux foot »). */
+  targetPrefix?: string;
+  /** Source et précautions du repère, derrière un ⓘ. */
+  targetInfo?: string;
   value: number | null;
   score: number | null;
   status: CardStatus | null;

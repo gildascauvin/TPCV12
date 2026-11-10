@@ -1,4 +1,6 @@
 /* Estimation 1RM et endurance de force à partir de séries reps×poids — 2026-09, généralisé (suite).
+   10/11/2026 : l'estimation passe sur la méthode de l'outil WordPress (oneRepMaxFromSet ci-dessous,
+   moyenne Epley / Brzycki) ; le texte qui suit décrit l'ancienne formule Epley seule.
    Une seule formule, réutilisée dans les 2 sens (jamais 2 modèles différents avec 2 statuts
    épistémiques distincts) :
 
@@ -28,9 +30,38 @@ export interface RepSet { reps: number; weight: number }
    SURESTIME un vrai 1RM de ~3.3% — la formule est conçue pour EXTRAPOLER depuis une série sous-
    maximale (reps>1), pas pour "corriger" un effort déjà maximal à 1 rep, qui EST le 1RM par
    définition. */
+/* Méthode unique de l'app et des outils (10/11/2026, alignée sur l'outil WordPress
+   ~/Desktop/tpc-seo/tools/calc-1rm.js) : série à l'échec = moyenne Epley / Brzycki, 1 rep = la
+   charge ; série en RPE = tableau de Helms et al. 2016 (1 à 8 reps). Arrondi au dixième, comme la
+   page. Les résultats déjà en base ne sont pas recalculés. */
+export const RPE_TABLE: Record<string, number[]> = {
+  "10": [100, 95, 91, 87, 85, 83, 81, 79], "9.5": [97, 93, 89, 86, 84, 82, 80, 77.5], "9": [95, 91, 87, 85, 83, 81, 79, 76],
+  "8.5": [93, 89, 86, 84, 82, 80, 77.5, 74.5], "8": [91, 87, 85, 83, 81, 79, 76, 73], "7.5": [89, 86, 84, 82, 80, 77.5, 74.5, 71.5],
+  "7": [87, 85, 83, 81, 79, 76, 73, 70],
+};
+/** 1RM estimé d'une série (méthode de l'outil WordPress). `strict` : mêmes refus que la page (plus de 12 reps, plus de 500 kg). */
+export function oneRepMaxFromSet(weight: number, reps: number, opts: { rpe?: string; strict?: boolean } = {}): number | null {
+  const one = oneRepMaxRaw(weight, reps, opts);
+  return one == null ? null : Number(one.toFixed(1));
+}
+/** Même calcul sans arrondi (l'outil WordPress dérive ses charges de 1 à 8 RM de cette valeur-là). */
+export function oneRepMaxRaw(weight: number, reps: number, opts: { rpe?: string; strict?: boolean } = {}): number | null {
+  if (!(weight > 0) || !Number.isInteger(reps) || reps < 1) return null;
+  if (opts.strict && (weight > 500 || reps > 12)) return null;
+  let one: number;
+  if (opts.rpe != null) {
+    const row = RPE_TABLE[opts.rpe];
+    if (!row || reps > 8) return null;
+    one = weight / (row[reps - 1] / 100);
+  } else if (reps === 1) one = weight;
+  else if (reps < 37) one = (weight * (1 + reps / 30) + (weight * 36) / (37 - reps)) / 2;
+  else one = weight * (1 + reps / 30);
+  return one;
+}
+
 export function estimateOneRepMax(set: RepSet): { value: number; reliable: boolean } {
   if (set.reps <= 1) return { value: set.weight, reliable: true };
-  return { value: set.weight * (1 + set.reps / 30), reliable: set.reps <= 10 };
+  return { value: oneRepMaxFromSet(set.weight, set.reps) ?? set.weight * (1 + set.reps / 30), reliable: set.reps <= 10 };
 }
 
 export interface StrengthEnduranceComparison {

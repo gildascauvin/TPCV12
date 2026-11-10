@@ -11,7 +11,8 @@ export async function updateSession(request: NextRequest) {
   /* /sandbox/* suit le même principe (2026-08-19) : visiteur anonyme par construction, jamais de
      session à résoudre, potentiellement fort trafic depuis WP (2 URL copiables-collées par rôle,
      voir CLAUDE.md "Sandbox PLG"). */
-  if (request.nextUrl.pathname.startsWith("/p/") || request.nextUrl.pathname.startsWith("/share/") || request.nextUrl.pathname.startsWith("/sandbox/")) {
+  /* /o/* (outils de test intégrés aux pages SEO WordPress, 11/2026) : même principe que /p/. */
+  if (request.nextUrl.pathname.startsWith("/p/") || request.nextUrl.pathname.startsWith("/o/") || request.nextUrl.pathname.startsWith("/share/") || request.nextUrl.pathname.startsWith("/sandbox/")) {
     return NextResponse.next({ request });
   }
 
@@ -78,7 +79,7 @@ export async function updateSession(request: NextRequest) {
      ce qui se manifeste comme "le lien me connecte direct" plutôt que de proposer le
      formulaire. Rien d'insécure à le rendre public : sans session, updateUser() échoue
      simplement côté page avec une erreur, pas de fuite possible. */
-  const publicPaths = ["/login", "/register", "/reset-password", "/auth/callback", "/api/", "/join/", "/p/", "/share/", "/sandbox/", "/opengraph-image"];
+  const publicPaths = ["/login", "/register", "/reset-password", "/auth/callback", "/api/", "/join/", "/p/", "/o/", "/share/", "/sandbox/", "/opengraph-image"];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
   if (!user && !isPublic) {

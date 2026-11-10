@@ -13,13 +13,17 @@ import TestEvolutionChart from "@/components/tests/TestEvolutionChart";
 import { ExampleNote } from "@/components/conseils/MetricChart";
 import { guessSportChip } from "@/lib/sportCategories";
 import {
-  computeAllInsights, computeCrossFamilyInsights, computeAllFamiliesInsights, canonicalMetricKey, buildVerdict, groupInsightsByMetric, METRIC_DISPLAY, heightFromFlightTime, dropJumpProfile, formatDropJumpHeightCm, formatDropJumpContactMs, ftctRatio, vo2maxFromCooperDistance, vmaFromDemiCooperDistance,
+  computeAllInsights, computeCrossFamilyInsights, computeAllFamiliesInsights, canonicalMetricKey, groupInsightsByMetric, METRIC_DISPLAY, heightFromFlightTime, dropJumpProfile, formatDropJumpHeightCm, formatDropJumpContactMs, ftctRatio, vo2maxFromCooperDistance, vmaFromDemiCooperDistance,
   type MetricKey, type CardInsight, type CardStatus, type Sexe,
 } from "@/lib/testNorms";
 import { TEST_BATTERIES, BATTERY_TEST_METRICS, type BatteryTest, sharesEnoughWords, buildMergeSuggestions } from "@/lib/testBattery";
 import { QUALITY_ORDER, QUALITY_META, METRIC_QUALITY, BATTERY_TEST_QUALITY, type Quality } from "@/lib/testQualities";
 import { classifySprintProfile, type SprintAxisComparison, type SprintDistance, type FlyKey } from "@/lib/sprintProfile";
 import { estimateOneRepMax, bestStrengthEnduranceComparison } from "@/lib/strengthProfile";
+import {
+  cmjHaugenInsight, sayersWatts, pickAdvisedTest, sportBatteryTestNames, batteryTestMetrics, groupOfMetric, groupOfBatteryTest, groupOfQualities,
+  PROFILE_GROUPS, groupMeta, buildTestProfile, groupWord, buildAxisVerdict, buildQualityVerdict, nextTestDate, type ProfileGroup,
+} from "@/lib/testProfile";
 
 const STATUS_COLOR: Record<CardStatus, { text: string; bg: string; fill: string }> = {
   green: { text: "#2f9e44", bg: "rgba(47,158,68,.10)", fill: "#2f9e44" },
@@ -125,14 +129,16 @@ function findMatchingRawTest(testName: string, candidates: MergedTest[]): Merged
    testNorms.ts), seule la présentation change pour ces 2 métriques précises. Le drop jump se lit
    toujours à 2 valeurs : quand `secondaryByDate` (le temps de contact, par date) est fourni et qu'un
    point existe pour cette date précise, il est affiché à côté de la hauteur — jamais la hauteur seule. */
+/** Nombres affichés à la française : « 2,8 » et non « 2.8 ». */
+export const frNum = (s: string) => s.replace(/(\d)\.(\d)/g, "$1,$2");
 function formatRawValue(metric: MetricKey | undefined, value: number, unit: string, date?: string, secondaryByDate?: Map<string, number>): string {
   if (metric === "dropJumpHeight") {
     const heightText = formatDropJumpHeightCm(value);
     const contact = date != null ? secondaryByDate?.get(date) : undefined;
-    return contact != null ? `${heightText} · ${formatDropJumpContactMs(contact)}` : heightText;
+    return frNum(contact != null ? `${heightText} · ${formatDropJumpContactMs(contact)}` : heightText);
   }
-  if (metric === "dropJumpContact") return formatDropJumpContactMs(value);
-  return `${value} ${unit}`;
+  if (metric === "dropJumpContact") return frNum(formatDropJumpContactMs(value));
+  return frNum(`${value} ${unit}`);
 }
 
 /* Un exercice peut être comparé à plusieurs références (un autre lift, le poids de corps) — chacune
@@ -175,8 +181,8 @@ function ComparisonBlock({ insight, first }: { insight: CardInsight; first: bool
    formaté en absolu (voir formatAbsoluteRef, testNorms.ts, ex. "128 kg"). `null` quand aucun repère
    théorique n'existe (classification graduée sans cible unique, ex. VO2max). */
 function targetRealUnitDisplay(insight: CardInsight): string | null {
-  if (insight.kind === "absolute") return insight.refValue != null ? insight.fmt(insight.refValue) : null;
-  return insight.refValueDisplay ?? null;
+  if (insight.kind === "absolute") return insight.refValue != null ? frNum(insight.fmt(insight.refValue)) : null;
+  return insight.refValueDisplay != null ? frNum(insight.refValueDisplay) : null;
 }
 /* Même repère, en NOMBRE (pour calculer un écart réel) plutôt qu'en texte déjà formaté — extrait le
    nombre de `refValueDisplay` via parseFloat plutôt que dupliquer le calcul de formatAbsoluteRef. */
@@ -185,6 +191,23 @@ function targetRealUnitNumeric(insight: CardInsight): number | null {
   if (!insight.refValueDisplay) return null;
   const n = parseFloat(insight.refValueDisplay);
   return Number.isFinite(n) ? n : null;
+}
+
+/* Source d'un repère derrière un ⓘ (jamais affichée par défaut). */
+export function InfoTip({ text, dark = true }: { text: string; dark?: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span style={{ position: "relative", display: "inline-block", marginLeft: 5 }}>
+      <button
+        type="button" aria-label="Source du repère" aria-expanded={open}
+        onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
+        style={{ border: "none", background: "none", padding: 0, cursor: "pointer", color: dark ? "rgba(255,255,255,.55)" : "#8a8f94", fontSize: 11, lineHeight: 1 }}
+      >ⓘ</button>
+      {open && (
+        <span role="note" onClick={e => e.stopPropagation()} style={{ position: "absolute", zIndex: 5, bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)", width: 240, maxWidth: "70vw", textAlign: "left", background: "#fff", color: "#171b1f", fontSize: 11.5, fontWeight: 500, lineHeight: 1.45, padding: "9px 11px", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,.25)" }}>{text}</span>
+      )}
+    </span>
+  );
 }
 
 /* Jauge pleine largeur de la comparaison "primary" d'une ligne (2026-09, suite) — reprend le rendu
@@ -200,7 +223,7 @@ function targetRealUnitNumeric(insight: CardInsight): number | null {
    n'ont pas la même échelle physique que l'écart réel, un mélange des deux serait trompeur). Repli
    sur l'ancien remplissage linéaire 0→score% quand aucun repère théorique n'existe (classification
    graduée sans cible unique, ex. VO2max) — pas de centre à définir dans ce cas. */
-function PrimaryGauge({ insight, deltaRealUnit, rawValueLabel, analysisLocked = false }: { insight: CardInsight; deltaRealUnit: string | null; rawValueLabel: string | null; /** Compte gratuit : valeur loggée lisible (entrée), badge/barre/cible floutés. */ analysisLocked?: boolean }) {
+function PrimaryGauge({ insight, deltaRealUnit, rawValueLabel, analysisLocked = false, valueNote }: { insight: CardInsight; deltaRealUnit: string | null; rawValueLabel: string | null; /** Compte gratuit : valeur loggée lisible (entrée), badge/barre/cible floutés. */ analysisLocked?: boolean; /** Petite valeur dérivée à côté du résultat (ex. « ≈ 3 594 W »). */ valueNote?: string }) {
   const lockBlur: React.CSSProperties = analysisLocked ? { filter: "blur(6px)", userSelect: "none", pointerEvents: "none" } : {};
   const c = STATUS_COLOR[insight.status!];
   const hasTarget = insight.refValue != null && insight.norms[1] !== insight.norms[0];
@@ -218,7 +241,10 @@ function PrimaryGauge({ insight, deltaRealUnit, rawValueLabel, analysisLocked = 
           jauge reste visuellement aligné avec le tick. */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
         {rawValueLabel != null ? (
-          <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em", lineHeight: 1.1 }}>{rawValueLabel}</span>
+          <span style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em", lineHeight: 1.1 }}>{rawValueLabel}</span>
+            {valueNote && <span style={{ fontSize: 11.5, fontWeight: 700, color: "rgba(255,255,255,.55)" }}>{valueNote}</span>}
+          </span>
         ) : <span />}
         <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 24, flexShrink: 0, whiteSpace: "nowrap", color: c.fill, background: `${c.fill}26`, ...lockBlur }}>
           {STATUS_LABEL[insight.status!]}{deltaRealUnit && ` : ${deltaRealUnit}`}
@@ -248,7 +274,8 @@ function PrimaryGauge({ insight, deltaRealUnit, rawValueLabel, analysisLocked = 
       </div>
       {targetLabel != null && (
         <div style={{ marginTop: 6, textAlign: "center", fontSize: 10.5, color: "rgba(255,255,255,.45)", ...lockBlur }}>
-          cible vs {insight.compareLabel} : <b style={{ color: "#fff", fontWeight: 700 }}>{targetLabel}</b>
+          {insight.targetPrefix ?? `cible vs ${insight.compareLabel}`} : <b style={{ color: "#fff", fontWeight: 700 }}>{targetLabel}</b>
+          {insight.targetInfo && <InfoTip text={insight.targetInfo} />}
         </div>
       )}
     </div>
@@ -279,7 +306,7 @@ function SprintAxisGauge({ comp, hideLabel, analysisLocked = false }: { comp: Sp
       {/* Attendu déplacé SOUS la jauge (2026-09, suite — même fix que PrimaryGauge, "en mobile c'est
           mieux") : même raisonnement, plus de position:absolute superposée à la ligne résultat/badge. */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>{comp.actual.toFixed(2)}s</span>
+        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>{frNum(comp.actual.toFixed(2))}s</span>
         <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 24, flexShrink: 0, whiteSpace: "nowrap", color: col.text, background: `${col.text}26`, ...lockBlur }}>
           {comp.label.charAt(0).toUpperCase() + comp.label.slice(1)}
         </span>
@@ -294,7 +321,7 @@ function SprintAxisGauge({ comp, hideLabel, analysisLocked = false }: { comp: Sp
         />
       </div>
       <div style={{ marginTop: 6, textAlign: "center", fontSize: 10.5, color: "rgba(255,255,255,.45)", ...lockBlur }}>
-        attendu : <b style={{ color: "#fff", fontWeight: 700 }}>{comp.predicted.toFixed(2)}s</b>
+        attendu : <b style={{ color: "#fff", fontWeight: 700 }}>{frNum(comp.predicted.toFixed(2))}s</b>
       </div>
     </div>
   );
@@ -488,7 +515,9 @@ function RowMenu({ mergeSuggestions, onMerge, onDeleteWhole }: {
    `comparisons` est fourni (sinon carte "brute", sans interprétation — cas d'un test hors des
    normes connues, toujours affiché mais sans jugement forces/faiblesses). Toujours visible en
    entier, jamais un détail caché derrière une sélection préalable. */
-function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPair, readOnly, batteryInfo, onDeleteResult, metric, sscProfile, secondaryByDate, ftctInfo, repEntries, onAddRepEntry, onDeleteRepEntry, initialOpen, analysisLocked = false, exampleNote }: {
+function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPair, readOnly, batteryInfo, onDeleteResult, metric, sscProfile, secondaryByDate, ftctInfo, repEntries, onAddRepEntry, onDeleteRepEntry, initialOpen, analysisLocked = false, exampleNote, projectedDate }: {
+  /** Prochain test (ISO) : un 1er résultat montre déjà sa courbe avec le point à venir en pointillés. */
+  projectedDate?: string;
   /* Freemium : comparaisons, profil et courbe floutés ; l'historique brut et l'ajout restent libres. */
   analysisLocked?: boolean;
   /** Tests d'exemple (2026-10-01) : mention centrée sur la courbe d'évolution. */
@@ -692,7 +721,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
                 {/* Parenthèse en unité réelle du test (2026-09, suite — retour de Gildas), jamais le
                     %/multiple interne de la comparaison : repli sur le % uniquement si aucun repère
                     théorique n'est convertible (classification graduée sans cible unique). */}
-                <span><b style={{ color: "#fff" }}>{ins.compareLabel}</b> : {STATUS_LABEL[ins.status!]} ({targetRealUnitDisplay(ins) ?? ins.fmt(ins.value!)})</span>
+                <span><b style={{ color: "#fff" }}>{ins.compareLabel}</b> : {STATUS_LABEL[ins.status!]} ({targetRealUnitDisplay(ins) ?? frNum(ins.fmt(ins.value!))})</span>
               </div>
             ))}
           </div>
@@ -706,7 +735,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
         <div style={{ marginTop: 10, padding: "9px 11px", background: "rgba(255,255,255,.05)", borderRadius: 12 }}>
           {ftctInfo != null && (
             <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", marginBottom: 4 }}>
-              Ratio temps de vol/contact (style MyJump) : {ftctInfo.toFixed(2)} · non normé, indicatif (pas de seuil scientifique publié pour cette variante).
+              Ratio temps de vol/contact (style MyJump) : {frNum(ftctInfo.toFixed(2))} · non normé, indicatif (pas de seuil scientifique publié pour cette variante).
             </div>
           )}
           <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700, color: "#fff", marginBottom: 2 }}>{sscProfile.label}</div>
@@ -718,20 +747,20 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
 
       {/* Courbe et premier/dernier = tes propres résultats (des entrées) : toujours lisibles, même
           en compte gratuit (2026-10-01). Seuls les repères et l'analyse au-dessus sont floutés. */}
-      {results.length >= 2 ? (
+      {results.length >= 2 || (projectedDate && results.length === 1) ? (
         <div style={{ marginTop: 10 }}>
           <div style={{ position: "relative" }}>
-            <TestEvolutionChart points={results.map(r => ({ date: r.date, value: r.value }))} height={exampleNote ? 96 : 70} />
+            <TestEvolutionChart points={results.map(r => ({ date: r.date, value: r.value }))} height={exampleNote ? 96 : 70} projectedDate={results.length === 1 ? projectedDate : undefined} />
             {exampleNote && <ExampleNote text={exampleNote} top="50%" />}
           </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+          {results.length >= 2 && <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
             <span style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "5px 9px", fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,.65)" }}>
               Premier : <b style={{ color: "#fff" }}>{formatRawValue(metric, results[0].value, results[0].unit, results[0].date, secondaryByDate)}</b>
             </span>
             <span style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "5px 9px", fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,.65)" }}>
               Dernier : <b style={{ color: "#fff" }}>{formatRawValue(metric, last!.value, last!.unit, last!.date, secondaryByDate)}</b>
             </span>
-          </div>
+          </div>}
         </div>
       ) : results.length === 1 ? null : (
         <div style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginTop: results.length || comparisons || sscProfile || batteryInfo ? 10 : 0 }}>Aucun résultat encore.</div>
@@ -839,13 +868,13 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
                 value={value} onChange={e => setValue(e.target.value)} style={{ ...INPUT_STYLE, fontSize: 14 }}
               />
               {flightPreview != null && (
-                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.5)", marginTop: 4 }}>≈ {formatDropJumpHeightCm(heightFromFlightTime(flightPreview / 1000))}</div>
+                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.5)", marginTop: 4 }}>≈ {frNum(formatDropJumpHeightCm(heightFromFlightTime(flightPreview / 1000)))}</div>
               )}
               {cooperPreview != null && (
-                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.5)", marginTop: 4 }}>≈ {vo2maxFromCooperDistance(cooperPreview).toFixed(1)} ml/kg/min</div>
+                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.5)", marginTop: 4 }}>≈ {frNum(vo2maxFromCooperDistance(cooperPreview).toFixed(1))} ml/kg/min</div>
               )}
               {demiCooperPreview != null && (
-                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.5)", marginTop: 4 }}>≈ {vmaFromDemiCooperDistance(demiCooperPreview).toFixed(1)} km/h</div>
+                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.5)", marginTop: 4 }}>≈ {frNum(vmaFromDemiCooperDistance(demiCooperPreview).toFixed(1))} km/h</div>
               )}
             </div>
             {onAddNew && (
@@ -904,7 +933,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
                   const est = estimateOneRepMax({ reps: r.reps, weight: r.weight });
                   return (
                     <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 12, color: "rgba(255,255,255,.7)" }}>
-                      <span>{r.reps} reps @ {r.weight}kg ({formatLong(r.date)}) <span style={{ color: "rgba(255,255,255,.45)" }}>· e1RM {est.value.toFixed(1)}kg</span></span>
+                      <span>{r.reps} reps @ {r.weight}kg ({formatLong(r.date)}) <span style={{ color: "rgba(255,255,255,.45)" }}>· e1RM {frNum(est.value.toFixed(1))}kg</span></span>
                       {!readOnly && onDeleteRepEntry && (
                         <button
                           disabled={deletingRepId === r.id}
@@ -956,7 +985,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
    qu'avant pour chacune des 4 sources (interprétée/résolue sans jauge/recommandée/brute), pour ne
    rien perdre en dépliant. */
 type TestCardProps = ComponentProps<typeof TestCard>;
-interface UnifiedRow {
+export interface UnifiedRow {
   key: string;
   emoji: string;
   name: string;
@@ -993,6 +1022,14 @@ interface UnifiedRow {
       impossible, et le repli fechain ne couvre que 60m/100m). */
   sprintComparison?: SprintAxisComparison;
   cardProps: TestCardProps;
+  /** Qualité de rattachement (en-têtes de groupes, testProfile.ts). */
+  group?: ProfileGroup;
+  /** Nom du test de batterie (testBattery.ts) dont vient la ligne, s'il y en a un. */
+  batteryName?: string;
+  /** Valeur dérivée affichée à côté du résultat (ex. watts du CMJ). */
+  valueNote?: string;
+  /** « Prochain test : 8 déc. » (4 semaines après le dernier résultat). */
+  nextLabel?: string;
   unlinked?: boolean;
   mergeSuggestions?: { label: string; toName: string }[];
   onMerge?: (toName: string) => Promise<void>;
@@ -1027,6 +1064,17 @@ function unifiedRowFromInsightGroup(group: { metric: MetricKey; label: string; c
       const deltaDisplay = formatRawValue(group.metric, deltaRounded, last.unit);
       deltaRealUnit = `${deltaRaw >= 0 ? "+" : "−"}${deltaDisplay}`;
     }
+  }
+  // RSI (drop jump) : le repère et l'écart se lisent en RSI, pas en hauteur (un écart de 4 cm
+  // s'affichait « −0.00 cm » une fois arrondi au dixième de mètre).
+  if (rep && rep.id === "dropJumpHeight_dropJumpContact" && rep.value != null && rep.refValue != null) {
+    const d = rep.value - rep.refValue;
+    return {
+      key: `insight-${group.metric}`, emoji, name: group.label, date,
+      score: rep.score ?? null, primaryComparison: { ...rep, kind: "absolute", fmt: v => `RSI ${v.toFixed(2).replace(".", ",")}`, targetPrefix: "Repère" },
+      rawValueLabel, deltaRealUnit: `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(2).replace(".", ",")}`, cardProps,
+      valueNote: `RSI ${rep.value.toFixed(2).replace(".", ",")}`,
+    };
   }
   return {
     key: `insight-${group.metric}`, emoji, name: group.label, date,
@@ -1109,6 +1157,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   // d'ajouter un test depuis la page des tests de performance") : un simple toggle, pas un accordion
   // de plus (le formulaire n'est associé à aucune ligne existante).
   const [addingCustomTest, setAddingCustomTest] = useState(false);
+  const [showAllTests, setShowAllTests] = useState(false);
 
   // Fetch pur (aucun setState ici) — réutilisé à la fois par l'effet de montage (qui applique le
   // résultat seulement si toujours d'actualité, via `cancelled` local ci-dessous) et par l'ajout
@@ -1298,7 +1347,9 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   // plus filtrer les tests par sport du profil... tous les tests de l'app pour tous les users,
   // filtrables par qualité physique").
   const activeFamily = sportFamily;
-  const allInsights = computeAllInsights(activeFamily, sexe ?? null, poidsKg ?? null, latestByMetric);
+  // Repère CMJ par sport (Haugen 2021, testProfile.ts) : interprété quel que soit la famille de normes.
+  const haugen = cmjHaugenInsight(sport, sexe ?? null, latestByMetric.cmjHeight ?? null);
+  const allInsights = [...computeAllInsights(activeFamily, sexe ?? null, poidsKg ?? null, latestByMetric), ...(haugen ? [haugen] : [])];
   // Un test DÉJÀ LOGUÉ garde sa carte enrichie quel que soit le sport de profil (2026-09) — ex. un
   // Drop Jump loggué (repère RSI, "Athlétisme & vitesse") reste enrichi même si le profil est
   // "Haltérophilie". `cardInsights` (famille active + déjà loggé ailleurs) reste le comportement PAR
@@ -1312,8 +1363,9 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   // rapport à l'ancien chip "par sport", qui pouvait basculer `activeFamily` entièrement. Jamais
   // utilisée par défaut (sans qualité active) : afficherait sinon les cartes verrouillées de tous les
   // sports en permanence.
+  const allFamiliesInsights = [...computeAllFamiliesInsights(sexe ?? null, poidsKg ?? null, latestByMetric), ...(haugen ? [haugen] : [])];
   const filteredCardInsights = activeQuality
-    ? computeAllFamiliesInsights(sexe ?? null, poidsKg ?? null, latestByMetric).filter(i => METRIC_QUALITY[i.primaryMetric].includes(activeQuality))
+    ? allFamiliesInsights.filter(i => METRIC_QUALITY[i.primaryMetric].includes(activeQuality))
     : cardInsights;
   const coveredMetrics = new Set(filteredCardInsights.map(i => i.primaryMetric));
   // Le filtre qualité s'applique aussi aux Recommandations (verdict/points faibles-forts) — cohérent
@@ -1322,8 +1374,12 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   // "Recommandations d'entraînement" (`allInsights` = famille de profil seule, sans crossFamily).
   // `filteredCardInsights` inclut déjà tout ça une fois une qualité active ; sans qualité, retombe sur
   // `allInsights` (comportement historique, famille de profil uniquement).
-  const qualityFilteredInsights = activeQuality ? filteredCardInsights : allInsights;
-  const verdict = buildVerdict(qualityFilteredInsights);
+  // Verdict (POC v11, 10/11) : « Tous » = un seul axe prioritaire (la qualité la plus faible, calculée
+  // sur TOUS les tests interprétés) ; filtre = les priorités dans cette qualité. Rien avant 2 qualités
+  // avec repère. Le filtre ne recalcule jamais l'axe général.
+  const testProfile = buildTestProfile(cardInsights);
+  const axisVerdict = buildAxisVerdict(testProfile);
+  const qualityVerdict = activeQuality && testProfile.verdictOn ? buildQualityVerdict(filteredCardInsights, activeQuality, QUALITY_META[activeQuality].label) : null;
   // Profil de vitesse et endurance de force dans Recommandations, pas des cartes à part (2026-09,
   // suite) — ce sont de vrais verdicts (point fort/axe de travail), au même titre que les CardInsight
   // ci-dessus, juste construits sur un mécanisme réel-vs-attendu plutôt qu'une norme de population.
@@ -1362,7 +1418,6 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   // (jauge visuelle, pas juste du texte). Un `enduranceProfile.ts` (formule de Riegel) avait été
   // construit puis retiré pour cette raison précise, trouvée en vérifiant l'inventaire des corrélations
   // déjà existantes avant de généraliser l'architecture.
-  const showReco = !!activeFamily || sprintAxisRows.length > 0 || forceExtraWeak.length > 0;
   // Contexte "pourquoi ce test" (batteryInfo) pour les cartes à UN SEUL MetricKey (2026-09, suite —
   // scanne désormais TOUTES les batteries, plus seulement celle du sport de profil, cohérent avec le
   // retrait du filtrage par sport ci-dessous). Les composés (plusieurs MetricKey) n'ont pas de carte
@@ -1566,7 +1621,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   // Liste unifiée (2026-09, suite — remplace à la fois le bilan texte séparé ET la grille de cartes
   // toujours dépliées) : chacune des 4 sources devient une UnifiedRow, avec exactement les mêmes
   // `cardProps` qu'avant pour ne rien perdre une fois la ligne dépliée (CRUD complet inchangé).
-  const interpretedRows: UnifiedRow[] = groupInsightsByMetric(filteredCardInsights).map(group => {
+  function rowForInsightGroup(group: { metric: MetricKey; label: string; comparisons: CardInsight[] }, batteryName?: string): UnifiedRow {
     const cardProps: TestCardProps = {
       title: group.label,
       unit: METRIC_DISPLAY[group.metric].unit,
@@ -1586,8 +1641,15 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
       onAddRepEntry: FORCE_MOVEMENT_METRICS.has(group.metric) ? (r, w, d) => handleAddStrengthRep(group.label, r, w, d) : undefined,
       onDeleteRepEntry: FORCE_MOVEMENT_METRICS.has(group.metric) ? handleDeleteStrengthRep : undefined,
     };
-    return unifiedRowFromInsightGroup(group, movementEmoji(group.metric), cardProps);
-  });
+    const row = unifiedRowFromInsightGroup(group, movementEmoji(group.metric), cardProps);
+    const lastCmj = group.metric === "cmjHeight" ? latestByMetric.cmjHeight : undefined;
+    return {
+      ...row, group: groupOfMetric(group.metric), batteryName,
+      ...(batteryName ? { name: batteryName } : {}),
+      valueNote: lastCmj != null && poidsKg ? `≈ ${Math.round(sayersWatts(lastCmj, poidsKg)).toLocaleString("fr-FR")} W` : row.valueNote,
+    };
+  }
+  const interpretedRows: UnifiedRow[] = groupInsightsByMetric(filteredCardInsights).map(group => rowForInsightGroup(group));
 
   // Métriques résolus sans carte interprétée (sprint60/100/200m notamment, aucune norme sourcée pour
   // une vraie RATIO_CARD — mais sprint60m/100m/200m ONT quand même un repère possible via le profil
@@ -1609,7 +1671,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
     };
     const axisLabel = SPRINT_AXIS_LABEL[metric];
     const sprintComparison = axisLabel ? sprintAxisComparisons.find(c => c.axis === axisLabel) : undefined;
-    const row = unifiedRowFromRaw(`metric-${metric}`, METRIC_DISPLAY[metric].name, movementEmoji(metric), metric, cardProps.results, cardProps);
+    const row = { ...unifiedRowFromRaw(`metric-${metric}`, METRIC_DISPLAY[metric].name, movementEmoji(metric), metric, cardProps.results, cardProps), group: groupOfMetric(metric) };
     if (!sprintComparison) return row;
     // Score dérivé (2026-09, suite) — UNIQUEMENT pour le tri "plus faible en premier" de la liste
     // (même échelle 0-100, même sens que CardInsight.score), jamais affiché tel quel à l'écran :
@@ -1622,6 +1684,11 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   // Tests recommandés → lignes, sans exception : verrouillée (jamais loguée) ou remplie (une ligne
   // `tests` matche déjà, voir findMatchingRawTest).
   const recommendedRows: UnifiedRow[] = recommendedCards.map(({ t, match }) => {
+    // Test de batterie avec métrique interprétée (ex. Drop Jump pour un footballeur) : sa vraie carte
+    // verrouillée (formulaire hauteur + contact, jauge dès le 1er résultat) plutôt qu'une ligne brute.
+    const m0 = batteryTestMetrics(t.name)[0];
+    const comps = !match && m0 ? allFamiliesInsights.filter(i => i.primaryMetric === m0) : [];
+    if (comps.length) return rowForInsightGroup({ metric: m0, label: METRIC_DISPLAY[m0].name, comparisons: comps }, t.name);
     const results = match ? resultsByKey.get(match.name_key) ?? [] : [];
     const metric = match ? canonicalMetricKey(match.name_key) ?? undefined : undefined;
     const cardProps: TestCardProps = {
@@ -1637,6 +1704,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
     };
     return {
       ...unifiedRowFromRaw(`rec-${t.name}`, t.name, movementEmoji(metric, BATTERY_TEST_QUALITY[t.name]), metric, results, cardProps),
+      group: groupOfBatteryTest(t.name), batteryName: t.name,
       unlinked: match ? !canonicalMetricKey(match.name_key) : undefined,
       mergeSuggestions: match && !canonicalMetricKey(match.name_key) ? buildMergeSuggestions(match.name) : undefined,
       onMerge: match ? (toKey: string) => handleMergeRawTest(match, toKey) : undefined,
@@ -1666,6 +1734,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
     };
     return {
       ...unifiedRowFromRaw(t.name_key, t.name, movementEmoji(rawMetric), rawMetric, results, cardProps),
+      group: rawMetric ? groupOfMetric(rawMetric) : groupOfQualities(t.qualities as Quality[] | null),
       unlinked: !canonicalMetricKey(t.name_key),
       mergeSuggestions: canonicalMetricKey(t.name_key) ? undefined : buildMergeSuggestions(t.name),
       onMerge: (toKey: string) => handleMergeRawTest(t, toKey),
@@ -1677,13 +1746,75 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   // (priorité réelle façon bilan — "commence par ton plus gros écart"), puis les lignes neutres
   // (jamais loguées ou sans norme sourcée) à la suite, dans leur ordre d'apparition d'origine (tri
   // stable, jamais mélangées entre elles).
-  const unifiedRows: UnifiedRow[] = [...interpretedRows, ...uninterpretedRows, ...recommendedRows, ...rawRows]
+  const unifiedRowsAll: UnifiedRow[] = [...interpretedRows, ...uninterpretedRows, ...recommendedRows, ...rawRows]
     .sort((a, b) => {
       if (a.score == null && b.score == null) return 0;
       if (a.score == null) return 1;
       if (b.score == null) return -1;
       return a.score - b.score;
     });
+  // Une seule ligne par clé (un même métrique peut venir de 2 tests de batterie différents) : celle
+  // de la batterie du sport l'emporte.
+  const sportTestNames = sportBatteryTestNames(sport);
+  const sportNameSet = new Set(sportTestNames);
+  const seenRowKeys = new Set<string>();
+  const unifiedRows: UnifiedRow[] = [...unifiedRowsAll]
+    .sort((a, b) => (sportNameSet.has(b.batteryName ?? "") ? 1 : 0) - (sportNameSet.has(a.batteryName ?? "") ? 1 : 0))
+    .filter(r => (seenRowKeys.has(r.key) ? false : (seenRowKeys.add(r.key), true)))
+    .sort((a, b) => unifiedRowsAll.indexOf(a) - unifiedRowsAll.indexOf(b))
+    .map(r => {
+      const last = r.cardProps.results[r.cardProps.results.length - 1];
+      if (!last) return r;
+      const next = nextTestDate(last.date);
+      const due = next.getTime() <= Date.now();
+      const iso = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+      return {
+        ...r, nextLabel: due ? "À refaire" : `Prochain test : ${next.getDate()} ${MONTH_FR[next.getMonth()]}`,
+        cardProps: r.cardProps.results.length === 1 ? { ...r.cardProps, projectedDate: iso } : r.cardProps,
+      };
+    });
+
+  // Test conseillé (POC v11) : batterie du sport, d'abord un test qui donne une jauge dès le 1er
+  // résultat ; suit le filtre qualité ; sinon test de secours de la qualité.
+  const isBatteryTestDone = (name: string) => {
+    const metrics = batteryTestMetrics(name);
+    if (metrics.length) return metrics.every(m => latestByMetric[m] != null);
+    const match = findMatchingRawTest(name, merged);
+    return !!match && (resultsByKey.get(match.name_key)?.length ?? 0) > 0;
+  };
+  const batteryTestHasReference = (name: string) => {
+    const m0 = batteryTestMetrics(name)[0];
+    if (!m0) return false;
+    if (m0 === "cmjHeight" && cmjHaugenInsight(sport, sexe ?? null, 1)) return true;
+    const probe: Partial<Record<MetricKey, number>> = { ...latestByMetric, [m0]: latestByMetric[m0] ?? 1 };
+    if (m0 === "dropJumpHeight") probe.dropJumpContact = latestByMetric.dropJumpContact ?? 1;
+    return computeAllFamiliesInsights(sexe ?? null, poidsKg ?? null, probe).some(i => i.primaryMetric === m0 && i.score != null);
+  };
+  const advisedName = pickAdvisedTest({ sport, activeQuality, isDone: isBatteryTestDone, hasReference: batteryTestHasReference });
+  const rowForBatteryName = (name: string) => {
+    const m0 = batteryTestMetrics(name)[0];
+    return unifiedRows.find(r => r.batteryName === name)
+      ?? (m0 ? unifiedRows.find(r => r.key === `insight-${m0}` || r.key === `metric-${m0}`) : undefined);
+  };
+  const advisedRow = advisedName ? rowForBatteryName(advisedName) : undefined;
+  const advisedDone = advisedRow ? advisedRow.cardProps.results.length > 0 : true;
+  const advised = advisedRow && !advisedDone ? advisedRow : undefined;
+
+  const doneRows = unifiedRows.filter(r => r.cardProps.results.length > 0);
+  const sportMetricSet = new Set(sportTestNames.map(n => batteryTestMetrics(n)[0]).filter(Boolean));
+  const isSportRow = (r: UnifiedRow) => (r.batteryName != null && sportNameSet.has(r.batteryName))
+    || (r.key.startsWith("insight-") && sportMetricSet.has(r.key.slice(8) as MetricKey));
+  const todoRows = unifiedRows.filter(r => r.cardProps.results.length === 0 && r.key !== advised?.key);
+  const sportTodoRows = todoRows.filter(isSportRow);
+  const otherTodoRows = todoRows.filter(r => !isSportRow(r));
+
+  // Tests faits groupés par qualité dès qu'il y a 2 qualités différentes ; le mot de la qualité porte
+  // le profil (pas de jauge agrégée).
+  const doneGroups = Array.from(new Set(doneRows.map(r => r.group ?? "autres")));
+  const groupOrder: ProfileGroup[] = [...PROFILE_GROUPS.map(g => g.key), "autres"];
+  const showGroups = doneGroups.filter(g => g !== "autres").length >= 2;
+  const coachWords = isCoachView || examplePerspective === "coach";
+  const locked = !!lockedAnalysis;
 
   function toggleRow(key: string) {
     setAutoAddKey(null);
@@ -1693,206 +1824,289 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
     setAutoAddKey(key);
     setExpandedKey(key);
   }
+  const line = (row: UnifiedRow, opts?: { hideDate?: boolean; bare?: boolean }) => (
+    <TestLine
+      key={row.key} row={row} expanded={expandedKey === row.key} autoAdd={autoAddKey === row.key}
+      onToggle={() => toggleRow(row.key)} onQuickAdd={() => quickAdd(row.key)}
+      analysisLocked={locked} example={example} examplePerspective={examplePerspective}
+      hideDate={opts?.hideDate} bare={opts?.bare}
+    />
+  );
+  const KICKER: React.CSSProperties = { fontSize: 10.5, fontWeight: 800, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "rgba(255,255,255,.4)" };
+  const recoCard: React.CSSProperties = { background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 20, padding: "16px 16px 14px", color: "#fff", marginBottom: 16 };
+  const hasVerdict = !!(activeQuality ? qualityVerdict : axisVerdict);
 
   return (
-    <div>
-      {/* Carte dark "Recommandations" — s'affiche dès qu'il y a un verdict à montrer OU au moins un
-          test à lister (2026-09, suite) : la liste de tests ne doit JAMAIS disparaître faute de
-          verdict (ex. aucun sport de profil et aucun signal sprint/force), même si ce sont les 2
-          raisons pour lesquelles cette carte existe à l'origine. */}
-      {(showReco || unifiedRows.length > 0) && (
-        <div style={{ background: onDarkPage ? "transparent" : "linear-gradient(135deg,#161616,#282828 64%,#111)", borderRadius: 24, padding: onDarkPage ? "0 0 16px" : "18px 18px 16px", marginBottom: 14, color: "#fff" }}>
-          {showReco && (
-            <>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#f04a08", marginBottom: 6, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>Recommandations d&apos;entraînement</div>
-
-              {/* Profil (2026-09, suite — retour de Gildas) : déplacé sous le titre "Recommandations
-                  d'entraînement" (était au-dessus de toute la carte, sur fond clair) — restylé dark
-                  pour rester cohérent avec le reste de la carte. */}
-              {onEditProfile && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "9px 12px", marginBottom: 10, fontSize: 12, color: "rgba(255,255,255,.75)" }}>
-                  <span>👤 <b style={{ color: "#fff" }}>{sport || "Sport non renseigné"}</b> · {sexeLabel(sexe ?? null)} · {poidsLabel(poidsKg)}</span>
-                  <button onClick={onEditProfile} style={{ background: "none", border: "none", color: "#f04a08", fontWeight: 800, fontSize: 12, cursor: "pointer", padding: 0 }}>✏️ Modifier</button>
-                </div>
-              )}
-
-              {/* Chips de qualité physique (2026-09) — remplace l'ancien filtre par sport. Ne change
-                  jamais la famille de normes interprétée (toujours celle du sport de profil) : filtre
-                  uniquement QUELLES cartes/tests recommandés s'affichent, transversalement à tous les
-                  sports (voir testQualities.ts). "Tous" (2026-09, suite — retour de Gildas) : remet
-                  `activeQuality` à `null`, seul moyen de sortir du filtre une fois un chip cliqué
-                  (avant, il fallait recliquer le MÊME chip actif — pas évident). */}
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 8 }}>Filtrer par qualité physique</div>
-                <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
-                  <button
-                    onClick={() => setActiveQuality(null)}
-                    style={{
-                      flexShrink: 0, display: "flex", alignItems: "center", gap: 6,
-                      padding: "8px 13px", borderRadius: 24,
-                      border: activeQuality == null ? "1px solid #f04a08" : "1px solid rgba(255,255,255,.14)",
-                      background: activeQuality == null ? "#f04a08" : "rgba(255,255,255,.06)", color: "#fff",
-                      fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
-                    }}
-                  >
-                    Tous
-                  </button>
-                  {QUALITY_ORDER.map(q => {
-                    const meta = QUALITY_META[q];
-                    const active = activeQuality === q;
-                    return (
-                      <button
-                        key={q}
-                        onClick={() => setActiveQuality(prev => (prev === q ? null : q))}
-                        style={{
-                          flexShrink: 0, display: "flex", alignItems: "center", gap: 6,
-                          padding: "8px 13px", borderRadius: 24,
-                          border: active ? "1px solid #f04a08" : "1px solid rgba(255,255,255,.14)",
-                          background: active ? "#f04a08" : "rgba(255,255,255,.06)", color: "#fff",
-                          fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
-                        }}
-                      >
-                        <span>{meta.emoji}</span>{meta.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <LockedBlur locked={!!lockedAnalysis} surface="tests_verdict" onUnlock={() => lockedAnalysis?.onUnlock()} title="Tes forces et tes axes de travail" sub="Calculés sur les ratios de tes tests." cta="Débloquer l'analyse" radius={12}>
-              <div style={{ position: "relative" }}>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, lineHeight: 1.3, marginBottom: 10 }}>{verdict.title}</div>
-              <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "10px 12px", fontSize: 13, color: "rgba(255,255,255,.85)", lineHeight: 1.5 }}>
-                <b style={{ color: "#fff" }}>{verdict.emoji} {verdict.action} :</b> {verdict.sub}
-              </div>
-              {example && <ExampleNote text={examplePerspective === "coach" ? "Ses recommandations apparaissent dès son 1er test." : "Tes recommandations apparaissent dès ton 1er test."} top="50%" />}
-              </div>
-              </LockedBlur>
-            </>
-          )}
-          {/* Profil de vitesse — jauges (2026-09, suite — retour de Gildas) : pas de carte CRUD à qui
-              les rattacher (profils dérivés de plusieurs distances, pas un mouvement unique loggable),
-              donc elles restent ici plutôt que dans la liste ci-dessous — mais avec le même langage
-              visuel que PrimaryGauge (centre = temps attendu, la barre part du centre vers le temps
-              réel) plutôt qu'une ligne de texte brut. */}
-          {sprintAxisRows.length > 0 && (
-            <div style={{ marginTop: 14 }}>
-              {sprintAxisRows.map(c => <SprintAxisGauge key={c.axis} comp={c} analysisLocked={!!lockedAnalysis} />)}
-            </div>
-          )}
-          <LockedBlur locked={!!lockedAnalysis} surface="tests_signals" onUnlock={() => lockedAnalysis?.onUnlock()} bare radius={12}>
-          {/* Signal Force (2026-09) — pas de repère actual/predicted à jauger de la même façon (voir
-              StrengthEnduranceComparison), reste en texte. */}
-          {forceExtraWeak.length > 0 && (
-            <div style={{ marginTop: sprintAxisRows.length > 0 ? 4 : 14, display: "flex", flexDirection: "column", gap: 8 }}>
-              {forceExtraWeak.map((it, i) => (
-                <div key={`sig-force-${i}`} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                  <span style={{ width: 18, height: 18, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#ff8a6a", background: "rgba(209,0,0,.22)" }}>!</span>
-                  <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.78)", lineHeight: 1.4 }}><b style={{ color: "#fff" }}>{it.label}</b> — {it.detail}</div>
-                </div>
-              ))}
-            </div>
-          )}
-          </LockedBlur>
-
-          {/* "+ Nouveau test" (2026-09, suite) — toujours visible (indépendant de showReco/du filtre
-              qualité), masqué en sandbox (fixture, aucun backend réel derrière). */}
-          {!fixture && (
-            <div style={{ marginTop: showReco ? 14 : 0 }}>
-              {addingCustomTest ? (
-                <AddCustomTestForm
-                  onSave={async (name, value, unit, date, qualities) => {
-                    await handleAddForNewRecommendedTest(name, value, unit, date, qualities);
-                    setAddingCustomTest(false);
-                  }}
-                  onCancel={() => setAddingCustomTest(false)}
-                />
-              ) : (
+    <div style={onDarkPage ? { color: "#fff" } : { background: "linear-gradient(135deg,#161616,#282828 64%,#111)", borderRadius: 24, padding: "18px 18px 16px", color: "#fff" }}>
+      {/* Une colonne, comme en prod : Recommandations (profil, filtres, verdict), test conseillé,
+          tests faits groupés par qualité, tests du sport à faire, « Tous les tests » replié. Les
+          filtres affinent la reco ET la liste. */}
+      <div style={recoCard}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#f04a08", marginBottom: 8, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>Recommandations d&apos;entraînement</div>
+        {onEditProfile && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "9px 12px", marginBottom: 10, fontSize: 12, color: "rgba(255,255,255,.75)" }}>
+            <span>👤 <b style={{ color: "#fff" }}>{sport || "Sport non renseigné"}</b> · {sexeLabel(sexe ?? null)} · {poidsLabel(poidsKg)}</span>
+            <button onClick={onEditProfile} style={{ background: "none", border: "none", color: "#f04a08", fontWeight: 800, fontSize: 12, cursor: "pointer", padding: 0 }}>✏️ Modifier</button>
+          </div>
+        )}
+        <div style={{ marginBottom: hasVerdict ? 12 : 0 }}>
+          <div style={{ ...KICKER, marginBottom: 8 }}>Filtrer par qualité physique</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {[null, ...QUALITY_ORDER].map(q => {
+              const active = activeQuality === q;
+              const meta = q ? QUALITY_META[q] : null;
+              return (
                 <button
-                  onClick={() => setAddingCustomTest(true)}
-                  style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,.06)", border: "1px dashed rgba(255,255,255,.24)", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 13, padding: "10px 14px", cursor: "pointer", marginBottom: 12 }}
+                  key={q ?? "all"}
+                  onClick={() => setActiveQuality(prev => (q == null || prev === q ? null : q))}
+                  aria-pressed={active}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 5, padding: "7px 11px", borderRadius: 24,
+                    border: active ? "1px solid #f04a08" : "1px solid rgba(255,255,255,.14)",
+                    background: active ? "#f04a08" : "rgba(255,255,255,.06)", color: "#fff",
+                    fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                  }}
                 >
-                  <span style={{ fontSize: 15 }}>+</span> Nouveau test
+                  {meta ? <><span>{meta.emoji}</span>{meta.label}</> : "Tous"}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {hasVerdict && (
+          <LockedBlur locked={locked} surface="tests_verdict" onUnlock={() => lockedAnalysis?.onUnlock()} title="Tes forces et tes axes de travail" sub="Calculés sur les ratios de tes tests." cta="Débloquer l'analyse" radius={12}>
+          <div style={{ position: "relative" }}>
+            {(() => {
+              const v = activeQuality ? qualityVerdict : axisVerdict;
+              if (!v) return null;
+              return (
+                <>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, lineHeight: 1.3, marginBottom: 10 }}>{activeQuality ? `${QUALITY_META[activeQuality].emoji} ` : ""}{v.title}</div>
+                  <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "10px 12px", fontSize: 13, color: "rgba(255,255,255,.85)", lineHeight: 1.5 }}>
+                    <b style={{ color: "#fff" }}>{v.emoji} {v.action} :</b>{v.focus && <b style={{ color: "#fff" }}> {v.focus}.</b>} {v.sub}
+                  </div>
+                </>
+              );
+            })()}
+            {example && <ExampleNote text={coachWords ? "Ses recommandations apparaissent dès son 1er test." : "Tes recommandations apparaissent dès ton 1er test."} top="50%" />}
+          </div>
+          </LockedBlur>
+        )}
+        {sprintAxisRows.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            {sprintAxisRows.map(c => <SprintAxisGauge key={c.axis} comp={c} analysisLocked={locked} />)}
+          </div>
+        )}
+        <LockedBlur locked={locked} surface="tests_signals" onUnlock={() => lockedAnalysis?.onUnlock()} bare radius={12}>
+        {forceExtraWeak.length > 0 && (
+          <div style={{ marginTop: sprintAxisRows.length > 0 ? 4 : 14, display: "flex", flexDirection: "column", gap: 8 }}>
+            {forceExtraWeak.map((it, i) => (
+              <div key={`sig-force-${i}`} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <span style={{ width: 18, height: 18, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#ff8a6a", background: "rgba(209,0,0,.22)" }}>!</span>
+                <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.78)", lineHeight: 1.4 }}><b style={{ color: "#fff" }}>{it.label}</b> : {frNum(it.detail)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        </LockedBlur>
+        {!fixture && (
+          <div style={{ marginTop: 14 }}>
+            {addingCustomTest ? (
+              <AddCustomTestForm
+                onSave={async (name, value, unit, date, qualities) => {
+                  await handleAddForNewRecommendedTest(name, value, unit, date, qualities);
+                  setAddingCustomTest(false);
+                }}
+                onCancel={() => setAddingCustomTest(false)}
+              />
+            ) : (
+              <button
+                onClick={() => setAddingCustomTest(true)}
+                style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,.06)", border: "1px dashed rgba(255,255,255,.24)", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 13, padding: "10px 14px", cursor: "pointer" }}
+              >
+                <span style={{ fontSize: 15 }}>+</span> Nouveau test
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div>
+        {advised && (
+          <div style={{ border: "1px solid rgba(240,74,8,.45)", background: "rgba(240,74,8,.08)", borderRadius: 16, padding: "12px 12px 12px", marginBottom: 16 }}>
+            <div style={{ ...KICKER, color: "#ff8a5c", marginBottom: 2 }}>Test conseillé</div>
+            {line(advised, { hideDate: true, bare: true })}
+            {expandedKey !== advised.key && !advised.cardProps.readOnly && (
+              <button
+                onClick={() => quickAdd(advised.key)}
+                style={{ display: "block", width: "100%", marginTop: 8, border: "none", cursor: "pointer", color: "#fff", fontSize: 14, fontWeight: 800, borderRadius: 12, padding: "12px 16px", background: "linear-gradient(180deg,#f04a08,#d44000)" }}
+              >
+                {coachWords ? "Ajouter son résultat" : "Ajouter mon résultat"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {doneRows.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ ...KICKER, marginBottom: 2 }}>{coachWords ? "Ses tests" : "Tes tests"}</div>
+            {showGroups
+              ? groupOrder.filter(g => doneGroups.includes(g)).map(g => {
+                  const meta = groupMeta(g);
+                  const w = groupWord(testProfile, g, true);
+                  const axisTone = w?.tone === "axis" && !locked;
+                  return (
+                    <div key={g} style={{ marginTop: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 800, padding: "6px 2px", borderBottom: "1px solid rgba(255,255,255,.10)", color: axisTone ? "#ff8a5c" : "#fff" }}>
+                        <span>{meta.emoji}</span><span>{meta.label}</span>
+                        {w && (
+                          <span style={{ fontWeight: 700, color: axisTone ? "#ff8a5c" : w.tone === "strong" ? "#7fd18f" : "rgba(255,255,255,.55)", ...(locked ? { filter: "blur(5px)", userSelect: "none" as const } : {}) }}>
+                            · {axisTone ? "● " : w.tone === "strong" ? "✓ " : ""}{w.word}
+                          </span>
+                        )}
+                      </div>
+                      {doneRows.filter(r => (r.group ?? "autres") === g).map(r => line(r))}
+                    </div>
+                  );
+                })
+              : doneRows.map(r => line(r))}
+          </div>
+        )}
+
+        {sportTodoRows.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ ...KICKER, marginBottom: 2 }}>Pas encore testé</div>
+            {sportTodoRows.map(r => line(r, { hideDate: true }))}
+          </div>
+        )}
+
+        {otherTodoRows.length > 0 && (
+          <div>
+            <button
+              onClick={() => setShowAllTests(v => !v)}
+              aria-expanded={showAllTests}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 13, padding: "11px 14px", cursor: "pointer" }}
+            >
+              <span>Tous les tests <span style={{ color: "rgba(255,255,255,.5)", fontWeight: 600 }}>({otherTodoRows.length})</span></span>
+              <span style={{ color: "rgba(255,255,255,.5)" }}>{showAllTests ? "▴" : "▾"}</span>
+            </button>
+            {showAllTests && <div style={{ marginTop: 4 }}>{otherTodoRows.map(r => line(r, { hideDate: true }))}</div>}
+          </div>
+        )}
+
+        {unifiedRows.length === 0 && (
+          <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.5, padding: "8px 2px" }}>
+            {emptyHint ?? "Aucun test enregistré pour l'instant. Marque une ligne d'exercice comme test (menu ⋯ d'une séance) pour commencer."}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* Ligne de test (liste de l'onglet Performance et outil public /o/) : valeur, jauge et badge visibles
+   sans cliquer ; déplier n'ajoute que la courbe, l'historique et le formulaire (TestCard). */
+export function TestLine({ row, expanded, autoAdd = false, onToggle, onQuickAdd, analysisLocked = false, example = false, examplePerspective = "athlete", hideDate = false, bare = false, hideNoReference = false }: {
+  /** Masque « pas de repère » (outil /o/ tant que le sexe n'est pas choisi : le repère existe). */
+  hideNoReference?: boolean;
+  row: UnifiedRow;
+  expanded: boolean;
+  autoAdd?: boolean;
+  onToggle: () => void;
+  onQuickAdd: () => void;
+  analysisLocked?: boolean;
+  example?: boolean;
+  examplePerspective?: "athlete" | "coach";
+  hideDate?: boolean;
+  bare?: boolean;
+}) {
+  const dateText = row.date ? `${row.date}${row.nextLabel ? ` · ${row.nextLabel}` : ""}` : hideDate ? null : "Pas encore testé";
+  return (
+    <div style={{ borderBottom: bare ? undefined : "1px solid rgba(255,255,255,.06)", padding: bare ? "8px 0 0" : "13px 2px" }}>
+      <div onClick={onToggle} style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+        <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{row.emoji}</div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: "#fff" }}>{row.name}</div>
+              {row.unlinked && (row.onMerge || row.onDeleteWhole) && (
+                <RowMenu mergeSuggestions={row.mergeSuggestions} onMerge={row.onMerge} onDeleteWhole={row.onDeleteWhole} />
+              )}
+            </div>
+            <div style={{ flexShrink: 0 }}>
+              {expanded ? (
+                <span style={{ color: "rgba(255,255,255,.35)", fontSize: 12 }}>▾</span>
+              ) : row.cardProps.readOnly || bare ? null : (
+                <button
+                  onClick={e => { e.stopPropagation(); onQuickAdd(); }}
+                  title="Ajouter un résultat"
+                  aria-label={`Ajouter un résultat : ${row.name}`}
+                  style={{ width: 24, height: 24, borderRadius: "50%", border: "1px solid rgba(255,255,255,.18)", background: "rgba(255,255,255,.06)", color: "#fff", fontWeight: 900, fontSize: 14, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+                >
+                  +
                 </button>
               )}
             </div>
-          )}
-
-          {/* Liste unifiée "Mouvement / Écart" (2026-09, suite — Variante A retenue par Gildas) : reste
-              DANS la carte Recommandations, sur son fond dark (demande explicite) — valeur dominante +
-              jauge type "comportement" (centrée, épaisse) visibles par défaut, expand n'ajoute QUE du
-              contenu nouveau (comparaisons secondaires, courbe, historique, formulaire — voir TestCard,
-              qui ne réaffiche jamais ce que la ligne montre déjà : zéro doublon). */}
-          {unifiedRows.length > 0 && (
-            <div style={showReco ? { marginTop: 16, borderTop: "1px solid rgba(255,255,255,.10)" } : undefined}>
-              {unifiedRows.map(row => {
-                const isExpanded = expandedKey === row.key;
-                return (
-                  <div key={row.key} style={{ borderBottom: "1px solid rgba(255,255,255,.06)", padding: "13px 2px" }}>
-                    <div onClick={() => toggleRow(row.key)} style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
-                      <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{row.emoji}</div>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                            <div style={{ fontSize: 13.5, fontWeight: 800, color: "#fff" }}>{row.name}</div>
-                            {row.unlinked && (row.onMerge || row.onDeleteWhole) && (
-                              <RowMenu mergeSuggestions={row.mergeSuggestions} onMerge={row.onMerge} onDeleteWhole={row.onDeleteWhole} />
-                            )}
-                          </div>
-                          <div style={{ flexShrink: 0 }}>
-                            {isExpanded ? (
-                              <span style={{ color: "rgba(255,255,255,.35)", fontSize: 12 }}>▾</span>
-                            ) : row.cardProps.readOnly ? null : (
-                              <button
-                                onClick={e => { e.stopPropagation(); quickAdd(row.key); }}
-                                title="Ajouter un résultat"
-                                style={{ width: 24, height: 24, borderRadius: "50%", border: "1px solid rgba(255,255,255,.18)", background: "rgba(255,255,255,.06)", color: "#fff", fontWeight: 900, fontSize: 14, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
-                              >
-                                +
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.45)", marginTop: 1 }}>{row.date ?? "Jamais loggué"}</div>
-
-                        {/* Valeur actuelle (2026-09, suite — retour de Gildas, "j'ai perdu la valeur
-                            actuelle") : quand une comparaison existe, elle rejoint la ligne cible/
-                            badge de PrimaryGauge (les 3 alignées : résultat à gauche, cible au
-                            centre, badge à droite) — jamais répétée sur sa propre ligne au-dessus.
-                            Sinon (aucune comparaison), sa propre grande ligne reste la seule info. */}
-                        <div style={{ position: "relative" }}>
-                        {example && (row.sprintComparison || row.primaryComparison || row.rawValueLabel != null) && <ExampleNote compact top="50%" />}
-                        {row.sprintComparison ? (
-                          <SprintAxisGauge comp={row.sprintComparison} hideLabel analysisLocked={!!lockedAnalysis} />
-                        ) : row.primaryComparison ? (
-                          <PrimaryGauge insight={row.primaryComparison} deltaRealUnit={row.deltaRealUnit} rawValueLabel={row.rawValueLabel} analysisLocked={!!lockedAnalysis} />
-                        ) : row.rawValueLabel != null ? (
-                          <>
-                            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", color: "#fff", marginTop: 4, lineHeight: 1.1 }}>{row.rawValueLabel}</div>
-                            <div style={{ fontSize: 11, color: "rgba(255,255,255,.4)", marginTop: 2 }}>pas de repère</div>
-                          </>
-                        ) : null}
-                        </div>
-                      </div>
-                    </div>
-                    {isExpanded && (
-                      <div style={{ marginTop: 4, paddingLeft: 42 }}>
-                        <TestCard {...row.cardProps} initialOpen={autoAddKey === row.key} analysisLocked={!!lockedAnalysis} exampleNote={example ? (examplePerspective === "coach" ? "Ses propres tests remplacent cet exemple." : "Tes propres tests remplacent cet exemple.") : undefined} />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          </div>
+          {dateText && <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.45)", marginTop: 1 }}>{dateText}</div>}
+          <div style={{ position: "relative" }}>
+          {example && (row.sprintComparison || row.primaryComparison || row.rawValueLabel != null) && <ExampleNote compact top="50%" />}
+          {row.sprintComparison ? (
+            <SprintAxisGauge comp={row.sprintComparison} hideLabel analysisLocked={analysisLocked} />
+          ) : row.primaryComparison ? (
+            <PrimaryGauge insight={row.primaryComparison} deltaRealUnit={row.deltaRealUnit} rawValueLabel={row.rawValueLabel} analysisLocked={analysisLocked} valueNote={row.valueNote} />
+          ) : row.rawValueLabel != null ? (
+            <>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", color: "#fff", lineHeight: 1.1 }}>{row.rawValueLabel}</span>
+                {row.valueNote && <span style={{ fontSize: 11.5, fontWeight: 700, color: "rgba(255,255,255,.55)" }}>{row.valueNote}</span>}
+              </div>
+              {!hideNoReference && <div style={{ fontSize: 11, color: "rgba(255,255,255,.4)", marginTop: 2 }}>pas de repère</div>}
+            </>
+          ) : null}
+          </div>
         </div>
-      )}
-
-      {unifiedRows.length === 0 && (
-        <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.5, padding: "8px 2px" }}>
-          {emptyHint ?? "Aucun test enregistré pour l'instant — marque une ligne d'exercice comme test (menu ⋯ d'une séance) pour commencer."}
+      </div>
+      {expanded && (
+        <div style={{ marginTop: 4, paddingLeft: 42 }}>
+          <TestCard {...row.cardProps} initialOpen={autoAdd} analysisLocked={analysisLocked} exampleNote={example ? (examplePerspective === "coach" ? "Ses propres tests remplacent cet exemple." : "Tes propres tests remplacent cet exemple.") : undefined} />
         </div>
       )}
     </div>
   );
+}
+
+/* Ligne d'aperçu pour l'outil public /o/ (aucune donnée en base) : mêmes repères et même rendu que
+   la ligne de l'onglet Performance, à partir des valeurs tapées dans l'outil. */
+export function previewTestRow({ metric, values, sport, sexe, poidsKg, dateIso, nextIso, name, withReference = true }: {
+  /** false : la valeur seule, sans jauge, badge ni repère (ex. sexe pas encore choisi). */
+  withReference?: boolean;
+  metric: MetricKey;
+  values: Partial<Record<MetricKey, number>>;
+  sport: string | null;
+  sexe: Sexe;
+  poidsKg: number | null;
+  dateIso: string;
+  nextIso: string;
+  name?: string;
+}): UnifiedRow {
+  const haugen = metric === "cmjHeight" ? cmjHaugenInsight(sport, sexe, values.cmjHeight ?? null) : null;
+  const comparisons = withReference
+    ? [...computeAllFamiliesInsights(sexe, poidsKg, values), ...(haugen ? [haugen] : [])].filter(i => i.primaryMetric === metric && !(i.locked && i.locked.kind !== "weight"))
+    : [];
+  const unit = METRIC_DISPLAY[metric].unit;
+  const results: TestResultRow[] = values[metric] != null ? [{ id: "preview", test_id: "preview", date: dateIso, value: values[metric]!, unit, video_url: null }] : [];
+  const secondaryByDate = metric === "dropJumpHeight" && values.dropJumpContact != null ? new Map([[dateIso, values.dropJumpContact]]) : undefined;
+  const cardProps: TestCardProps = {
+    title: name ?? METRIC_DISPLAY[metric].name, unit, results, comparisons: comparisons.filter(c => c.locked), onAdd: async () => {}, readOnly: true, metric,
+    secondaryByDate, projectedDate: nextIso,
+    sscProfile: metric === "dropJumpHeight" ? dropJumpProfile(values.dropJumpContact) ?? undefined : undefined,
+  };
+  const row = unifiedRowFromInsightGroup({ metric, label: name ?? METRIC_DISPLAY[metric].name, comparisons }, movementEmoji(metric), cardProps);
+  const cm = values.cmjHeight;
+  return {
+    ...row, date: null,
+    valueNote: metric === "cmjHeight" && cm != null && poidsKg ? `≈ ${Math.round(sayersWatts(cm, poidsKg)).toLocaleString("fr-FR")} W` : row.valueNote,
+  };
 }

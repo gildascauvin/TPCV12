@@ -11,7 +11,9 @@ function formatShort(dateStr: string) {
    (aire remplie, trait, point final marqué) mais volontairement dédié plutôt que de forcer leur API :
    ces deux composants sont taillés pour une échelle 0-100 fixe (wellness) ou un ACWR normalisé, alors
    qu'un résultat de test est une valeur arbitraire dans une unité arbitraire (kg, s, reps...). */
-export default function TestEvolutionChart({ points, height = 90 }: { points: { date: string; value: number }[]; height?: number }) {
+/* `projectedDate` (page outil /o/) : prochain test à venir, cercle creux en pointillés au niveau de la dernière
+   valeur, relié par un trait pointillé ; n'entre pas dans l'échelle. */
+export default function TestEvolutionChart({ points, height = 90, projectedDate }: { points: { date: string; value: number }[]; height?: number; projectedDate?: string }) {
   if (points.length === 0) return null;
 
   const W = 280, H = height, PAD = Math.min(10, height / 4);
@@ -19,12 +21,17 @@ export default function TestEvolutionChart({ points, height = 90 }: { points: { 
   const min = Math.min(...values);
   const max = Math.max(...values);
   const span = max - min || 1;
-  const stepX = points.length > 1 ? (W - 2 * PAD) / (points.length - 1) : 0;
+  const slots = points.length + (projectedDate ? 1 : 0);
+  const stepX = slots > 1 ? (W - 2 * PAD) / (slots - 1) : 0;
 
   const coords = points.map((p, i) => ({
     x: PAD + i * stepX,
     y: PAD + (1 - (p.value - min + span * 0.1) / (span * 1.2)) * (H - 2 * PAD),
   }));
+
+  const last = coords[coords.length - 1];
+  const ghost = projectedDate ? { x: PAD + points.length * stepX, y: last.y } : null;
+  const labels = projectedDate ? [...points, { date: projectedDate, value: last.y }] : points;
 
   const linePath = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
   const areaPath = `M${coords[0].x.toFixed(1)},${H} ${coords.map(c => `L${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ")} L${coords[coords.length - 1].x.toFixed(1)},${H} Z`;
@@ -33,10 +40,10 @@ export default function TestEvolutionChart({ points, height = 90 }: { points: { 
   // sur un historique long, même principe de décimation que les charts déjà en place ailleurs.
   const maxLabels = 5;
   const labelIdx = new Set<number>();
-  if (points.length <= maxLabels) {
-    points.forEach((_, i) => labelIdx.add(i));
+  if (labels.length <= maxLabels) {
+    labels.forEach((_, i) => labelIdx.add(i));
   } else {
-    for (let i = 0; i < maxLabels; i++) labelIdx.add(Math.round((i * (points.length - 1)) / (maxLabels - 1)));
+    for (let i = 0; i < maxLabels; i++) labelIdx.add(Math.round((i * (labels.length - 1)) / (maxLabels - 1)));
   }
 
   return (
@@ -50,6 +57,10 @@ export default function TestEvolutionChart({ points, height = 90 }: { points: { 
         </defs>
         <path d={areaPath} fill="url(#test-evo-fill)" />
         <path d={linePath} fill="none" stroke="#d44000" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+        {ghost && <>
+          <line x1={last.x} y1={last.y} x2={ghost.x} y2={ghost.y} stroke="#d44000" strokeWidth={1.5} strokeDasharray="4 4" opacity={0.55} />
+          <circle cx={ghost.x} cy={ghost.y} r={5} fill="#fff" stroke="#d44000" strokeWidth={1.5} strokeDasharray="3 2" />
+        </>}
         {coords.map((c, i) => (
           <circle
             key={i} cx={c.x} cy={c.y}
@@ -60,7 +71,7 @@ export default function TestEvolutionChart({ points, height = 90 }: { points: { 
         ))}
       </svg>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "#b0b3b5", fontWeight: 700, marginTop: 4, padding: "0 4px" }}>
-        {points.map((p, i) => labelIdx.has(i) ? <span key={i}>{formatShort(p.date)}</span> : <span key={i} />)}
+        {labels.map((p, i) => labelIdx.has(i) ? <span key={i}>{formatShort(p.date)}</span> : <span key={i} />)}
       </div>
     </div>
   );
