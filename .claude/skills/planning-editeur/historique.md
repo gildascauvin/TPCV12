@@ -923,3 +923,11 @@ Départ : Maxime Leblois avait ajouté son échauffement et des exercices en S1 
 - Premium : mesure gratuite, décision Elite. Gildas : ne jamais donner la valeur Elite en clair au gratuit (« Elite ajusterait la suite pour toi »). Gratuit 2 (boutons de côté bloqués) écarté : le gratuit perdrait la mesure et le moment de vente.
 - L'anneau de décision n'est pas rendu obsolète : il fixe la base avant la séance (hors séance), les séries corrigent pendant ; la 1re série de chaque exercice pourra juger le conseil du matin (pas fait). Risque à surveiller : des sportifs qui sautent le point forme en comptant sur l'ajustement en séance.
 - Pas fait : notification de fin de repos (plugin de notifications locales, prochain build natif), 1re série comme juge du conseil du matin, ressenti de fin pré-rempli, côté coach, toast Elite une fois par séance (aujourd'hui à chaque tap qui aurait ajusté).
+
+## 10/11/2026 · Ressenti par série : retours du 1er test en prod (déployé)
+- « Une charge de moins de 100 kg n'est pas ajustée » (test de Gildas) : en fait les montées écrites charge par charge (« 3x1 Pause Snatch 60kg 65kg 70kg », « Snatch 8x1(75kg -95kg) 3x75kg 2x80kg… », « 2x10 Tirage vertical 60kg ») ne se réécrivaient pas et restaient figées par la sécurité anti-texte-abîmé. Nouvelle stratégie `rewriteLoadList` : seule la liste des charges est réécrite, plage annoncée gardée, groupée en « 2x80kg » seulement si le coach groupait déjà (sinon « 2x62,5kg » derrière « 3x10 » se lirait comme des répétitions). Sur les 2 274 lignes réelles avec séries en base : 51 → 12 lignes figées ; bibliothèque : 0 texte abîmé.
+- Le 1er essai de Gildas était sur le compte gratuit (`+liv`) : rien ne bouge, c'est voulu.
+- « Timer après tap trop long » : la réponse restait 4 s sur la jauge (liée au toast) → 0,9 s (`feelFlash`), le toast garde 4 s.
+- Corriger un ressenti : tap sur une case faite, même jauge, la suite est rejouée depuis le prévu (`replayFeels`).
+- « Revenir au prévu » retiré : il ne touchait que les séries restantes (perçu comme « ne change que le dernier set ») et la correction du ressenti couvre les erreurs ; suivre le plan malgré le ressenti = retoucher la ligne.
+- Piège : un `next build` dans le worktree écrase le `.next` du serveur de dev (NEXT_DIST_DIR n'est pas lu) → arrêter le dev, `rm -rf .next`, relancer.
