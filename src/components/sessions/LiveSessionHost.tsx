@@ -203,23 +203,6 @@ export default function LiveSessionHost({ userId, userName, elite = true }: { us
     toastTimer.current = setTimeout(() => setFeelToast(cur => (cur === t ? null : cur)), 4000);
   }
 
-  /* Revenir au prévu (09/11) : les séries restantes de l'exercice reprennent leur valeur d'avant les
-     taps ; les séries faites et les ressentis restent. */
-  const adjustedLeft = !!log && log.done < activeCount(log) + log.cut
-    && (log.net !== 0 || log.cut > 0 || log.vals.some((v, i) => i >= log.done && log.orig[i] != null && v !== log.orig[i]));
-  function resetToPlan() {
-    if (!log || !curLine || !adjustedLeft) return;
-    const vals = log.vals.map((v, i) => (i < log.done ? v : (log.orig[i] ?? v)));
-    const back: LineLog = { ...log, vals, cut: 0, net: 0 };
-    let newLine = rewriteLineFor(curLine, back);
-    if (newLine === curLine && log.done === 0 && log.src) newLine = log.src;
-    if (newLine === curLine) { toast("Impossible de remettre cette ligne comme prévue."); return; }
-    const notes = live!.notes ?? "";
-    commit({ notes: replaceNonEmptyLine(notes, safeIdx, newLine), live_sets: { ...ls, lines: { ...ls.lines, [String(safeIdx)]: { ...back, key: newLine } } } });
-    setEditorRev(r => r + 1);
-    haptic("light");
-  }
-
   /* Gratuit : l'écran d'offre s'ouvre sur l'étape « Ajuste » ; la séance se réduit pour le laisser voir. */
   function tryElite() {
     setFeelToast(null);
@@ -330,12 +313,6 @@ export default function LiveSessionHost({ userId, userName, elite = true }: { us
                             );
                           })}
                         </div>
-                        {adjustedLeft && (
-                          <button onClick={resetToPlan}
-                            style={{ marginTop: 8, minHeight: 36, padding: "0 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#171b1f", fontSize: 12.5, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
-                            Revenir au prévu
-                          </button>
-                        )}
                       </div>
                     
   ) : null;
