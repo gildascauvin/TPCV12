@@ -248,6 +248,49 @@ const VOLUME_TOKS = new Set(["complex", "scheme", "series", "count", "reps", "ti
 /* Réécrit la partie volume de la ligne. Si le texte obtenu ne se relit pas exactement en ces séries,
    la ligne reste telle quelle (le journal garde la vérité). */
 export function rewriteLineFor(line: string, log: LineLog): string {
+  const full = rewriteVolume(line, log);
+  if (full !== line || log.kind !== "load") return full;
+  return rewriteLoadList(line, log) ?? line;
+}
+
+const sameVals = (next: string, log: LineLog) => {
+  const check = extract(next);
+  const n = activeCount(log);
+  return !!check && check.kind === log.kind && check.vals.length === n && check.vals.every((v, i) => Math.abs(v - log.vals[i]) <= 0.01);
+};
+
+/* Montée de charge écrite charge par charge (« 3x1 Pause Snatch 60kg 65kg 70kg », « Snatch 8x1(75kg -95kg)
+   3x75kg 2x80kg 90kg ») : seule la liste des charges est réécrite, au même format, le reste de la ligne
+   (volume de tête, parenthèses) ne bouge pas. 10/11 : ces lignes restaient figées. */
+function rewriteLoadList(line: string, log: LineLog): string | null {
+  const p = parseLine(line);
+  const isLoad = (t: { k: string; src: string }) => t.k === "load" || t.k === "atload" || ((t.k === "scheme" || t.k === "mult" || t.k === "series") && /kg/i.test(t.src));
+  // La plage annoncée (« 90kg - 112,5kg ») reste telle quelle : seules les charges par série sont réécrites.
+  const rangeToks = new Set(p.schemes.flatMap(sc => [...(sc.range ?? []), ...sc.items.filter(x => x.rangeStart || x.rangeEnd)].map(x => x.ref?.t)).filter(Boolean));
+  const toks = p.toks.filter(t => isLoad(t) && !rangeToks.has(t));
+  if (!toks.length) return null;
+  const start = Math.min(...toks.map(t => t.start)), end = Math.max(...toks.map(t => t.end));
+  if (p.toks.some(t => !isLoad(t) && t.start >= start && t.end <= end)) return null;
+  let between = line.slice(start, end);
+  for (const t of [...toks].sort((x, y) => y.start - x.start)) between = between.slice(0, t.start - start) + between.slice(t.end - start);
+  if (!/^[\s,;·/]*$/.test(between)) return null;
+  const n = activeCount(log);
+  // Même écriture que le coach : « 3x75kg 2x80kg » s'il groupait déjà, sinon une charge par série
+  // (« 60kg 62,5kg 62,5kg » : « 2x62,5kg » derrière « 3x10 » se lirait comme des répétitions).
+  const grouped = toks.some(t => t.k !== "load" && t.k !== "atload");
+  const parts: string[] = [];
+  for (let i = 0; i < n;) {
+    let j = i;
+    while (grouped && j + 1 < n && log.vals[j + 1] === log.vals[i]) j++;
+    const c = j - i + 1;
+    parts.push(c > 1 ? `${c}x${fmtNum(log.vals[i])}kg` : `${fmtNum(log.vals[i])}kg`);
+    i = j + 1;
+  }
+  const next = line.slice(0, start) + parts.join(" ") + line.slice(end);
+  return sameVals(next, log) ? next : null;
+}
+
+function rewriteVolume(line: string, log: LineLog): string {
   const p = parseLine(line);
   if (log.countWord) {
     const t = p.toks.find(x => x.k === "series" || x.k === "reps");
