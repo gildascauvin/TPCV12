@@ -118,8 +118,12 @@ export function wellnessSlides(w: WellnessInput, sport: string | null): MiniSlid
   const v = w.verdict;
   if (v) {
     const ms = nightMeasures(w.date, w.health);
-    const top = [...ms].sort((a, b) => Math.abs(b.delta) / SCALE[b.key] - Math.abs(a.delta) / SCALE[a.key])[0];
-    const tail = v.kind === "less" ? "alors que tu te sens bien" : v.kind === "more" ? "alors que tu te sens moins bien" : "comme ton ressenti";
+    /* Le chiffre en grand va dans le sens du verdict quand une mesure le permet ; sinon « alors que » se
+       contredisait (2026-11-10 : « −37 min de sommeil, alors que tu te sens moins bien »). */
+    const along = ms.filter(m => (v.kind === "less" ? m.worse : v.kind === "more" ? !m.worse : true));
+    const top = [...(along.length ? along : ms)].sort((a, b) => Math.abs(b.delta) / SCALE[b.key] - Math.abs(a.delta) / SCALE[a.key])[0];
+    const tail = v.kind === "less" ? (top?.worse === false ? "et tu te sens encore mieux" : "alors que tu te sens bien")
+      : v.kind === "more" ? (top?.worse ? "et tu te sens encore moins bien" : "alors que tu te sens moins bien") : "comme ton ressenti";
     const what = top?.key === "sleep" ? "de sommeil cette nuit" : top?.key === "rhr" ? "de fréquence cardiaque au repos" : "de VFC (variabilité cardiaque)";
     // Récup = bleus (2026-11-04, Gildas) : le niveau MESURÉ sur l'échelle de la récup (pâle = bas, franc = bon).
     const color = RECUP_TEXT(50 + v.zPhysio * 16);

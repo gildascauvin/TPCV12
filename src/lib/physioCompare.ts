@@ -165,9 +165,23 @@ const andList = (w: string[]) => (w.length === 1 ? w[0] : `${w.slice(0, -1).join
 // Jour sans séance (2026-11-02, Gildas) : pas de conseil d'échauffement.
 const LEGS_TIP = "Échauffe-toi plus longtemps et écoute tes jambes.";
 const LEGS_TIP_REST = "Profite du repos : 10 min de mobilité douce, et écoute tes jambes demain.";
-function moreCause(c: PhysioCheckin, prior: PhysioCheckin[], restDay: boolean): { short: string; long: string } {
+/* Nuit elle-même sous la norme (2026-11-10, Gildas : « ta nuit est bonne » avec −37 min, FC +3, VFC −2,
+   et « ton sommeil… ne se voit pas dans la nuit ») : l'écart reste vrai (le ressenti est bien plus bas
+   que la nuit), mais on ne dit plus que la nuit est bonne, et un sommeil ressenti court qui se voit
+   dans la nuit mesurée n'est plus présenté comme invisible. */
+type NightCtx = { low: boolean; veryLow: boolean; sleepShort: boolean };
+function moreCause(c: PhysioCheckin, prior: PhysioCheckin[], restDay: boolean, night: NightCtx): { short: string; long: string } {
   const low = lowItems(c, prior);
   const legs = restDay ? LEGS_TIP_REST : LEGS_TIP;
+  if (night.low) {
+    const rest = (low.length ? low : [lowestItem(c)]).filter(k => !(k === "sleep" && night.sleepShort));
+    return {
+      short: `tu le sens plus que la nuit ne le montre${rest.length ? ` (${andList(rest.map(k => FEEL_WORD[k]))})` : ""}`,
+      long: `Ta nuit est ${night.veryLow ? "sous" : "un peu sous"} ta norme, et tu la sens plus qu'elle ne le montre.`
+        + (rest.length ? ` Ce qui pèse en plus ce matin : ${andList(rest.map(k => FEEL_YOUR[k]))}.` : "")
+        + (rest.includes("recovery") ? ` ${legs}` : ""),
+    };
+  }
   // Une seule cause (ou stress + motivation, la tête) : les phrases dédiées.
   const causes = Array.from(new Set((low.length ? low : [lowestItem(c)]).map(causeOf)));
   if (causes.length === 1) return { short: MORE_CAUSE_SHORT[causes[0]], long: MORE_CAUSE_LONG[causes[0]] + (causes[0] === "recovery" ? ` ${legs}` : "") };
@@ -233,12 +247,25 @@ export function physioVerdictAt(date: string, answers: PhysioCheckin, checkins: 
   if (diff <= -DIFF_THRESHOLD) return { zFeel, zPhysio, diff, kind: "less", status: "Moins optimistes",
     title: `${P} données physiologiques sont moins optimistes que ${coach ? "lui" : "toi"}`,
     text: `${detail} ${compare} : ${coach ? "son" : "ton"} corps récupère peut-être moins bien ${coach ? "qu'il ne le sent" : "que tu ne le sens"}.` };
-  const cause = diff >= DIFF_THRESHOLD ? moreCause(answers, prior, restDay) : null;
+  const short = sleepShort(date, health);
+  // Une nuit courte n'est jamais « bonne », même si FC/VFC la remontent dans la norme.
+  const nightLow = zPhysio <= -0.5 || short;
+  const cause = diff >= DIFF_THRESHOLD ? moreCause(answers, prior, restDay, { low: nightLow, veryLow: zPhysio <= -1.5, sleepShort: short }) : null;
   if (cause) return { zFeel, zPhysio, diff, kind: "more", status: "Plus optimistes",
-    title: `${coach ? "Son" : "Ton"} corps a mieux récupéré ${coach ? "qu'il ne le sent" : "que tu ne le sens"}`,
+    title: nightLow ? `${coach ? "Sa" : "Ta"} nuit est moins mauvaise que ${coach ? "son" : "ton"} ressenti`
+      : `${coach ? "Son" : "Ton"} corps a mieux récupéré ${coach ? "qu'il ne le sent" : "que tu ne le sens"}`,
     text: `${detail} ${compare} : ${cause.short}.`, reason: cause.long };
   return { zFeel, zPhysio, diff, kind: "agree", status: "D'accord",
     title: `${P} données physiologiques confirment ${coach ? "son" : "ton"} ressenti`, text: `${detail} ${compare}.` };
+}
+
+/* Sommeil mesuré nettement sous la moyenne des 28 nuits précédentes (≥ 20 min), comme nightMeasures. */
+function sleepShort(date: string, health: _HealthRow[]): boolean {
+  const ok = (h: _HealthRow) => h.sleep_minutes != null && Number(h.sleep_minutes) >= 180;
+  const today = health.find(h => h.date === date);
+  if (!today || !ok(today)) return false;
+  const prior = health.filter(h => h.date < date && ok(h)).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 28).map(h => Number(h.sleep_minutes));
+  return prior.length >= 5 && Number(today.sleep_minutes) - prior.reduce((a, b) => a + b, 0) / prior.length <= -20;
 }
 
 function shiftIso(iso: string, days: number) {
