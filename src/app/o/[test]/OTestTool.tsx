@@ -111,11 +111,14 @@ export default function OTestTool({ testKey }: { testKey: string }) {
     ? previewTestRow({ metric, values, sport: sport || null, sexe, poidsKg, dateIso: dates.today, nextIso: dates.next, withReference: !needsSexe })
     : null;
 
+  // Ce qui s'enregistre à l'inscription : `persist` quand l'affichage contient une estimation (FC max).
+  const saved = values && metric ? (def.persist ? def.persist(numeric, { mode, choice }) : values) : null;
+  const hasSaved = !!saved && Object.keys(saved).length > 0;
   const ctaParams = new URLSearchParams();
   if (values && metric) {
     ctaParams.set("test", testKey);
     ctaParams.set("v", String(values[metric] ?? ""));
-    ctaParams.set("x", encodeOValues(values));
+    if (hasSaved) ctaParams.set("x", encodeOValues(saved!));
     if (sexe) ctaParams.set("sx", sexe === "femme" ? "f" : "h");
     if (poidsKg) ctaParams.set("kg", String(poidsKg));
   }
@@ -176,10 +179,16 @@ export default function OTestTool({ testKey }: { testKey: string }) {
 
   const result = (
     <section style={{ background: "linear-gradient(135deg,#161616,#282828 64%,#111)", borderRadius: 18, padding: "14px 16px 16px", color: "#fff", minWidth: 0 }}>
-      {row ? (
+      {def.plain && detail?.big ? (
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.7)" }}>{detail.big.label}</div>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 30, fontWeight: 700, letterSpacing: "-0.01em", color: "#fff", marginTop: 4, lineHeight: 1.1 }}>{detail.big.value}</div>
+          {detail.big.note && <div style={{ fontSize: 12, color: "rgba(255,255,255,.55)", marginTop: 4 }}>{detail.big.note}</div>}
+        </div>
+      ) : row ? (
         <>
           {/* Un seul point pour le visiteur : la ligne seule (valeur, jauge, badge, repère), sans historique ni courbe. */}
-          <TestLine row={row} expanded={false} onToggle={() => {}} onQuickAdd={() => {}} bare hideDate hideNoReference={needsSexe} />
+          <TestLine row={row} expanded={false} onToggle={() => {}} onQuickAdd={() => {}} bare hideDate hideNoReference={needsSexe || !!def.plain} />
           {needsSexe && <div style={{ marginTop: 8, fontSize: 12, color: "rgba(255,255,255,.6)" }}>Choisis Homme ou Femme pour te situer.</div>}
         </>
       ) : (
@@ -218,7 +227,7 @@ export default function OTestTool({ testKey }: { testKey: string }) {
           {def.cta}
         </span>
       )}
-      <div style={{ marginTop: 6, textAlign: "center", fontSize: 11.5, color: "rgba(255,255,255,.55)" }}>Ton résultat est gardé, on te dit quoi travailler.</div>
+      {(hasSaved || !values) && <div style={{ marginTop: 6, textAlign: "center", fontSize: 11.5, color: "rgba(255,255,255,.55)" }}>Ton résultat est gardé, on te dit quoi travailler.</div>}
     </section>
   );
 

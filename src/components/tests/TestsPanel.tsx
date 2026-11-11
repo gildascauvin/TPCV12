@@ -2,7 +2,8 @@
 
 import { Skel } from "@/components/ui/Skeleton";
 import LockedBlur from "@/components/paywall/LockedBlur";
-import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import { cardioZonesFor, type CardioZones } from "@/lib/cardioZones";
 import {
   listTests, listOwnResults, fetchAthleteOwnTests, fetchCoachTestsForAthlete, mergeTests,
   upsertTestResult, parseResultValue, mergeTestInto, deleteTestIfEmpty, deleteTestResult, deleteTestCompletely, TEST_UNITS,
@@ -1030,6 +1031,10 @@ export interface UnifiedRow {
   valueNote?: string;
   /** « Prochain test : 8 déc. » (4 semaines après le dernier résultat). */
   nextLabel?: string;
+  /** Ligne FC max : tes zones en bpm (cardioZones.ts), à la place de « pas de repère ». */
+  cardio?: CardioZones | null;
+  /** Ligne FC de repos sans FC max : ce qu'il manque pour avoir les zones. */
+  cardioHint?: string;
   unlinked?: boolean;
   mergeSuggestions?: { label: string; toName: string }[];
   onMerge?: (toName: string) => Promise<void>;
@@ -1768,8 +1773,11 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
       const next = nextTestDate(last.date);
       const due = next.getTime() <= Date.now();
       const iso = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+      const metric = r.cardProps.metric;
+      const cardio = metric === "hrMax" ? cardioZonesFor(latestByMetric.hrMax, latestByMetric.hrRest) : undefined;
+      const cardioHint = metric === "hrRest" ? (latestByMetric.hrMax != null ? "utilisée pour tes zones (ligne FC max)" : "Ajoute ta FC max pour voir tes zones") : undefined;
       return {
-        ...r, nextLabel: due ? "À refaire" : `Prochain test : ${next.getDate()} ${MONTH_FR[next.getMonth()]}`,
+        ...r, cardio, cardioHint, nextLabel: due ? "À refaire" : `Prochain test : ${next.getDate()} ${MONTH_FR[next.getMonth()]}`,
         cardProps: r.cardProps.results.length === 1 ? { ...r.cardProps, projectedDate: iso } : r.cardProps,
       };
     });
@@ -2007,6 +2015,34 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
 
 /* Ligne de test (liste de l'onglet Performance et outil public /o/) : valeur, jauge et badge visibles
    sans cliquer ; déplier n'ajoute que la courbe, l'historique et le formulaire (TestCard). */
+
+/* Zones cardiaques sous la ligne FC max (11/11) : la zone 2 en avant, les 5 zones repliées. Jamais
+   floutée en gratuit : c'est un calcul, pas une analyse. */
+function CardioZonesBlock({ z }: { z: CardioZones }) {
+  const z2 = z.zones[1];
+  return (
+    <div onClick={e => e.stopPropagation()} style={{ marginTop: 6 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.7)" }}>Ta zone 2</span>
+        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 15, fontWeight: 700, color: "#fff", fontVariantNumeric: "tabular-nums" }}>{z2.low}–{z2.high} bpm</span>
+        <span style={{ fontSize: 11, color: "rgba(255,255,255,.45)" }}>{z.method === "karvonen" ? `Karvonen, repos ${Math.round(z.rest!)} bpm` : "% de FC max (ajoute ta FC de repos pour plus juste)"}</span>
+      </div>
+      <details style={{ marginTop: 4 }}>
+        <summary style={{ cursor: "pointer", fontSize: 11.5, fontWeight: 700, color: "rgba(255,255,255,.55)" }}>Tes 5 zones</summary>
+        <div style={{ display: "grid", gridTemplateColumns: "auto auto 1fr", columnGap: 10, rowGap: 3, marginTop: 6, fontSize: 11.5, color: "rgba(255,255,255,.75)", fontVariantNumeric: "tabular-nums" }}>
+          {z.zones.map((x, i) => (
+            <Fragment key={x.name}>
+              <span style={{ fontWeight: 700, color: i === 1 ? "#fff" : undefined }}>Z{i + 1}</span>
+              <span style={{ fontFamily: "var(--font-mono), monospace", color: i === 1 ? "#fff" : undefined }}>{x.low}–{x.high} bpm</span>
+              <span style={{ color: "rgba(255,255,255,.45)", minWidth: 0 }}>{x.name}</span>
+            </Fragment>
+          ))}
+        </div>
+      </details>
+    </div>
+  );
+}
+
 export function TestLine({ row, expanded, autoAdd = false, onToggle, onQuickAdd, analysisLocked = false, example = false, examplePerspective = "athlete", hideDate = false, bare = false, hideNoReference = false }: {
   /** Masque « pas de repère » (outil /o/ tant que le sexe n'est pas choisi : le repère existe). */
   hideNoReference?: boolean;
@@ -2062,7 +2098,11 @@ export function TestLine({ row, expanded, autoAdd = false, onToggle, onQuickAdd,
                 <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", color: "#fff", lineHeight: 1.1 }}>{row.rawValueLabel}</span>
                 {row.valueNote && <span style={{ fontSize: 11.5, fontWeight: 700, color: "rgba(255,255,255,.55)" }}>{row.valueNote}</span>}
               </div>
-              {!hideNoReference && <div style={{ fontSize: 11, color: "rgba(255,255,255,.4)", marginTop: 2 }}>pas de repère</div>}
+              {row.cardio ? (
+                <CardioZonesBlock z={row.cardio} />
+              ) : row.cardioHint ? (
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,.5)", marginTop: 2 }}>{row.cardioHint}</div>
+              ) : !hideNoReference && <div style={{ fontSize: 11, color: "rgba(255,255,255,.4)", marginTop: 2 }}>pas de repère</div>}
             </>
           ) : null}
           </div>

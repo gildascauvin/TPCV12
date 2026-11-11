@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { Health, type HealthDataType, type HealthSample, type Workout } from "@capgo/capacitor-health";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchHeartTests, heartRefsForWorkout } from "@/lib/heartRefs";
 import { HEALTH_SYNCED_EVENT, type HealthDay } from "@/lib/healthDays";
 import { reapplyDeviceToRecentWellness } from "@/lib/deviceWellnessDb";
 import { canReadHeart } from "@/lib/heartAccess";
@@ -124,8 +125,12 @@ async function syncWorkouts(supabase: SupabaseClient, userId: string, startDate:
   // FC max = la plus haute vue sur la fenêtre, jamais sous 180 : seule la comparaison d'une séance
   // à l'autre compte, pas la valeur absolue du TRIMP.
   const hrMax = Math.max(180, ...hr.flat().map((x) => x.value).filter(Number.isFinite));
+  // FC max / FC de repos testées : seulement pour les séances datées du test ou après (heartRefs.ts).
+  const heartTests = await fetchHeartTests(supabase, userId);
   const rows = unique.map((w, i) => {
-    const stats = workoutHeartStats(hr[i], w.startDate, w.endDate, restHr ?? 60, hrMax);
+    const peak = Math.max(0, ...hr[i].map((x) => x.value).filter(Number.isFinite));
+    const refs = heartRefsForWorkout(heartTests, localDay(w.startDate), { rest: restHr ?? 60, max: hrMax }, peak);
+    const stats = workoutHeartStats(hr[i], w.startDate, w.endDate, refs.rest, refs.max);
     return {
       user_id: userId,
       platform_id: w.platformId!,

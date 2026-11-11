@@ -72,6 +72,9 @@ export type MetricKey =
   | "fly10m" | "fly20m" | "fly30m"
   // Endurance (suite, 2026-09) — VMA en km/h, VO2max en ml/kg/min.
   | "vma" | "vo2max"
+  // Cardio (11/11/2026, outils /o/ fcmax, zones, zone2) : FC max et FC de repos en bpm. Pas de repère
+  // (une FC max ne se juge pas, une FC de repos dépend trop de la personne) : valeur seule, historique.
+  | "hrMax" | "hrRest"
   // Agilité/changement de direction (2026-09, demande de Gildas) — temps en secondes, mêmes
   // conventions que les splits sprint. "Test T (agilité)" déjà présent dans testBattery.ts reste
   // sans MetricKey/protocole numérique fixe (temps total variable selon variante du protocole) —
@@ -264,6 +267,8 @@ const ALIASES: Record<string, MetricKey> = {
   "navette de luc léger": "vma", "navette de luc leger": "vma", "vameval": "vma", "test vameval": "vma",
   "beep test": "vma", "test vma": "vma",
   "vma": "vma", "vitesse maximale aérobie": "vma", "vitesse maximale aerobie": "vma",
+  "fc max": "hrMax", "fcmax": "hrMax", "frequence cardiaque maximale": "hrMax", "fréquence cardiaque maximale": "hrMax",
+  "fc de repos": "hrRest", "fc repos": "hrRest", "fc au repos": "hrRest", "frequence cardiaque de repos": "hrRest", "fréquence cardiaque de repos": "hrRest",
   "vo2max": "vo2max", "vo2 max": "vo2max", "consommation maximale d'oxygène": "vo2max", "consommation maximale d'oxygene": "vo2max",
 };
 
@@ -464,6 +469,8 @@ export const METRIC_DISPLAY: Record<MetricKey, { name: string; unit: string }> =
   dropJumpContact: { name: "Temps de contact (drop jump)", unit: "s" },
   vma: { name: "VMA", unit: "km/h" },
   vo2max: { name: "VO2max", unit: "ml/kg/min" },
+  hrMax: { name: "FC max", unit: "bpm" },
+  hrRest: { name: "FC de repos", unit: "bpm" },
 };
 
 function normalizeForMatch(s: string): string {

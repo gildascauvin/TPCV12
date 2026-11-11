@@ -16,7 +16,7 @@ const RPE_OPTIONS = [
 
 export interface OField { id: string; label: string; unit: string; def: string; options?: { value: string; label: string }[] }
 /** Détail sous la ligne de test (repris des outils WordPress) : un résumé visible, le reste replié. */
-export interface ODetail { summary: string; table?: { head: string[]; rows: string[][]; hl?: number }; lines?: string[] }
+export interface ODetail { /** Outils sans ligne de test (cardio) : le résultat principal en grand. */ big?: { label: string; value: string; note?: string }; summary: string; table?: { head: string[]; rows: string[][]; hl?: number }; lines?: string[] }
 export interface OTestDef {
   key: string;
   /** Balise <title> et meta description de la page /o/ (noindex, indexée seulement intégrée). */
@@ -42,6 +42,11 @@ export interface OTestDef {
   /** Conversion des valeurs déjà tapées quand on change de mode (comme l'outil WordPress). */
   onModeChange?: (vals: Record<string, string>, to: string) => Record<string, string>;
   detail?: (v: Record<string, number>, ctx: { mode: string; choice: string }) => ODetail | null;
+  /** Valeurs enregistrées à l'inscription si elles diffèrent de l'affichage (ex. une FC max estimée
+   *  s'affiche mais ne s'enregistre pas : seule une mesure devient un résultat de test). Absent = compute. */
+  persist?: (v: Record<string, number>, ctx: { mode: string; choice: string }) => Partial<Record<MetricKey, number>> | null;
+  /** Ligne sans repère par nature (cardio) : pas de mention « pas de repère ». */
+  plain?: boolean;
 }
 
 const pos = (n: number | undefined): n is number => n != null && Number.isFinite(n) && n > 0;
@@ -108,6 +113,39 @@ const SPRINT_METRIC: Record<number, MetricKey> = { 10: "sprint10m", 20: "sprint2
 
 /** vo2max-cooper.js : 7 repères généraux. */
 export const VO2_REF: [number, number, string, string][] = [[0, 30, "< 30", "Faible"], [30, 35, "30 – 35", "Moyen −"], [35, 40, "35 – 40", "Moyen"], [40, 45, "40 – 45", "Moyen +"], [45, 50, "45 – 50", "Bon"], [50, 55, "50 – 55", "Très bon"], [55, 999, "≥ 55", "Excellent"]];
+
+
+/* ── Cardio (11/11/2026) : ports fidèles de fc-max.js, zones-karvonen.js et zone2.js ── */
+
+/** fc-max.js : Tanaka 2001, Nes 2013, Gulati 2010 (femmes), Fox (220 − âge) ; le pic mesuré passe avant. */
+export function fcMaxFormulas(age: number) {
+  return { tanaka: Math.round(208 - 0.7 * age), nes: Math.round(211 - 0.64 * age), gulati: Math.round(206 - 0.88 * age), fox: Math.round(220 - age) };
+}
+/** zones-karvonen.js : 5 zones de 50 à 100 % de la réserve, FC max mesurée sinon 220 − âge. */
+export const HZ_ZONES: [number, number, string, string][] = [
+  [0.5, 0.6, "Récupération", "Récupération active, échauffement"], [0.6, 0.7, "Endurance fondamentale", "Base aérobie, sorties longues"],
+  [0.7, 0.8, "Tempo", "Allure marathon, seuil aérobie"], [0.8, 0.9, "Seuil / VO2max", "Intervalles VO2max, allure 5 km-10 km"],
+  [0.9, 1.0, "Anaérobie / Max", "Sprints, puissance maximale"],
+];
+export function karvonen(age: number, rest: number, measuredMax: number) {
+  if (!(rest > 0)) return null;
+  const measured = measuredMax > 0;
+  if (!measured && !(age > 0)) return null;
+  const max = measured ? measuredMax : 220 - age;
+  if (max <= rest) return null;
+  const reserve = max - rest;
+  return { max, measured, reserve, zones: HZ_ZONES.map(([a, b, name, desc]) => ({ a, b, name, desc, low: Math.round(reserve * a + rest), high: Math.round(reserve * b + rest) })) };
+}
+/** zone2.js : Karvonen 60-70 %, % FC max 60-70 %, Maffetone 180 − âge ; FC max estimée par Tanaka si non mesurée. */
+export function zone2(age: number, rest: number, measuredMax: number) {
+  const measured = measuredMax > 0;
+  if (!measured && !(age > 0)) return null;
+  const max = measured ? measuredMax : Math.round(208 - 0.7 * age);
+  if (!(rest > 0) || max <= rest) return null;
+  const r = max - rest;
+  return { max, measured, kl: Math.round(r * 0.6 + rest), kh: Math.round(r * 0.7 + rest), pl: Math.round(max * 0.6), ph: Math.round(max * 0.7), maf: age > 0 ? 180 - Math.round(age) : null };
+}
+const AGE_FIELD = (def: string): OField => ({ id: "age", label: "Ton âge", unit: "ans", def });
 
 export const O_TESTS: Record<string, OTestDef> = {
   detente: {
@@ -246,6 +284,91 @@ export const O_TESTS: Record<string, OTestDef> = {
       const vo = Math.round(vo2maxFromCooperDistance(v.d) * 10) / 10;
       const hl = VO2_REF.findIndex(r => vo >= r[0] && vo < r[1]);
       return { summary: `Ton niveau : ${VO2_REF[hl][3]}`, table: { head: ["ml/kg/min", "Niveau"], rows: VO2_REF.map(r => [r[2], r[3]]), hl } };
+    },
+  },
+  fcmax: {
+    key: "fcmax",
+    cta: "Mieux doser mes séances",
+    title: "Calculer sa fréquence cardiaque maximale : 4 formules et ton pic mesuré",
+    description: "Ta FC max estimée selon ton âge (Tanaka, Nes, Gulati, 220 − âge), ou ton pic mesuré, prioritaire.",
+    heading: "FC max",
+    wpPath: "/frequence-cardiaque-maximale-comment-la-calculer/",
+    choice: { label: "Catégorie", options: [{ value: "x", label: "Non précisé" }, { value: "f", label: "Femme" }, { value: "h", label: "Homme" }] },
+    fields: () => [AGE_FIELD("40"), { id: "peak", label: "Pic mesuré (facultatif)", unit: "bpm", def: "" }],
+    ask: {},
+    plain: true,
+    compute: v => pos(v.peak) && v.peak < 260 ? { hrMax: Math.round(v.peak) } : v.age >= 10 && v.age < 100 ? { hrMax: fcMaxFormulas(v.age).tanaka } : null,
+    // Seul un pic mesuré devient un résultat de test : une formule reste une moyenne d'âge.
+    persist: v => pos(v.peak) && v.peak < 260 ? { hrMax: Math.round(v.peak) } : null,
+    metric: () => "hrMax",
+    formula: () => "Tanaka : FC max = 208 − 0,7 × âge",
+    detail: (v, { choice }) => {
+      const hasPeak = pos(v.peak) && v.peak < 260;
+      if (!(v.age >= 10 && v.age < 100)) return hasPeak ? { big: { label: "Ta FC max", value: `${Math.round(v.peak)} bpm`, note: "ton pic mesuré, plus fiable que toute formule" }, summary: "Ajoute ton âge pour comparer aux formules" } : null;
+      const f = fcMaxFormulas(v.age);
+      const rows = [["Tanaka", `${f.tanaka} bpm`, "la plus utilisée en recherche"], ["Nes", `${f.nes} bpm`, "adultes actifs, testés au maximum"],
+        ...(choice !== "h" ? [["Gulati", `${f.gulati} bpm`, "établie chez les femmes"]] : []), ["220 − âge", `${f.fox} bpm`, "la plus connue, la moins précise après 40 ans"]];
+      const d = hasPeak ? Math.round(v.peak - f.tanaka) : 0;
+      return {
+        big: hasPeak ? { label: "Ta FC max", value: `${Math.round(v.peak)} bpm`, note: "ton pic mesuré, plus fiable que toute formule" } : { label: "Ta FC max estimée", value: `${f.tanaka} bpm`, note: `probablement entre ${f.tanaka - 11} et ${f.tanaka + 11} bpm` },
+        summary: "Selon les formules",
+        lines: hasPeak ? [`Ton pic est ${d >= 0 ? `${d} bpm au-dessus` : `${-d} bpm en dessous`} de la formule de Tanaka.`] : undefined,
+        table: { head: ["Formule", "FC max", "Pour qui"], rows, hl: hasPeak ? -1 : 0 },
+      };
+    },
+  },
+  zones: {
+    key: "zones",
+    cta: "Mieux doser mes séances",
+    title: "Zones cardiaques Karvonen : tes 5 zones en bpm",
+    description: "Tes 5 zones d'entraînement calculées sur ta réserve cardiaque (FC max − FC de repos).",
+    heading: "Zones cardiaques",
+    wpPath: "/calculateur-de-zones-cardiaques-methode-karvonen/",
+    fields: () => [AGE_FIELD("30"), { id: "rest", label: "FC de repos", unit: "bpm", def: "60" }, { id: "max", label: "FC max mesurée (facultatif)", unit: "bpm", def: "" }],
+    ask: {},
+    plain: true,
+    compute: v => { const k = karvonen(v.age, v.rest, v.max); return k ? { hrRest: Math.round(v.rest) } : null; },
+    persist: v => { const k = karvonen(v.age, v.rest, v.max); return k ? { hrRest: Math.round(v.rest), ...(k.measured ? { hrMax: Math.round(k.max) } : {}) } : null; },
+    metric: () => "hrRest",
+    formula: () => "FC cible = (FC max − FC repos) × % + FC repos",
+    detail: v => {
+      const k = karvonen(v.age, v.rest, v.max);
+      if (!k) return null;
+      return {
+        big: { label: "Ta réserve cardiaque", value: `${k.reserve} bpm`, note: k.measured ? `FC max mesurée : ${k.max} bpm, repos ${Math.round(v.rest)} bpm` : `FC max estimée (220 − ${Math.round(v.age)} ans) : ${k.max} bpm, à ±10-12 bpm près` },
+        summary: "Tes 5 zones",
+        // Ta cible en 2e colonne : sur mobile, le tableau défile et la cible doit rester visible.
+        table: { head: ["Zone", "Ta cible", "% réserve", "À quoi elle sert"], rows: k.zones.map((z, i) => [`Z${i + 1} · ${z.name}`, `${z.low}–${z.high} bpm`, `${Math.round(z.a * 100)}-${Math.round(z.b * 100)} %`, z.desc]), hl: -1 },
+      };
+    },
+  },
+  zone2: {
+    key: "zone2",
+    cta: "Progresser en endurance",
+    title: "Calculer sa zone 2 en bpm",
+    description: "Ta zone 2 en battements par minute, avec ta FC au réveil (Karvonen 60-70 %), comparée au % de FC max et à Maffetone.",
+    heading: "Zone 2",
+    wpPath: "/pourquoi-lentrainement-en-zone-2-est-la-base-pour-progresser-en-endurance/",
+    fields: () => [AGE_FIELD("35"), { id: "rest", label: "FC au réveil", unit: "bpm", def: "55" }, { id: "max", label: "FC max mesurée (facultatif)", unit: "bpm", def: "" }],
+    ask: {},
+    plain: true,
+    compute: v => zone2(v.age, v.rest, v.max) ? { hrRest: Math.round(v.rest) } : null,
+    persist: v => { const z = zone2(v.age, v.rest, v.max); return z ? { hrRest: Math.round(v.rest), ...(z.measured ? { hrMax: Math.round(z.max) } : {}) } : null; },
+    metric: () => "hrRest",
+    formula: () => "Zone 2 = (FC max − FC repos) × 60 à 70 % + FC repos",
+    detail: v => {
+      const z = zone2(v.age, v.rest, v.max);
+      if (!z) return null;
+      return {
+        big: { label: "Ta zone 2", value: `${z.kl} à ${z.kh} bpm`, note: (z.measured ? `FC max mesurée : ${z.max} bpm` : `FC max estimée à ${z.max} bpm (à environ 11 bpm près)`) + `, FC au réveil ${Math.round(v.rest)} bpm` },
+        summary: "Selon la méthode",
+        table: {
+          head: ["Méthode", "Zone 2", "À savoir"],
+          rows: [["Réserve cardiaque (Karvonen)", `${z.kl} à ${z.kh} bpm`, "tient compte de ton cœur au repos"], ["% de FC max", `${z.pl} à ${z.ph} bpm`, "souvent trop basse chez les sportifs entraînés"],
+            ...(z.maf != null ? [["Maffetone", `${z.maf} bpm au plus`, "règle d'entraîneur, non validée"]] : [])],
+          hl: 0,
+        },
+      };
     },
   },
   eur: {

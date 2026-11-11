@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchHeartTests, heartRefsForWorkout } from "@/lib/heartRefs";
 import { reapplyDeviceToRecentWellness } from "@/lib/deviceWellnessDb";
 
 /* Données poussées par Garmin (Health API 2.0 / Activity API 2.0, push JSON) → health_daily et
@@ -193,6 +194,7 @@ export async function ingestGarminPush(admin: SupabaseClient, userId: string, pa
   const details = payload.activityDetails ?? [];
   if (details.length) {
     const refs = await heartRefs(admin, userId);
+    const heartTests = await fetchHeartTests(admin, userId);
     for (const d of details) {
       const summary = (d.summary as Row | undefined) ?? d;
       const row = activityRow(userId, { ...summary, activityId: d.activityId ?? summary.activityId, summaryId: d.summaryId ?? summary.summaryId });
@@ -200,8 +202,10 @@ export async function ingestGarminPush(admin: SupabaseClient, userId: string, pa
       const samples = ((d.samples as Row[] | undefined) ?? [])
         .map((s) => ({ t: (num(s.startTimeInSeconds) ?? 0) * 1000, v: num(s.heartRate) ?? NaN }))
         .filter((s) => s.t > 0 && Number.isFinite(s.v));
-      const hrMax = Math.max(refs.max, ...samples.map((s) => s.v));
-      row.trimp = trimpOf(samples, new Date(row.end_at as string).getTime(), refs.rest, hrMax);
+      const peak = Math.max(0, ...samples.map((s) => s.v));
+      // FC max / FC de repos testées : seulement pour les séances datées du test ou après (heartRefs.ts).
+      const r = heartRefsForWorkout(heartTests, String(row.date), { rest: refs.rest, max: Math.max(refs.max, peak) }, peak);
+      row.trimp = trimpOf(samples, new Date(row.end_at as string).getTime(), r.rest, r.max);
       workouts.push(row);
       count++;
     }

@@ -182,6 +182,9 @@ export function buildTestFixture(now: Date = new Date()): { merged: MergedTest[]
     { name: "Temps de contact (drop jump)", unit: "s", oldValue: 0.17, newValue: 0.16 },
     { name: "5 km", unit: "min", oldValue: 23.2, newValue: 22.5 },
     { name: "10 km", unit: "min", oldValue: 48.5, newValue: 47 },
+    // Cardio (11/11/2026) : la ligne FC max montre les zones en bpm (cardioZones.ts).
+    { name: "FC max", unit: "bpm", oldValue: 192, newValue: 192 },
+    { name: "FC de repos", unit: "bpm", oldValue: 56, newValue: 54 },
   ];
 
   const merged: MergedTest[] = [];
