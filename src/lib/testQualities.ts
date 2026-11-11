@@ -86,7 +86,7 @@ export const METRIC_QUALITY: Record<MetricKey, Quality[]> = {
   sprint10m: ["vitesse"], sprint20m: ["vitesse"], sprint30m: ["vitesse"], sprint60m: ["vitesse"], sprint100m: ["vitesse"], sprint200m: ["vitesse"],
   fly10m: ["vitesse"], fly20m: ["vitesse"], fly30m: ["vitesse"],
   // Endurance
-  time5k: ["endurance"], time10k: ["endurance"], timeSemi: ["endurance"], timeMarathon: ["endurance"], vma: ["endurance"], vo2max: ["endurance"], hrMax: ["endurance"], hrRest: ["endurance"],
+  time5k: ["endurance"], time10k: ["endurance"], timeSemi: ["endurance"], timeMarathon: ["endurance"], vma: ["endurance"], vo2max: ["endurance"], hrMax: ["endurance"], hrRest: ["endurance"], hrv: ["endurance"],
   // Agilité (2026-09, demande de Gildas)
   test505: ["agilite"], illinoisAgility: ["agilite"], proAgility: ["agilite"],
   // Mobilité (2026-09, demande de Gildas)

@@ -145,6 +145,33 @@ export function zone2(age: number, rest: number, measuredMax: number) {
   const r = max - rest;
   return { max, measured, kl: Math.round(r * 0.6 + rest), kh: Math.round(r * 0.7 + rest), pl: Math.round(max * 0.6), ph: Math.round(max * 0.7), maf: age > 0 ? 180 - Math.round(age) : null };
 }
+/* ── VFC (11/11/2026) : port fidèle de vfc.js (médianes RMSSD Lifelines, Tegegne et al. 2020,
+   Eur J Prev Cardiol 27(19):2191-2194 ; ECG de 10 s au repos, 84 772 personnes ; [médiane, 2e, 98e centile]
+   femmes puis hommes ; positions 0,6 / 0,85 / 1,15 / 1,6 ; zone perso ±8 %). ── */
+type HrvRef = [number, number, number];
+export const HRV_AGE: [number, number, HrvRef, HrvRef][] = [[15, 19, [60.7, 12.4, 225.9], [59.9, 9.8, 213.2]], [20, 24, [52.1, 11.3, 205.5], [47.6, 9.6, 174.0]], [25, 29, [47.5, 11.5, 180.7], [42.3, 10.1, 172.7]], [30, 34, [42.3, 11.5, 161.0], [36.9, 10.2, 140.8]], [35, 39, [37.9, 10.8, 141.9], [32.8, 8.6, 123.8]], [40, 44, [33.9, 9.7, 123.7], [29.0, 8.1, 105.5]], [45, 49, [29.2, 8.3, 109.5], [26.0, 7.1, 95.5]], [50, 54, [26.6, 7.5, 96.3], [23.7, 6.7, 87.5]], [55, 59, [22.5, 6.7, 83.6], [21.0, 5.5, 89.5]], [60, 64, [20.5, 5.5, 79.3], [19.1, 4.8, 86.6]], [65, 69, [17.8, 5.0, 83.0], [17.7, 4.87, 110.5]], [70, 74, [18.3, 5.0, 115.8], [16.0, 4.7, 161.9]], [75, 120, [16.1, 3.5, 106.2], [14.9, 3.7, 130.3]]];
+const f1 = (x: number) => String(Math.round(x * 10) / 10).replace(".", ",");
+export function hrvRead(age: number, today: number, usual: number | undefined, sex: string) {
+  if (!(Number.isFinite(age) && age > 0) || !pos(today)) return null;
+  const a = Math.max(15, age);
+  const idx = HRV_AGE.findIndex(r => a <= r[1]);
+  const i = idx < 0 ? HRV_AGE.length - 1 : idx;
+  const row = HRV_AGE[i], w = sex === "w", ref = w ? row[2] : row[3], med = ref[0], r = today / med;
+  const where = r < 0.6 ? "nettement en dessous de" : r < 0.85 ? "un peu en dessous de" : r <= 1.15 ? "proche de" : r <= 1.6 ? "au-dessus de" : "nettement au-dessus de";
+  const lab = (w ? "des femmes" : "des hommes") + " de " + row[0] + (row[1] >= 120 ? " ans et plus" : " à " + row[1] + " ans");
+  const popLine = `Avec ${f1(today)} ms, tu es ${where} la médiane ${lab} (${f1(med)} ms). 96 % d’entre ${w ? "elles" : "eux"} sont entre ${f1(ref[1])} et ${f1(ref[2])} ms : une VFC très différente de la médiane reste souvent normale.`;
+  let perso: { ecart: number | null; head: string; text: string };
+  if (!pos(usual)) {
+    perso = { ecart: null, head: "Il manque ta moyenne habituelle", text: "Une VFC ne se juge pas seule : 24 ms peut être normal pour toi et bas pour quelqu’un d’autre. Ajoute ta moyenne des dernières semaines (visible dans l’app de ta montre) pour savoir si ta séance du jour doit changer." };
+  } else {
+    const e = Math.round((today / usual - 1) * 100);
+    perso = e >= 8 ? { ecart: e, head: "Au-dessus de ta norme", text: `Ta VFC est ${e} % au-dessus de ta moyenne. En général, c’est un signe de bonne récupération : ta séance prévue tient.` }
+      : e > -8 ? { ecart: e, head: "Dans ta norme", text: "Ta VFC est dans ta zone habituelle (±8 %). Sur ce critère, rien ne justifie de changer ta séance du jour." }
+      : { ecart: e, head: "Sous ta norme", text: `Ta VFC est ${-e} % sous ta moyenne. Seule, ce n’est pas une raison d’annuler. Regarde ton sommeil, ton stress et tes courbatures : si eux aussi sont mauvais, allège la séance dure du jour (moins de séries ou de charge) et garde les séances légères.` };
+  }
+  return { i, med, where, lab, popLine, perso, w };
+}
+
 const AGE_FIELD = (def: string): OField => ({ id: "age", label: "Ton âge", unit: "ans", def });
 
 export const O_TESTS: Record<string, OTestDef> = {
@@ -368,6 +395,32 @@ export const O_TESTS: Record<string, OTestDef> = {
             ...(z.maf != null ? [["Maffetone", `${z.maf} bpm au plus`, "règle d'entraîneur, non validée"]] : [])],
           hl: 0,
         },
+      };
+    },
+  },
+  vfc: {
+    key: "vfc",
+    cta: "Suivre ma récupération",
+    title: "VFC normale selon l'âge : situe ta VFC du matin",
+    description: "Ta VFC (RMSSD) de ce matin comparée à la médiane de ton âge et de ton sexe (étude Lifelines), puis à ta propre moyenne.",
+    heading: "VFC selon l'âge",
+    wpPath: "/la-variabilite-de-la-frequence-cardiaque-et-lage/",
+    choice: { label: "Sexe", options: [{ value: "m", label: "Homme" }, { value: "w", label: "Femme" }] },
+    fields: () => [AGE_FIELD("32"), { id: "today", label: "Ta VFC ce matin", unit: "ms", def: "24" }, { id: "usual", label: "Ta moyenne habituelle (facultatif)", unit: "ms", def: "30" }],
+    ask: {},
+    plain: true,
+    compute: v => hrvRead(v.age, v.today, v.usual, "m") ? { hrv: Math.round(v.today * 10) / 10 } : null,
+    metric: () => "hrv",
+    formula: () => "Médiane RMSSD de ton âge (Lifelines, ECG de 10 s au repos)",
+    detail: (v, { choice }) => {
+      const h = hrvRead(v.age, v.today, v.usual, choice);
+      if (!h) return null;
+      // La page WordPress montre déjà le tableau juste au-dessus : ici, la position de CE sportif, sans le répéter.
+      const e = h.perso.ecart;
+      return {
+        big: { label: "Ta VFC ce matin", value: `${f1(v.today)} ms`, note: `${h.where.charAt(0).toUpperCase()}${h.where.slice(1)} la médiane de ton âge (${f1(h.med)} ms)` },
+        summary: e == null ? "Ajoute ta moyenne pour décider de ta séance" : `Face à ta moyenne : ${e > 0 ? "+" : ""}${e} %, ${h.perso.head.toLowerCase()}`,
+        lines: [h.popLine, h.perso.text],
       };
     },
   },

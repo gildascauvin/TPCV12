@@ -1775,7 +1775,9 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
       const iso = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
       const metric = r.cardProps.metric;
       const cardio = metric === "hrMax" ? cardioZonesFor(latestByMetric.hrMax, latestByMetric.hrRest) : undefined;
-      const cardioHint = metric === "hrRest" ? (latestByMetric.hrMax != null ? "utilisée pour tes zones (ligne FC max)" : "Ajoute ta FC max pour voir tes zones") : undefined;
+      const cardioHint = metric === "hrRest" ? (latestByMetric.hrMax != null ? "utilisée pour tes zones (ligne FC max)" : "Ajoute ta FC max pour voir tes zones")
+        // VFC (11/11) : l'app ne connaît pas l'âge, donc pas de repère de population ; le vrai repère est ta moyenne.
+        : metric === "hrv" ? "ton repère : ta propre moyenne, pas la médiane de ton âge" : undefined;
       return {
         ...r, cardio, cardioHint, nextLabel: due ? "À refaire" : `Prochain test : ${next.getDate()} ${MONTH_FR[next.getMonth()]}`,
         cardProps: r.cardProps.results.length === 1 ? { ...r.cardProps, projectedDate: iso } : r.cardProps,

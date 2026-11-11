@@ -75,6 +75,9 @@ export type MetricKey =
   // Cardio (11/11/2026, outils /o/ fcmax, zones, zone2) : FC max et FC de repos en bpm. Pas de repère
   // (une FC max ne se juge pas, une FC de repos dépend trop de la personne) : valeur seule, historique.
   | "hrMax" | "hrRest"
+  // VFC (11/11/2026, outil /o/vfc) : RMSSD du matin en ms. Repère d'âge sur la page et dans l'outil
+  // (l'app ne connaît pas l'âge) : dans l'app, valeur seule et historique, comme FC max / FC de repos.
+  | "hrv"
   // Agilité/changement de direction (2026-09, demande de Gildas) — temps en secondes, mêmes
   // conventions que les splits sprint. "Test T (agilité)" déjà présent dans testBattery.ts reste
   // sans MetricKey/protocole numérique fixe (temps total variable selon variante du protocole) —
@@ -269,6 +272,7 @@ const ALIASES: Record<string, MetricKey> = {
   "vma": "vma", "vitesse maximale aérobie": "vma", "vitesse maximale aerobie": "vma",
   "fc max": "hrMax", "fcmax": "hrMax", "frequence cardiaque maximale": "hrMax", "fréquence cardiaque maximale": "hrMax",
   "fc de repos": "hrRest", "fc repos": "hrRest", "fc au repos": "hrRest", "frequence cardiaque de repos": "hrRest", "fréquence cardiaque de repos": "hrRest",
+  "vfc": "hrv", "vfc (rmssd)": "hrv", "rmssd": "hrv", "hrv": "hrv", "variabilité de la fréquence cardiaque": "hrv", "variabilite de la frequence cardiaque": "hrv",
   "vo2max": "vo2max", "vo2 max": "vo2max", "consommation maximale d'oxygène": "vo2max", "consommation maximale d'oxygene": "vo2max",
 };
 
@@ -471,6 +475,7 @@ export const METRIC_DISPLAY: Record<MetricKey, { name: string; unit: string }> =
   vo2max: { name: "VO2max", unit: "ml/kg/min" },
   hrMax: { name: "FC max", unit: "bpm" },
   hrRest: { name: "FC de repos", unit: "bpm" },
+  hrv: { name: "VFC (RMSSD)", unit: "ms" },
 };
 
 function normalizeForMatch(s: string): string {
