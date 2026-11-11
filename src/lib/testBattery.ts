@@ -277,6 +277,7 @@ export const TEST_BATTERIES: Record<string, SportBattery> = {
    à 2 champs (onAddPair) plutôt qu'une simple carte "valeur seule" comme les autres. */
 export const BATTERY_TEST_METRICS: Record<string, MetricKey[]> = {
   "Saut vertical (CMJ)": ["cmjHeight"],
+  "Bronco Test": ["bronco"],
   // Bug réel corrigé (2026-09) : jamais mappé jusqu'ici — ce test recommandé n'était donc jamais
   // marqué "fait" une fois loggué (notCovered() le voyait toujours comme non couvert), et sa donnée
   // réelle atterrissait séparément comme test brut non relié (canonicalMetricKey renvoyait null avant

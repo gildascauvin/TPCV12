@@ -172,6 +172,22 @@ export function hrvRead(age: number, today: number, usual: number | undefined, s
   return { i, med, where, lab, popLine, perso, w };
 }
 
+/* ── Bronco (11/11/2026) : moyennes du résumé de Weakley et al. 2026 (JSCR 40(5):e479-e484, PMID 42017981),
+   462 joueurs Super Rugby, 1 668 tests sur 10 ans. Hommes 5:11 (avants 5:21, trois-quarts 4:57),
+   femmes 6:19 (avants 6:38, trois-quarts 5:52). Le résumé ne donne pas d'écart-type (± = erreur type) :
+   pas de jauge ni de badge, juste l'écart à la moyenne du groupe. ── */
+export const BRONCO_GROUPS = [
+  { id: "ha", label: "Homme, avant", short: "avants hommes", mean: 321, row: 0 },
+  { id: "hb", label: "Homme, trois-quarts", short: "trois-quarts hommes", mean: 297, row: 1 },
+  { id: "fa", label: "Femme, avant", short: "avants femmes", mean: 398, row: 0 },
+  { id: "fb", label: "Femme, trois-quarts", short: "trois-quarts femmes", mean: 352, row: 1 },
+];
+export const mmss = (sec: number) => { const t = Math.round(sec); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
+function broncoSeconds(min: number | undefined, sec: number | undefined): number | null {
+  const m = Number.isFinite(min) ? (min as number) : 0, s = Number.isFinite(sec) ? (sec as number) : 0;
+  const t = Math.round(m * 60 + s);
+  return m >= 0 && s >= 0 && s < 60 && t >= 180 && t <= 900 ? t : null;
+}
 const AGE_FIELD = (def: string): OField => ({ id: "age", label: "Ton âge", unit: "ans", def });
 
 export const O_TESTS: Record<string, OTestDef> = {
@@ -421,6 +437,37 @@ export const O_TESTS: Record<string, OTestDef> = {
         big: { label: "Ta VFC ce matin", value: `${f1(v.today)} ms`, note: `${h.where.charAt(0).toUpperCase()}${h.where.slice(1)} la médiane de ton âge (${f1(h.med)} ms)` },
         summary: e == null ? "Ajoute ta moyenne pour décider de ta séance" : `Face à ta moyenne : ${e > 0 ? "+" : ""}${e} %, ${h.perso.head.toLowerCase()}`,
         lines: [h.popLine, h.perso.text],
+      };
+    },
+  },
+  bronco: {
+    key: "bronco",
+    cta: "Améliorer mon Bronco",
+    title: "Bronco test : situe ton temps face aux joueurs pros",
+    description: "Ton temps au Bronco test (5 × 20-40-60 m, 1 200 m) face aux moyennes Super Rugby par sexe et par poste (Weakley et al. 2026).",
+    heading: "Bronco test",
+    wpPath: "/comment-ameliorer-son-bronco-test/",
+    choice: { label: "Ton groupe", options: BRONCO_GROUPS.map(g => ({ value: g.id, label: g.label })) },
+    fields: () => [{ id: "min", label: "Minutes", unit: "min", def: "5" }, { id: "sec", label: "Secondes", unit: "s", def: "45" }],
+    ask: {},
+    plain: true,
+    compute: v => { const t = broncoSeconds(v.min, v.sec); return t == null ? null : { bronco: t }; },
+    metric: () => "bronco",
+    formula: () => "Temps total des 5 séries de navettes 20, 40 et 60 m (1 200 m)",
+    detail: (v, { choice }) => {
+      const t = broncoSeconds(v.min, v.sec);
+      if (t == null) return null;
+      const g = BRONCO_GROUPS.find(x => x.id === choice) ?? BRONCO_GROUPS[0];
+      const d = t - g.mean;
+      const vs = `la moyenne des ${g.short} pros (${mmss(g.mean)})`;
+      const note = d === 0 ? `Pile sur ${vs}` : d > 0 ? `${mmss(d)} de plus que ${vs}` : `${mmss(-d)} plus rapide que ${vs}`;
+      return {
+        big: { label: "Ton Bronco", value: mmss(t), note },
+        summary: "Moyennes Super Rugby sur 10 ans",
+        table: { head: ["Groupe", "Hommes", "Femmes"], rows: [
+          ["Avants", mmss(321), mmss(398)], ["Trois-quarts", mmss(297), mmss(352)], ["Tous postes", mmss(311), mmss(379)],
+        ], hl: g.row },
+        lines: ["Joueurs pros : un amateur part en général plus haut. Compare-toi surtout à ton test précédent. Weakley et al., JSCR 2026."],
       };
     },
   },

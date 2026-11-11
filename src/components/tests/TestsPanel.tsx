@@ -130,6 +130,8 @@ function findMatchingRawTest(testName: string, candidates: MergedTest[]): Merged
    testNorms.ts), seule la présentation change pour ces 2 métriques précises. Le drop jump se lit
    toujours à 2 valeurs : quand `secondaryByDate` (le temps de contact, par date) est fourni et qu'un
    point existe pour cette date précise, il est affiché à côté de la hauteur — jamais la hauteur seule. */
+/** Bronco (secondes) → « 5:45 ». */
+export const formatMinSec = (sec: number) => { const t = Math.round(sec); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
 /** Nombres affichés à la française : « 2,8 » et non « 2.8 ». */
 export const frNum = (s: string) => s.replace(/(\d)\.(\d)/g, "$1,$2");
 function formatRawValue(metric: MetricKey | undefined, value: number, unit: string, date?: string, secondaryByDate?: Map<string, number>): string {
@@ -139,6 +141,7 @@ function formatRawValue(metric: MetricKey | undefined, value: number, unit: stri
     return frNum(contact != null ? `${heightText} · ${formatDropJumpContactMs(contact)}` : heightText);
   }
   if (metric === "dropJumpContact") return frNum(formatDropJumpContactMs(value));
+  if (metric === "bronco") return formatMinSec(value);
   return frNum(`${value} ${unit}`);
 }
 

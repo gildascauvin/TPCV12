@@ -78,6 +78,10 @@ export type MetricKey =
   // VFC (11/11/2026, outil /o/vfc) : RMSSD du matin en ms. Repère d'âge sur la page et dans l'outil
   // (l'app ne connaît pas l'âge) : dans l'app, valeur seule et historique, comme FC max / FC de repos.
   | "hrv"
+  // Bronco (11/11/2026, outil /o/bronco) : temps total en SECONDES (5 × navettes 20-40-60 m = 1 200 m),
+  // plus bas = mieux. Repère public (moyennes Super Rugby par sexe et avants/trois-quarts, Weakley et
+  // al. 2026, JSCR) sur la page et dans l'outil ; l'app ne connaît pas le poste : valeur seule.
+  | "bronco"
   // Agilité/changement de direction (2026-09, demande de Gildas) — temps en secondes, mêmes
   // conventions que les splits sprint. "Test T (agilité)" déjà présent dans testBattery.ts reste
   // sans MetricKey/protocole numérique fixe (temps total variable selon variante du protocole) —
@@ -272,6 +276,7 @@ const ALIASES: Record<string, MetricKey> = {
   "vma": "vma", "vitesse maximale aérobie": "vma", "vitesse maximale aerobie": "vma",
   "fc max": "hrMax", "fcmax": "hrMax", "frequence cardiaque maximale": "hrMax", "fréquence cardiaque maximale": "hrMax",
   "fc de repos": "hrRest", "fc repos": "hrRest", "fc au repos": "hrRest", "frequence cardiaque de repos": "hrRest", "fréquence cardiaque de repos": "hrRest",
+  "bronco": "bronco", "bronco test": "bronco", "test bronco": "bronco", "bronco fitness test": "bronco",
   "vfc": "hrv", "vfc (rmssd)": "hrv", "rmssd": "hrv", "hrv": "hrv", "variabilité de la fréquence cardiaque": "hrv", "variabilite de la frequence cardiaque": "hrv",
   "vo2max": "vo2max", "vo2 max": "vo2max", "consommation maximale d'oxygène": "vo2max", "consommation maximale d'oxygene": "vo2max",
 };
@@ -476,6 +481,7 @@ export const METRIC_DISPLAY: Record<MetricKey, { name: string; unit: string }> =
   hrMax: { name: "FC max", unit: "bpm" },
   hrRest: { name: "FC de repos", unit: "bpm" },
   hrv: { name: "VFC (RMSSD)", unit: "ms" },
+  bronco: { name: "Bronco Test", unit: "s" },
 };
 
 function normalizeForMatch(s: string): string {
