@@ -221,7 +221,7 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n, onPlanning }: {
       return (<>
         {/* 2026-11-03 : le titre porte sur la frise (dernières séances jugées), les constats sur tout
             l'historique. Les deux portées sont écrites, sinon « 14 sur 14 » puis « 9 sur 30 » se contredisent. */}
-        <Hero big={right} unit={`sur ${s.strip.length}`} cap={`dernières séances où le conseil du matin a vu juste.`} color={PHOTO_ACCENT.raison} />
+        <Hero big={right} unit={`sur ${s.strip.length}`} cap={`dernières séances où le conseil du jour a vu juste.`} color={PHOTO_ACCENT.raison} />
         <div style={card}>
           <Dots color={PHOTO_ACCENT.raison} items={s.strip.map(c => ({ on: !!outcomeRight(c.outcome), label: `${c.date} : ${outcomeRight(c.outcome) ? "vu juste" : "à côté"}`, onClick: n || !c.id ? undefined : () => requestPhysioReplay({ kind: "session", sessionId: c.id! }) }))} />
           <Legend>✓ vu juste · pointillé : à côté · de la plus ancienne à la plus récente</Legend>
@@ -323,7 +323,7 @@ export function SlideBody({ s, bilan, onShare, shared, recal, n, onPlanning }: {
         {L && s.lead && s.blocks[0]?.rows[0]
           ? <Hero big={s.blocks[0].rows[0].part} unit={`sur ${s.blocks[0].rows[0].total}`} cap={`${L.low.replace(/^Les /, "").replace(/^./, x => x.toLowerCase())} où ${T("ta", "sa")} séance de ${s.lead.noun} a été plus dure que prévu.`} color={PHOTO_ACCENT[DIM_PHOTO[s.lead.dim]]} />
           : <h2 style={h2}>Ce qui rend {T("tes", "ses")} séances <span style={{ color: "#ff8a5c" }}>plus dures que prévu.</span></h2>}
-        {L && s.lead && <p style={sub}>{L.low}, {T(`ton conseil du matin allège déjà ta séance de ${s.lead.noun}.`, `son conseil du matin allège déjà sa séance de ${s.lead.noun}.`)}</p>}
+        {L && s.lead && <p style={sub}>{L.low}, {T(`ton conseil du jour allège déjà ta séance de ${s.lead.noun}.`, `son conseil du jour allège déjà sa séance de ${s.lead.noun}.`)}</p>}
         {s.blocks.map((b, i) => {
           const dim = (Object.keys(PREDIT_WORDS) as PersonalDim[]).find(d => b.title.includes(DIM_HINT[d])) ?? null;
           const W = dim ? PREDIT_WORDS[dim] : null;
@@ -592,7 +592,7 @@ function GroupSlideBody({ s, open }: { s: GroupSlide; open: OpenAthlete }) {
       </>);
     case "g_conseils":
       return (<>
-        <Hero big={s.right} unit={`sur ${s.judged}`} cap="conseils du matin qui ont vu juste, dans tout le groupe." color={PHOTO_ACCENT.groupe_conseils} />
+        <Hero big={s.right} unit={`sur ${s.judged}`} cap="conseils du jour qui ont vu juste, dans tout le groupe." color={PHOTO_ACCENT.groupe_conseils} />
         <div style={card}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{s.right} confirmés sur {s.judged}</div>
           <Rows rows={s.rows.map((r, i) => ({ label: r.name, part: r.right, total: r.judged, highlight: i === 0 }))} color="#7ee08f" />

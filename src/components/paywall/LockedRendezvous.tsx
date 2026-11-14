@@ -19,7 +19,7 @@ export function missedLine(sessions: unknown[], today: string, signupDate: strin
     if (p?.proposed === "low") low++; else if (p?.proposed === "high") high++;
   }
   const n = low + high;
-  if (!n) return coach ? "Demain matin, sa séance se cale sur sa forme." : "Demain matin, ta séance se cale sur ta forme.";
+  if (!n) return coach ? "Demain, sa séance se cale sur sa forme." : "Demain, ta séance se cale sur ta forme.";
   const parts = [low ? `${low} allégée${low > 1 ? "s" : ""}` : null, high ? `${high} poussée${high > 1 ? "s" : ""}` : null].filter(Boolean).join(", ");
   const when = days >= 7 ? "cette semaine" : coach ? "depuis son inscription" : "depuis ton inscription";
   return `${n} séance${n > 1 ? "s" : ""} ${n > 1 ? "auraient" : "aurait"} changé ${when} : ${parts}.`;

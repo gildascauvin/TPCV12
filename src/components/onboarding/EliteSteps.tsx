@@ -244,7 +244,7 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
                 front={<AlertBox variant="bare"
                   alert={{ border: `${color ?? "#ffffff"}66`, glow: color ?? "#ffffff", text: sug
                     ? `${autoregHeadline(sug.dir)}\n${reliefLine(sug.dir, subject)}`
-                    : subject ? `Dans sa zone\nLa forme de ${subject} ce matin colle à la séance prévue : garde-la telle quelle.` : "Dans ta zone\nTa forme de ce matin colle à la séance prévue : garde-la telle quelle." }} />}
+                    : subject ? `Dans sa zone\nLa forme de ${subject} aujourd'hui colle à la séance prévue : garde-la telle quelle.` : "Dans ta zone\nTa forme du jour colle à la séance prévue : garde-la telle quelle." }} />}
                 actions={<div ref={setSlot} className="autoreg-slot" style={{ marginTop: 4 }} />} />
             </div>
             {isMd ? (
@@ -277,7 +277,7 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 9 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11.5, fontWeight: 800, color: "rgba(255,255,255,.65)", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              {checkinScore != null && !moved ? "Ta forme ce matin" : "Simule ta forme"}
+              {checkinScore != null && !moved ? "Ta forme du jour" : "Simule ta forme"}
             </div>
             <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.45)", marginTop: 2 }}>Glisse pour voir ta semaine bouger</div>
           </div>

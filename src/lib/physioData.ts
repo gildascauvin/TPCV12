@@ -105,6 +105,8 @@ export function usePhysioData(userId: string | null | undefined, enabled = true)
 
 /* Entrées de la carte décision pour un jour (2026-10-11) : désaccord du point forme (ligne 2) et écart
    au cœur répété sur les 2 dernières séances d'une même famille (Phase). */
+const heartWord = (d: number) => (d >= 7.5 ? "très dure" : d >= 4.5 ? "dure" : d >= 2.5 ? "modérée" : "légère");
+
 export function physioDecisionInputs(data: PhysioData | null, date: string): { verdictTitle: string | null; heartRepeated: string | null; sessionHeart: string | null } | null {
   if (!data) return null;
   const checkins = data.checkins.filter(c => c.bedtime != null);
@@ -120,11 +122,15 @@ export function physioDecisionInputs(data: PhysioData | null, date: string): { v
   // Séance faite ce jour-là : son écart au cœur (rien quand ressenti et cœur sont d'accord).
   const todayOk = data.sessions.filter(s => s.date === date && data.heart[s.id]?.kind === "ok")
     .map(s => data.heart[s.id] as Extract<HeartResult, { kind: "ok" }>).pop();
-  const p = todayOk ? Math.round(todayOk.predicted) : 0;
-  const sessionHeart = !todayOk || todayOk.verdict === "agree" ? null
-    : todayOk.verdict === "harder"
-    ? `Pour ton cœur, elle valait environ ${p} : tu l'as sentie plus dure.`
-    : `Pour ton cœur, elle valait environ ${p} : tu l'as sentie plus facile.`;
+  /* Des mots, jamais une note (14/11, Gildas). Ressenti d'abord, cœur ensuite ; les mots seulement
+     quand ils diffèrent (sinon « dure… plus dure » ne veut rien dire). Mêmes mots que le mini bilan. */
+  const sessionHeart = !todayOk || todayOk.verdict === "agree" ? null : (() => {
+    const felt = heartWord(todayOk.rpe), heart = heartWord(todayOk.predicted);
+    if (felt !== heart) return `Tu l'as sentie ${felt}, ta fréquence cardiaque dit ${heart}.`;
+    return todayOk.verdict === "harder"
+      ? "Tu l'as sentie plus dure que ce que montre ta fréquence cardiaque."
+      : "Tu l'as sentie plus facile que ce que montre ta fréquence cardiaque.";
+  })();
   return {
     sessionHeart,
     verdictTitle: v && v.kind !== "agree" ? v.title : null,

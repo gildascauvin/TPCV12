@@ -32,7 +32,7 @@ export default function LossSheet({ mode, onStay, onLeave, stake }: { mode: "ath
     : stake?.deadlineLabel ? "Tu prépares ton échéance au feeling." : "Tu reviens au feeling. Et au même plateau.";
   const keeps = coach
     ? "Tu gardes tes programmes et les points forme de ton groupe. Les décisions, le radar et les bilans s'arrêtent ici."
-    : "Tu gardes ton programme et ton point forme. Les décisions du matin et tes bilans s'arrêtent ici.";
+    : "Tu gardes ton programme et ton point forme. Les décisions du jour et tes bilans s'arrêtent ici.";
   const lead = coach
     ? (stake?.perWeek ? `${stake.perWeek} séances par semaine dans ton groupe, décidées sans savoir qui est cuit. ` : "")
     : stake?.sessions ? `${stake.deadlineLabel ? `D'ici le ${stake.deadlineLabel}` : "Sur 3 mois"}, ${stake.sessions} séances décidées sans savoir si tu pouvais pousser. ` : "";

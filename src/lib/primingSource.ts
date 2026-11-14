@@ -126,16 +126,16 @@ export function primingTitles(role: "athlete" | "coach", source: PrimingSource, 
   const a = athleteName ?? names[0] ?? null;
   const group = n >= 2 ? ` Pour tes ${n} sportifs${de}.` : "";
   const t = {
-    decision: [`Qui alléger ce matin ? Tu ne devrais pas avoir à deviner.`, `Elite te donne une décision par sportif, calculée sur sa forme et sa charge.${group}`],
+    decision: [`Qui alléger aujourd'hui ? Tu ne devrais pas avoir à deviner.`, `Elite te donne une décision par sportif, calculée sur sa forme et sa charge.${group}`],
     insight: [`Un sportif décroche rarement sans prévenir.`, `Elite te montre pourquoi ${a ?? "un sportif"} décroche, avant la blessure ou la stagnation.`],
     progress: [`Lequel de tes sportifs est en retard, et sur quoi ?`, `Elite situe les tests de chaque sportif${de} par rapport à leur cible : forces, faiblesses, priorité.`],
     first: [
-      a && n >= 2 ? `${a} a eu sa décision ce matin. Tes ${n - 1} autres sportifs attendent.` : `${a ?? "Ton sportif"} a eu sa décision ce matin. Demain, sa forme aura changé.`,
-      n >= 2 ? `Avec Elite, chacun de tes ${n} sportifs a la sienne chaque matin, calculée sur sa forme et sa charge.` : `Avec Elite, chaque sportif a la sienne chaque matin, calculée sur sa forme et sa charge.`,
+      a && n >= 2 ? `${a} a eu sa décision aujourd'hui. Tes ${n - 1} autres sportifs attendent.` : `${a ?? "Ton sportif"} a eu sa décision aujourd'hui. Demain, sa forme aura changé.`,
+      n >= 2 ? `Avec Elite, chacun de tes ${n} sportifs a la sienne chaque jour, calculée sur sa forme et sa charge.` : `Avec Elite, chaque sportif a la sienne chaque jour, calculée sur sa forme et sa charge.`,
     ],
     checklist: [
       n >= 2 ? cap(`${hey}tes ${n} sportifs${de} ne récupèrent pas tous pareil.`) : cap(`${hey}tes sportifs${de} ne récupèrent pas tous pareil.`),
-      `Ils suivent pourtant la même séance. Elite te dit chaque matin qui alléger, maintenir ou pousser, et de combien.`,
+      `Ils suivent pourtant la même séance. Elite te dit chaque jour qui alléger, maintenir ou pousser, et de combien.`,
     ],
   }[source];
   return { eyebrow, title: t[0], sub: t[1] };

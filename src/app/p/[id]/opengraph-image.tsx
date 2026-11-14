@@ -17,12 +17,12 @@ export default async function Image({ params }: { params: { id: string } }) {
   const [fonts, icon, photo] = await Promise.all([ogFonts(), ogIcon(), ogPhoto(cover)]);
   const name = (data?.name ?? "").split(/\s[–—-]\s/)[0];
   const meta = [data?.sport, data?.weeks_count ? `${data.weeks_count} semaines` : null].filter(Boolean).join(" · ");
-  const perWeek = data?.sessions_per_week ? `${data.sessions_per_week} séance${data.sessions_per_week > 1 ? "s" : ""} par semaine, ajustée${data.sessions_per_week > 1 ? "s" : ""} à ta forme chaque matin.` : "Un programme qui s'ajuste à ta forme, chaque matin.";
+  const perWeek = data?.sessions_per_week ? `${data.sessions_per_week} séance${data.sessions_per_week > 1 ? "s" : ""} par semaine, ajustée${data.sessions_per_week > 1 ? "s" : ""} à ta forme chaque jour.` : "Un programme qui s'ajuste à ta forme, chaque jour.";
   return new ImageResponse(
     /* Programme introuvable ou privé : l'aperçu générique, sans répéter « programme » trois fois. */
     <OgFrame photo={photo} icon={icon} eyebrow={data ? meta || "Programme" : "Ton point forme, 10 secondes"}
       title={!data ? "Un programme qui s'ajuste à ta forme" : name.length > 70 ? `${name.slice(0, 68).replace(/\s\S*$/, "")}…` : name}
-      sub={data ? perWeek : "Chaque matin, ta séance suit ta récupération."}
+      sub={data ? perWeek : "Chaque jour, ta séance suit ta récupération."}
       ring={<OgRing size={440} value={6} zone={[5, 6]} title={"Séance\nrecalibrée"} glow="#2f9e44" recup={48} charge={52} />} />,
     { ...OG_SIZE, fonts },
   );

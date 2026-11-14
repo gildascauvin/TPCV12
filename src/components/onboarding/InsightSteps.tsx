@@ -403,7 +403,7 @@ export function decideOptions(a: Answers): { value: Pick; label: string }[] {
 }
 export function decideLead(a: Answers): string {
   const k = lowestAnswer(a);
-  return k ? `Ce matin, ${QPHRASE[k]} ${answerWord(k, a[k])}` : "Tout est bon ce matin";
+  return k ? `Aujourd'hui, ${QPHRASE[k]} ${answerWord(k, a[k])}` : "Tout est bon aujourd'hui";
 }
 /* Titre de l'écran séance ajustée : son choix face à la règle. Pas de chiffre ici : la carte de prod juste
    dessous dit déjà « -3 points » et réécrit les séries, un % dans le titre ne collait pas avec elle. */

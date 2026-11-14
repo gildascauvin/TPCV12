@@ -1133,7 +1133,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 sub={lockedSub}
                 /* Gratuit dès le jour 0 (08/11) : compte à rebours vers son prochain point forme + ce qu'il rate. */
                 content={<LockedRendezvous hour={(profile as { push_hour?: number | null }).push_hour ?? 8} missed={missedLine(allSessions, initialDate, profile.created_at ? profile.created_at.slice(0, 10) : null)} />}
-                cta={profile.created_at && profile.created_at.slice(0, 10) >= initialDate ? "Ajuster mes séances chaque matin" : "Voir celle d'aujourd'hui"}
+                cta={profile.created_at && profile.created_at.slice(0, 10) >= initialDate ? "Ajuster mes séances chaque jour" : "Voir celle d'aujourd'hui"}
                 radius={16}
               >
               {decisionGaugeSlot && (

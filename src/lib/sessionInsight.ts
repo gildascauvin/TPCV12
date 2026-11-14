@@ -55,9 +55,9 @@ export function sessionVerdict(s: ResultSession, subject?: string): Verdict | nu
   if (proposed === "low" || proposed === "high") {
     const verb = proposed === "low" ? "alléger" : "pousser";
     const doneWord = proposed === "low" ? "allégée" : "poussée";
-    row = { icon: proposed === "low" ? "⬇" : "⬆", text: `Conseil du matin : ${verb} · séance ${follow.followed ? doneWord : "gardée"}.` };
+    row = { icon: proposed === "low" ? "⬇" : "⬆", text: `Conseil du jour : ${verb} · séance ${follow.followed ? doneWord : "gardée"}.` };
     title =
-      outcome === "justified" ? (follow.followed ? "Allègement justifié : même allégée, la séance a été dure." : "Alerte du matin confirmée.")
+      outcome === "justified" ? (follow.followed ? "Allègement justifié : même allégée, la séance a été dure." : "Alerte du jour confirmée.")
       : outcome === "followed_ok" ? (zg ? `Allégée, ${vsZone(zg, "la zone conseillée")}.` : "Ajustement juste.")
       : outcome === "margin" ? `Alerte de trop : ${had} de la marge.`
       : outcome === "push_right" ? (follow.followed ? (zg ? `Poussée, ${vsZone(zg, "la zone conseillée")}.` : "Surcharge validée.") : `Surcharge justifiée : ${had} de la marge.`)
@@ -71,12 +71,12 @@ export function sessionVerdict(s: ResultSession, subject?: string): Verdict | nu
         : { followed: true, label: subject ? `${subject} a ${proposed === "low" ? "allégé" : "poussé"} sans le noter` : `J'ai ${proposed === "low" ? "allégé" : "poussé"} sans le noter` };
     }
   } else {
-    // Pas de ligne « Conseil du matin : rien à changer. » (06/11, Gildas : le titre le dit déjà).
-    title = outcome === "none_harder" ? "Plus dure que prévu, sans alerte ce matin."
+    // Pas de ligne « Conseil du jour : rien à changer. » (06/11, Gildas : le titre le dit déjà).
+    title = outcome === "none_harder" ? "Plus dure que prévu, sans alerte avant la séance."
       : outcome === "none_easier" ? `Plus facile que prévu : ${had} de la marge.`
-      : zg ? `${cap(vsZone(zg, "prévu"))}, sans alerte ce matin.`
-      : g === 0 ? "Séance comme prévu, conforme à la lecture du matin."
-      : "Dans la zone prévue, conforme à la lecture du matin.";
+      : zg ? `${cap(vsZone(zg, "prévu"))}, sans alerte avant la séance.`
+      : g === 0 ? "Séance comme prévu, conforme à la lecture du jour."
+      : "Dans la zone prévue, conforme à la lecture du jour.";
   }
   return { title, row, outcome, changes, correct };
 }
@@ -102,8 +102,8 @@ export function sessionResult(s: ResultSession, week: WeekSession[], subject?: s
   const hard = others.filter(w => (w.rpe ?? 0) >= 8).length + (s.rpe >= 8 ? 1 : 0);
   if (s.rpe >= 8 && hard >= 2) {
     rows.push({ icon: "⚡", text: subject
-      ? `Sa ${ORD(hard)} séance très dure de la semaine : ${subject} enchaîne. Regarde son ressenti demain matin.`
-      : `Ta ${ORD(hard)} séance très dure de la semaine : tu enchaînes. Demain matin, ton point forme en tiendra compte.` });
+      ? `Sa ${ORD(hard)} séance très dure de la semaine : ${subject} enchaîne. Regarde son point forme demain.`
+      : `Ta ${ORD(hard)} séance très dure de la semaine : tu enchaînes. Demain, ton point forme en tiendra compte.` });
   } else if (s.duration && others.length > 0) {
     const load = (w: { rpe: number | null; duration: number | null }) => (w.rpe ?? 0) * (w.duration ?? 0);
     const total = load(s) + others.reduce((a, w) => a + load(w), 0);

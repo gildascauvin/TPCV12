@@ -47,7 +47,7 @@ async function athleteMorning(admin: Admin, p: Profile, today: string) {
   // La séance la plus dure du jour donne son nom à la notif (POC onboarding v4).
   const planned = (sessions ?? []).filter((s) => !s.done).sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0));
   const main = planned[0];
-  let title = "Comment tu te sens ce matin ?";
+  let title = "Comment tu te sens aujourd'hui ?";
   let body = "Ton point forme en 10 secondes, et ThePerfClub ajuste ta séance.";
   if (first?.date === shiftDate(today, -1) && main) {
     title = "Ta 1re séance ajustée t'attend";
@@ -67,7 +67,7 @@ async function athleteEvening(admin: Admin, p: Profile, today: string) {
      notée. Registre impersonnel, comme l'écran post-séance. */
   const dir = sessions.map(s => s.autoreg_proposal as { proposed?: string | null; date?: string } | null).find(x => x?.date === today && (x.proposed === "low" || x.proposed === "high"))?.proposed;
   return sendOnce(admin, p.user_id, "evening", today, {
-    title: dir ? `${dir === "low" ? "Alléger" : "Pousser"}, conseillé ce matin` : "Ta séance du jour, c'est fait ?",
+    title: dir ? `${dir === "low" ? "Alléger" : "Pousser"}, conseillé aujourd'hui` : "Ta séance du jour, c'est fait ?",
     body: dir ? "Note ta séance en 10 secondes pour vérifier le conseil." : "Note-la en 10 secondes pour ajuster la suite.",
     url: "/today",
     tag: "evening",
@@ -105,7 +105,7 @@ async function coachMorning(admin: Admin, p: Profile, today: string) {
   const names = Array.from(reasons.entries()).map(([id, why]) => `${firstName(real.find((r) => r.user_id === id)?.name) || "Un sportif"} : ${why}`);
   const n = reasons.size;
   return sendOnce(admin, p.user_id, "coach_digest", today, {
-    title: n === 1 ? "1 sportif à regarder ce matin" : `${n} sportifs à regarder ce matin`,
+    title: n === 1 ? "1 sportif à regarder aujourd'hui" : `${n} sportifs à regarder aujourd'hui`,
     body: names.slice(0, 3).join(" · ") + (n > 3 ? ` · +${n - 3}` : ""),
     url: "/coach",
     tag: "coach-digest",

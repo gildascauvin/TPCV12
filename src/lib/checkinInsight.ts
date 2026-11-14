@@ -156,7 +156,7 @@ export function checkinResult(today: CheckinRow, history: CheckinRow[], sessions
         if (bz == null || bz > -Z_SWC) break;
         streak++;
       }
-      if (streak >= 3) return T(`${streak}e matin de suite sous ta norme : la fatigue s'installe. Alléger aujourd'hui, c'est garder la suite.`, { kind: "dim", key: lowest, positive: false });
+      if (streak >= 3) return T(`${streak}e jour de suite sous ta norme : la fatigue s'installe. Alléger aujourd'hui, c'est garder la suite.`, { kind: "dim", key: lowest, positive: false });
     }
 
     // 3. Comportement d'hier qui, chez lui, pèse sur la récupération du lendemain.
@@ -191,24 +191,33 @@ export function checkinResult(today: CheckinRow, history: CheckinRow[], sessions
     }
 
     // 6. Séance dure demain et matin bas.
-    if ((tomorrowDifficulty ?? 0) >= 8 && low) return T("Séance très dure demain : avec ce matin, couche-toi tôt ce soir.", { kind: "load" });
+    if ((tomorrowDifficulty ?? 0) >= 8 && low) return T("Séance très dure demain : avec ta forme du jour, couche-toi tôt ce soir.", { kind: "load" });
 
     // 7. Avec une norme : la question la plus loin de la norme.
     if (relative) {
       // z orienté « plus haut = mieux » (stress inversé) : pour le stress, on parle du stress réel.
       const dom = DIMENSION_KEYS.map(k => ({ k, z: b.dimensions[k].z ?? 0 })).sort((a, c) => Math.abs(c.z) - Math.abs(a.z))[0];
+      /* Le score global d'abord (14/11, Gildas : « matin normal » sous un anneau à 73) : quatre réponses un
+         peu meilleures chacune font un score nettement au-dessus de la norme, sans qu'aucune ne passe seule
+         le seuil. On ne dit « dans ta norme » que si le score global l'est aussi. */
+      const zc = b.composite.z ?? 0;
+      if (Math.abs(dom.z) < Z_MODERATE && Math.abs(zc) >= Z_MODERATE) {
+        return zc > 0
+          ? T("Au-dessus de ta norme aujourd'hui : tes réponses sont meilleures que d'habitude.", { kind: "none" })
+          : T("Sous ta norme aujourd'hui : tes réponses sont un peu moins bonnes que d'habitude, sans point bas marqué.", { kind: "dim", key: lowest, positive: false });
+      }
       if (Math.abs(dom.z) >= Z_MODERATE) {
         const bad = dom.z < 0;
         const side = dom.k === "stress" ? (bad ? "au-dessus" : "en dessous") : (bad ? "en dessous" : "au-dessus");
         return T(`${DIMENSION_LABELS[dom.k]} nettement ${side} de ta norme : c'est ce qui ${bad ? "tire" : "porte"} ton score.`, { kind: "dim", key: dom.k, positive: !bad });
       }
-      return T("Un matin normal pour toi : tes réponses sont dans ta norme.", { kind: "none" });
+      return T("Une journée normale pour toi : tes réponses sont dans ta norme.", { kind: "none" });
     }
 
     // 8. Sans norme : le point bas du matin, en mots.
     return oriented(today, lowest) <= 5
-      ? T(`${lowPhrase(today, lowest)} : c'est ce qui pèse le plus sur ta récup ce matin.`, { kind: "dim", key: lowest, positive: false })
-      : T("Un matin plutôt bon : rien ne te tire vers le bas.", { kind: "none" });
+      ? T(`${lowPhrase(today, lowest)} : c'est ce qui pèse le plus sur ta récup aujourd'hui.`, { kind: "dim", key: lowest, positive: false })
+      : T("Plutôt en forme : rien ne te tire vers le bas.", { kind: "none" });
   })();
 
   return { score: agg.score, zone, relative, day: count <= NORM_DAYS ? count : null, insight: insight.text, theme: insight.theme, advice: dailyAdvice(today, lowest, restDay) };

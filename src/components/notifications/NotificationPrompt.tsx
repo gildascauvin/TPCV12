@@ -52,8 +52,8 @@ export default function NotificationPrompt({ userId, role, show = true }: { user
 
   const title = role === "coach" ? "Sois prévenu quand un sportif a besoin de toi" : `Demain à ${hour}h, ta séance ajustée à ta forme`;
   const body = role === "coach"
-    ? "Une alerte dès qu'un sportif est en récup fragile avant une séance dure, et un résumé chaque matin."
-    : "Un rappel chaque matin pour ton point forme : ta séance s'ajuste à ta réponse.";
+    ? "Une alerte dès qu'un sportif est en récup fragile avant une séance dure, et un résumé chaque jour."
+    : "Un rappel chaque jour pour ton point forme : ta séance s'ajuste à ta réponse.";
 
   return (
     <div style={{ borderRadius: 16, padding: "14px 15px", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.12)", margin: "0 0 16px" }}>

@@ -201,7 +201,7 @@ export function AhaMorningCard({ isMd, session }: { isMd: boolean; session?: Dem
       border: "1.5px solid rgba(255,255,255,.28)", borderRadius: 16, padding: isMd ? "14px 16px" : "10px 12px",
       maxWidth: isMd ? 270 : 214, boxShadow: "0 10px 28px rgba(0,0,0,.4)",
     }}>
-      <div style={{ ...kicker, color: "#ff8a70", marginBottom: isMd ? 9 : 7 }}>Ce matin</div>
+      <div style={{ ...kicker, color: "#ff8a70", marginBottom: isMd ? 9 : 7 }}>Aujourd'hui</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: isMd ? 10 : 8 }}>
         {["😴 Mal dormi", "💼 Stressé"].map(t => (
           <span key={t} style={{ fontSize: isMd ? 10 : 9, padding: "2px 7px", borderRadius: 999, background: "rgba(212,64,0,.22)", color: "#ffd2bf" }}>{t}</span>
@@ -271,11 +271,11 @@ export function AhaBilanPreview({ ses = "séances de force" }: { ses?: string })
   return (
     <BilanSynthesis title="Ton bilan du mois" kicker="APPRIS SUR TOI" headline={<>Ce qui pèse vraiment <span style={{ color: "#c79bf7" }}>sur tes séances.</span></>} blocks={[
       { kicker: "Ce qui te fatigue", color: "#c79bf7", text: "Une soirée te coûte plus qu'une séance très dure.", extra: <>
-        <SynthBar k={k} label="Le matin après une séance très dure" value="68" pct={92} color="rgba(199,155,247,.4)" />
-        <SynthBar k={k} label="Le matin après une soirée" value="62" pct={84} color="#a855f7" />
+        <SynthBar k={k} label="Le lendemain d'une séance très dure" value="68" pct={92} color="rgba(199,155,247,.4)" />
+        <SynthBar k={k} label="Le lendemain d'une soirée" value="62" pct={84} color="#a855f7" />
       </> },
       { kicker: "Ce qui durcit tes séances", color: "#ff8a5c", text: `Le stress durcit tes ${ses}.`, extra:
-        <SynthBar k={k} label="Les matins stressés, plus dures que prévu" value="7 fois sur 9" pct={78} color="#ff6a2b" /> },
+        <SynthBar k={k} label="Les jours stressés, plus dures que prévu" value="7 fois sur 9" pct={78} color="#ff6a2b" /> },
       { kicker: "Tes leviers", color: "#7ee08f", text: "Les soirs de stretching, tu dors 24 min de plus.", extra:
         <div style={{ fontSize: 12, color: "rgba(255,255,255,.6)" }}>Avec : 7h59 · Sans : 7h35</div> },
     ]} />

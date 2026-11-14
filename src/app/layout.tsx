@@ -32,8 +32,8 @@ export const metadata: Metadata = {
   /* Liens absolus des images d'aperçu (opengraph-image, 08/11/2026). */
   metadataBase: new URL("https://go.theperfclub.com"),
   title: "ThePerfClub",
-  description: "Ton point forme en 10 secondes, ta séance ajustée à ta forme chaque matin.",
-  openGraph: { siteName: "ThePerfClub", title: "ThePerfClub", description: "Ton point forme en 10 secondes, ta séance ajustée à ta forme chaque matin.", locale: "fr_FR", type: "website" },
+  description: "Ton point forme en 10 secondes, ta séance ajustée à ta forme chaque jour.",
+  openGraph: { siteName: "ThePerfClub", title: "ThePerfClub", description: "Ton point forme en 10 secondes, ta séance ajustée à ta forme chaque jour.", locale: "fr_FR", type: "website" },
   twitter: { card: "summary_large_image" },
   appleWebApp: {
     capable: true,

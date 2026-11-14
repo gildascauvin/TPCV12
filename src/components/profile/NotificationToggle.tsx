@@ -32,8 +32,8 @@ export default function NotificationToggle({ role = "athlete", initialHour = 8 }
 
   const usable = support === "native" || support === "web";
   const desc = role === "coach"
-    ? "Alerte quand un sportif a besoin de toi, résumé chaque matin"
-    : "Rappel du point forme chaque matin, séance ajustée à ta réponse";
+    ? "Alerte quand un sportif a besoin de toi, résumé chaque jour"
+    : "Rappel du point forme chaque jour, séance ajustée à ta réponse";
 
   return (
     <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 24, padding: "16px 16px", marginBottom: 22 }}>
@@ -67,7 +67,7 @@ export default function NotificationToggle({ role = "athlete", initialHour = 8 }
       </div>
       {usable && on && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(0,0,0,.06)" }}>
-          <span style={{ fontSize: 13, color: "#3b4046" }}>Rappel du matin</span>
+          <span style={{ fontSize: 13, color: "#3b4046" }}>Heure du rappel</span>
           <HourSelect value={hour} onChange={changeHour} />
         </div>
       )}
@@ -80,7 +80,7 @@ export function HourSelect({ value, onChange, dark = false }: { value: number; o
     <select
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
-      aria-label="Heure du rappel du matin"
+      aria-label="Heure du rappel"
       style={{
         fontSize: 16, fontWeight: 700, fontFamily: "var(--font-mono), monospace", borderRadius: 12, padding: "6px 10px",
         border: dark ? "1px solid rgba(255,255,255,.18)" : "1px solid rgba(0,0,0,.12)",

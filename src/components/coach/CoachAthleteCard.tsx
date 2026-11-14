@@ -439,7 +439,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
         </LockedBlur>
       )}
       {/* Gratuit dès le jour 0 (08/11) : compte à rebours vers son prochain point forme + ce qu'il rate, comme /today. */}
-      <LockedBlur locked={!!locked} bare={lockedBare} surface="coach_card" onUnlock={() => onUnlock?.()} title="Décision prête" sub="Vois quoi faire de cette séance." cta="Ajuster ses séances chaque matin" radius={24}
+      <LockedBlur locked={!!locked} bare={lockedBare} surface="coach_card" onUnlock={() => onUnlock?.()} title="Décision prête" sub="Vois quoi faire de cette séance." cta="Ajuster ses séances chaque jour" radius={24}
         content={<LockedRendezvous coach missed={missedLine([...recentSessions, ...sessions], new Date().toLocaleDateString("sv-SE"), athlete.created_at ? athlete.created_at.slice(0, 10) : null, true)} />}>
       <div style={{ textAlign: "center", marginBottom: 12 }}>
         {!locked && <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>

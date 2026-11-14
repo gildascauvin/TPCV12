@@ -178,7 +178,7 @@ function moreCause(c: PhysioCheckin, prior: PhysioCheckin[], restDay: boolean, n
     return {
       short: `tu le sens plus que la nuit ne le montre${rest.length ? ` (${andList(rest.map(k => FEEL_WORD[k]))})` : ""}`,
       long: `Ta nuit est ${night.veryLow ? "sous" : "un peu sous"} ta norme, et tu la sens plus qu'elle ne le montre.`
-        + (rest.length ? ` Ce qui pèse en plus ce matin : ${andList(rest.map(k => FEEL_YOUR[k]))}.` : "")
+        + (rest.length ? ` Ce qui pèse en plus aujourd'hui : ${andList(rest.map(k => FEEL_YOUR[k]))}.` : "")
         + (rest.includes("recovery") ? ` ${legs}` : ""),
     };
   }
@@ -187,7 +187,7 @@ function moreCause(c: PhysioCheckin, prior: PhysioCheckin[], restDay: boolean, n
   if (causes.length === 1) return { short: MORE_CAUSE_SHORT[causes[0]], long: MORE_CAUSE_LONG[causes[0]] + (causes[0] === "recovery" ? ` ${legs}` : "") };
   return {
     short: `${andList(low.map(k => FEEL_WORD[k]))} sous la norme, ce que la nuit ne montre pas`,
-    long: `Ta nuit est bonne. Ce qui te freine ce matin : ${andList(low.map(k => FEEL_YOUR[k]))}, et ça ne se voit pas dans la nuit.`
+    long: `Ta nuit est bonne. Ce qui te freine aujourd'hui : ${andList(low.map(k => FEEL_YOUR[k]))}, et ça ne se voit pas dans la nuit.`
       + (low.includes("recovery") ? ` ${legs}` : ""),
   };
 }

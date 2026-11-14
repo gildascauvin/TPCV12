@@ -152,10 +152,10 @@ export function personalAdjust(signals: PersonalSignal[], shift: number, notes: 
 }
 
 const OPENING: Record<PersonalDim, [string, string]> = {
-  stress: ["Ton stress n'est pas au calme ce matin.", "Son stress n'est pas au calme ce matin."],
+  stress: ["Ton stress n'est pas au calme aujourd'hui.", "Son stress n'est pas au calme aujourd'hui."],
   sleep: ["Ta nuit est moyenne.", "Sa nuit est moyenne."],
-  recovery: ["Ton corps n'est pas frais ce matin.", "Son corps n'est pas frais ce matin."],
-  motivation: ["Ta motivation est en retrait ce matin.", "Sa motivation est en retrait ce matin."],
+  recovery: ["Ton corps n'est pas frais aujourd'hui.", "Son corps n'est pas frais aujourd'hui."],
+  motivation: ["Ta motivation est en retrait aujourd'hui.", "Sa motivation est en retrait aujourd'hui."],
 };
 const FAMILY_WORDS: Record<SessionFamily, string> = {
   force: "de force", puissance: "de puissance", reactivite: "de réactivité", vitesse: "de vitesse", agilite: "d'agilité",

@@ -2262,7 +2262,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           { label: "Lecture de ton programme", detail: claimedName },
           { label: `Analyse du sport${label ? ` : ${label}` : ""}`, detail: "Qualités clés, gestes, charge type" },
           { label: "Préparation de ta semaine 1", detail: weekRows.length ? `${weekRows.length} séances calées sur tes jours` : "Séances calées sur tes jours" },
-          { label: "Branchement de l'ajustement quotidien", detail: "Chaque séance s'ajustera à ta forme du matin" },
+          { label: "Branchement de l'ajustement quotidien", detail: "Chaque séance s'ajustera à ta forme du jour" },
         ] : [
           { label: `Analyse du sport${label ? ` : ${label}` : ""}`, detail: "Qualités clés, gestes, charge type" },
           { label: coach ? "Prise en compte du niveau du groupe" : "Prise en compte de tes faiblesses", detail: weak.length ? weak.slice(0, 3).join(", ") : "Équilibre général" },
@@ -2281,10 +2281,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         <>
           <QuestionShell {...common}
             title={plan
-              ? <>{claimedLabel} Mais il ne sait pas <span style={{ color: "#d44000" }}>comment {who} ce matin.</span></>
-              : <>Voici une séance type{label ? ` de ${label}` : ""}. Elle ne sait pas <span style={{ color: "#d44000" }}>comment {who} ce matin.</span></>}
+              ? <>{claimedLabel} Mais il ne sait pas <span style={{ color: "#d44000" }}>comment {who} aujourd'hui.</span></>
+              : <>Voici une séance type{label ? ` de ${label}` : ""}. Elle ne sait pas <span style={{ color: "#d44000" }}>comment {who} aujourd'hui.</span></>}
             sub={coach
-              ? `${plan ? "Tel quel, il fait faire la même séance à chacun, en forme ou pas." : "Telle quelle, elle se fait pareil, en forme ou pas."} Pense à l'un d'eux et à sa forme ce matin.`
+              ? `${plan ? "Tel quel, il fait faire la même séance à chacun, en forme ou pas." : "Telle quelle, elle se fait pareil, en forme ou pas."} Pense à l'un d'eux et à sa forme aujourd'hui.`
               : `${plan ? "Tel quel, il te fait faire la même séance, en forme ou pas." : "Telle quelle, elle se fait pareil, en forme ou pas."}${next === "ob_health" ? "" : " Un point forme de 10 secondes, et il s'ajuste."}`}
             cta={coach
               ? { label: "Remplir son point forme", onClick: () => setObCheckinOpen(true), busy: !ready }
@@ -2345,7 +2345,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           <>
             <QuestionShell {...common} dark eyebrow="Tes 30 derniers jours"
               title="Ta montre savait. Ta séance, non."
-              sub="Chaque jour rejoué avec tes vraies mesures, comme ThePerfClub l'aurait lu le matin."
+              sub="Chaque jour rejoué avec tes vraies mesures, comme ThePerfClub l'aurait lu ce jour-là."
               onSkip={() => setObCheckinOpen(true)}
               cta={{ label: "Faire mon point forme", onClick: () => setObCheckinOpen(true), busy: obCheckinBusy }}>
               <ReplayStepBody replay={obReplay} />
@@ -2435,7 +2435,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       };
       const title = appSheet ? (coach ? "Tes sportifs, sur ton téléphone" : "Ton point forme de demain, sur ton téléphone")
         : coach ? "Sois prévenu quand un sportif a besoin de toi" : `Demain à ${obNotifHour} h, ton point forme en 10 secondes`;
-      const sub = coach ? "Chaque matin, tu sauras qui a fait son point forme." : "Il dira si ta forme a changé, et ta séance suivra.";
+      const sub = coach ? "Chaque jour, tu sauras qui a fait son point forme." : "Il dira si ta forme a changé, et ta séance suivra.";
       const btn: React.CSSProperties = { width: "100%", padding: "14px 16px", borderRadius: 14, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 15, fontWeight: 800, color: "#fff", background: "linear-gradient(180deg,#f04a08,#d44000)" };
       const toStore = (url: string) => { posthog.capture("onboarding_app_push", { device: webPhone ?? "desktop", surface: "apres_bilan" }); window.open(url, "_blank"); closeNotif(); };
       /* Badges officiels des stores (08/11, Gildas). */
@@ -2539,8 +2539,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       const pickLine = obPick ? (coach ? pickWordsCoach[obPick as PickCoach] : pickWords[obPick as Pick]) ?? "" : "";
       /* 2e phrase = le coût de ne rien faire, au moment d'hésiter (2026-10-31, chantier douleur). */
       const paySub = coach
-        ? `${pickLine ? pickLine + " " : ""}À l'œil, on voit la blessure trop tard. Son point forme de 10 secondes le matin, ta décision en un tap.`
-        : `${pickLine ? pickLine + " " : ""}Au feeling, c'est le même plateau. ThePerfClub te donne la règle chaque matin.`;
+        ? `${pickLine ? pickLine + " " : ""}À l'œil, on voit la blessure trop tard. Son point forme de 10 secondes, ta décision en un tap.`
+        : `${pickLine ? pickLine + " " : ""}Au feeling, c'est le même plateau. ThePerfClub te donne la règle chaque jour.`;
       return (
         <OnboardingBackground variant="dark">
           {obPayStage === "priming" ? (

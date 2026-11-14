@@ -83,7 +83,7 @@ export default function AppBanner({ source, variant = "bar" }: { source: string;
       <img src="/apple-touch-icon.png" alt="" width={38} height={38} style={{ borderRadius: 9, flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 800, color: "#171b1f", lineHeight: 1.2 }}>ThePerfClub</div>
-        <div style={{ fontSize: 12, color: "#6b7177", lineHeight: 1.3 }}>Ta séance ajustée chaque matin, dans l&apos;app</div>
+        <div style={{ fontSize: 12, color: "#6b7177", lineHeight: 1.3 }}>Ta séance ajustée chaque jour, dans l&apos;app</div>
       </div>
       <button type="button" onClick={open}
         style={{ border: 0, borderRadius: 999, background: "#d44000", color: "#fff", fontSize: 13, fontWeight: 800, padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>

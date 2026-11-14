@@ -101,10 +101,10 @@ export function wellnessSlides(w: WellnessInput, sport: string | null): MiniSlid
     const norm: string | null = null;
     slides.push({
       key: "forme", kicker: "" /* « POINT FORME · TA FORME » se répétait (06/11) : le titre suffit */, ...themePhoto(c.theme, sport),
-      hero: { big: c.score, unit: "/100", cap: c.relative ? "ta forme ce matin, comparée à ta norme." : "ta forme ce matin, à partir de tes réponses.", color },
+      hero: { big: c.score, unit: "/100", cap: c.relative ? "ta forme du jour, comparée à ta norme." : "ta forme du jour, à partir de tes réponses.", color },
       /* Anneau récup à la place du grand chiffre et de la barre Fatigué / Frais (2026-11-06, POC « Le curseur est le
          formulaire ») : le point forme se fait sur cet anneau, le bilan le reprend avec le vrai score. */
-      heroNode: <RecupRing score={c.score} norm={c.relative ? 50 : undefined} cap={c.relative ? "ta forme ce matin, comparée à ta norme" : undefined} />,
+      heroNode: <RecupRing score={c.score} norm={c.relative ? 50 : undefined} cap={c.relative ? "ta forme du jour, comparée à ta norme" : undefined} />,
       /* Constat et conseil du jour en un seul paragraphe (06/11, Gildas : plus clean). */
       sub: c.advice ? `${c.insight} ${c.advice}` : c.insight,
       body: <>
@@ -252,7 +252,7 @@ export function sessionSlides(x: SessionInput, sport: string | null, subject?: s
     const off = Math.abs(pct) >= 10;
     slides.push({ key: "prevu", kicker: "RESSENTI VS PRÉVU", photo: "charge", sportPhoto: sp,
       hero: { big: signed(off ? pct : 0), unit: "%", cap: off ? `de charge par rapport au prévu : prévue ${lw(s.target_difficulty)}, ${T("tu l'as", `${subject} l'a`)} ressentie ${lw(s.rpe)}.` : "d'écart avec le prévu : ressentie comme prévue.", color: pct >= 10 ? ORANGE : pct <= -10 ? BLUE : GREEN },
-      sub: T("Demain matin, ton point forme dira si tu l'as encaissée.", "Demain matin, son point forme dira si elle est encaissée."),
+      sub: T("Demain, ton point forme dira si tu l'as encaissée.", "Demain, son point forme dira si elle est encaissée."),
       body: <>
         <Columns feel={s.rpe / 10} measure={s.target_difficulty / 10} band={null} scale={["LÉGÈRE", "T.DURE"]} labels={["Ressenti", "Prévu"]} color={LOAD_COLOR(s.rpe)} ghost
           aria={`Ressenti ${lw(s.rpe)}, prévu ${lw(s.target_difficulty)}`} />

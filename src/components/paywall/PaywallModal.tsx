@@ -443,7 +443,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
                   Elite · {billing === "annual" ? "Annuel" : "Mensuel"}
                 </div>
                 <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2 }}>
-                  {mode === "coach" ? "Tes sportifs, une décision chaque matin." : "Chaque séance ajustée à ta forme."}
+                  {mode === "coach" ? "Tes sportifs, une décision chaque jour." : "Chaque séance ajustée à ta forme."}
                 </div>
               </div>
               {recap}
