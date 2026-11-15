@@ -186,7 +186,9 @@ type BigRingProps = { fluid?: boolean; centerTitle?: string; titleLocked?: boole
   breath?: RingBreath; ambient?: boolean; zoneLabel?: string; kicker?: string;
   axis?: { zone: [number, number]; colors: [string, string] };
   /* Lot 4 (2026-11-06) : la légende de l'essaim ouvre le détail de la récup et de la charge (à la place des onglets). */
-  legend?: RingLegend };
+  legend?: RingLegend;
+  /* Fond vivant derrière l'anneau (15/11) : l'essaim étalé autour de lui, /today seulement. */
+  field?: boolean };
 export type RingLegend = { recup: { value: number | null; color?: string; onClick: () => void }; charge: { value: number | null; color?: string; onClick: () => void } };
 
 /* Jour de repos (08/11, Gildas) : même sens que les autres jours, la difficulté de la journée (« Repos », au
@@ -320,9 +322,84 @@ function useDecisionSwarm(cvRef: React.RefObject<HTMLCanvasElement> | null, live
   }, [cvRef, live]);
 }
 
+/* Fond vivant derrière l'anneau (15/11, POC https://claude.ai/artifact/LVRDPPEoPa3VZhuYgd3P8k) : le même essaim,
+   étalé autour de l'anneau et discret (ellipse centrée un peu sous lui, qui s'éteint sur les bords).
+   - Dans la zone : flux mêlé, à plat, qui respire sur 10 s (homéostasie).
+   - Au-dessus : la charge chauffe, s'agite et monte, le haut se teinte de rouille (inflammation).
+   - En dessous : le flux ralentit, la récup se regroupe en bas, teinte bleu pétrole (récupération).
+   À la décision (magicAt) : aspiration en spirale vers le curseur puis relâche. Mêmes garde-fous que l'essaim :
+   rien n'est dessiné hors écran ni onglet caché, image fixe en mouvement réduit. */
+type FieldGeo = { w: number; h: number; rx: number; ry: number };
+function useDecisionField(cvRef: React.RefObject<HTMLCanvasElement> | null, live: React.MutableRefObject<SwarmLive>, geo: React.MutableRefObject<FieldGeo>) {
+  useEffect(() => {
+    const cv = cvRef?.current; if (!cv) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const NB = window.innerWidth < 640 ? 90 : 120;
+    const B = Array.from({ length: NB }, (_, i) => ({ x0: Math.random(), y0: Math.random(), sd: Math.random(), ph: Math.random() * TAU, cl: Math.floor(Math.random() * 7), ty: i & 1, x: NaN, y: NaN }));
+    let sg = 0, boost = 1, TB = 0, flow = 0, last = performance.now(), raf = 0, visible = true;
+    const born = performance.now();
+    const io = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(([e]) => { visible = e.isIntersecting; });
+    io?.observe(cv);
+    const frame = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      if (!visible || document.hidden) { raf = requestAnimationFrame(frame); return; }
+      const L = live.current, G = geo.current, t = reduce ? 0 : now / 1000, dpr = Math.min(2, window.devicePixelRatio || 1);
+      const W = G.w, H = G.h, g = cv.getContext("2d");
+      if (W && g) {
+        if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+        g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+        const lo = L.lo - 0.3, hi = L.hi + 0.3, dist = L.v < lo ? lo - L.v : L.v > hi ? L.v - hi : 0;
+        const target = L.v > hi ? Math.min(1, dist / 3) : L.v < lo ? -Math.min(1, dist / 3) : 0;
+        sg += (target - sg) * Math.min(1, dt * 2.2);
+        boost += ((L.drag || now - born < 1800 ? 1 : 0) - boost) * Math.min(1, dt * 3);
+        /* Moins amorti que l'essaim de l'anneau : l'état se lit au fond sans glisser. */
+        const s = sg * (0.6 + 0.4 * boost), hot = Math.max(0, s), cold = Math.max(0, -s), calm = 1 - hot - cold;
+        const br = Math.sin((t * TAU) / 10);
+        TB += dt * 0.12 * (1 - 0.85 * cold) * (1 + 1.5 * hot);
+        flow += dt * 14 * (1 - 0.85 * cold) * (1 + 1.8 * hot);
+        const sc = L.size / 300, RX = G.rx, RY = G.ry;
+        const Wr = W * 0.34, Hr = H * 0.34, FX = RX, FY = RY + Hr * 0.3, maxD = Math.hypot(W, H);
+        const me = L.magicAt != null && !reduce ? (now - L.magicAt) / 1000 : 99, f0 = Math.max(0, Math.min(1, (L.v - 1) / 9));
+        if (hot > 0.02) { const gr = g.createRadialGradient(FX, FY - Hr * 0.9, 0, FX, FY - Hr * 0.9, Wr * 1.4); gr.addColorStop(0, `rgba(212,64,0,${(0.22 * hot).toFixed(3)})`); gr.addColorStop(1, "rgba(212,64,0,0)"); g.fillStyle = gr; g.fillRect(0, 0, W, H); }
+        if (cold > 0.02) { const gr = g.createRadialGradient(FX, FY + Hr * 0.9, 0, FX, FY + Hr * 0.9, Wr * 1.4); gr.addColorStop(0, `rgba(47,93,138,${(0.34 * cold).toFixed(3)})`); gr.addColorStop(1, "rgba(47,93,138,0)"); g.fillStyle = gr; g.fillRect(0, 0, W, H); }
+        for (const q of B) {
+          let bx = (q.x0 * W + flow * (0.5 + 0.9 * q.sd)) % W, by = H * (0.5 + (q.y0 - 0.5) * 0.92);
+          by += (cold - hot) * H * 0.2 * (0.4 + q.sd) * (q.ty ? (hot > cold ? 1.25 : 0.8) : (cold > hot ? 1.25 : 0.8));
+          by += Math.sin((bx / W) * TAU * 1.2 + TB * 3 + q.ph) * H * 0.025 * calm * (1 + 0.4 * br);
+          const jit = hot * 22 * sc;
+          bx += jit * Math.sin(t * (3 + 5 * q.sd) + 10 * q.sd); by += jit * Math.cos(t * (2.4 + 4 * q.sd) + 7 * q.sd) - hot * 10 * sc * ((t * (0.6 + q.sd)) % 1);
+          const clx = ((q.cl + 0.5) / 7) * W, cly = H * (0.74 + 0.08 * Math.sin(q.cl * 2.1)), pull = Math.min(1, cold * 1.2) * 0.75;
+          bx += (clx + (q.sd - 0.5) * 70 * sc - bx) * pull; by += (cly + (q.y0 - 0.5) * 50 * sc - by) * pull;
+          if (Number.isNaN(q.x) || Math.abs(bx - q.x) > W * 0.5) { q.x = bx; q.y = by; }
+          q.x += (bx - q.x) * Math.min(1, dt * (2.2 + hot * 5)); q.y += (by - q.y) * Math.min(1, dt * (2.2 + hot * 5));
+          let x = q.x, y = q.y;
+          if (me < 3.2) {
+            const ka = ARC_FROM + f0 * (ARC_TO - ARC_FROM), kx = RX + L.r * Math.cos(ka), ky = RY + L.r * Math.sin(ka);
+            const d0 = Math.hypot(x - kx, y - ky) / maxD, delay = 1 + d0 * 1.6, inK = Math.min(1, me / 0.9), outK = Math.min(1, Math.max(0, (me - delay) / 0.8));
+            const kk = (1 - Math.pow(1 - inK, 3)) * (1 - outK * outK * (3 - 2 * outK)) * (0.55 + 0.45 * (1 - d0));
+            const sp = q.ph * 3 + me * (6 - 3 * inK), sr = (10 + 40 * q.sd) * (1 - 0.5 * inK) * sc;
+            x += (kx + sr * Math.cos(sp) - x) * kk; y += (ky + sr * Math.sin(sp) - y) * kk;
+          }
+          const dom = q.ty ? hot - cold : cold - hot;
+          const sz = (1.3 + hot * q.sd * 1.3 + cold) * (1 + 0.8 * Math.max(0, dom) - 0.45 * Math.max(0, -dom)) * sc * 1.2;
+          const ex = (x - FX) / Wr, ey = (y - FY) / Hr, near = Math.exp(-(ex * ex + ey * ey) * 0.55);
+          const al = (0.3 + 0.1 * q.sd * hot + 0.12 * cold + (0.08 * calm * (br + 1)) / 2) * (1 + 0.6 * Math.max(0, dom) - 0.5 * Math.max(0, -dom)) * near * Math.min(1, (now - born) / 1400);
+          if (al < 0.005) continue;
+          if (hot > 0.3 && q.ty) { g.beginPath(); g.arc(x, y, sz * 3, 0, TAU); g.fillStyle = `rgba(255,120,40,${(0.07 * hot * near).toFixed(3)})`; g.fill(); }
+          g.beginPath(); g.arc(x, y, sz, 0, TAU);
+          g.fillStyle = q.ty ? `rgba(246,128,64,${al.toFixed(3)})` : `rgba(128,184,204,${al.toFixed(3)})`; g.fill();
+        }
+      }
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => { cancelAnimationFrame(raf); io?.disconnect(); };
+  }, [cvRef, live, geo]);
+}
+
 export default function DecisionRing({
   zoneLow, zoneHigh, recoDir, value, onChange, readOnly, plannedMarker, hint: hintOverride, size: sizeProp = 188, light, centerLabel, hideZone = false, hideHint = false, onHint,
-  fluid = false, centerTitle, titleLocked = false, glow, introFrom, breath, ambient = false, zoneLabel, kicker, axis, locked = false, celebrate = false, neutralAt, legend,
+  fluid = false, centerTitle, titleLocked = false, glow, introFrom, breath, ambient = false, zoneLabel, kicker, axis, locked = false, celebrate = false, neutralAt, legend, field = false,
 }: BigRingProps & {
   /* Gratuit (zone masquée) : couleur et essaim lus par rapport à la séance prévue, jamais au conseil. */
   neutralAt?: number;
@@ -504,6 +581,21 @@ export default function DecisionRing({
     ? { v: 1 + 9 * drawValue, lo: 1 + 9 * axis.zone[0], hi: 1 + 9 * axis.zone[1], drag: dragging, r, sw: swBase, cx, cy, size, h, magicAt: magicAt.current }
     : { v: drawValue, lo: hideZone ? (neutralAt ?? value) : zoneLow, hi: hideZone ? (neutralAt ?? value) : zoneHigh, drag: dragging, r, sw: swBase, cx, cy, size, h, magicAt: magicAt.current };
   useDecisionSwarm(swarm ? cvRef : null, swarmLive);
+  const fieldRef = useRef<HTMLCanvasElement>(null);
+  /* Boîte du fond : 2,4 fois l'anneau, sans dépasser l'écran ; l'anneau un peu au-dessus de son centre. */
+  /* Largeur d'écran lue après le montage (pas au rendu serveur : même HTML des deux côtés). */
+  const [vw, setVw] = useState<number | null>(null);
+  useEffect(() => {
+    if (!field) return;
+    const m = () => setVw(window.innerWidth);
+    m(); window.addEventListener("resize", m);
+    return () => window.removeEventListener("resize", m);
+  }, [field]);
+  const fieldW = Math.round(Math.min(size * 2.4, vw ?? size * 2.4)), fieldH = Math.round(h + size * 1.1);
+  const fieldTop = Math.round(cy - fieldH * 0.42);
+  const fieldGeo = useRef<FieldGeo>({ w: fieldW, h: fieldH, rx: fieldW / 2, ry: cy - fieldTop });
+  fieldGeo.current = { w: fieldW, h: fieldH, rx: fieldW / 2, ry: cy - fieldTop };
+  useDecisionField(swarm && field ? fieldRef : null, swarmLive, fieldGeo);
 
   const onHintRef = useRef(onHint);
   onHintRef.current = onHint;
@@ -512,6 +604,7 @@ export default function DecisionRing({
   return (
     <div ref={wrapRef} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: fluid ? "100%" : undefined }}>
       <div style={{ position: "relative", width: size, height: h }}>
+        {swarm && field && <canvas ref={fieldRef} aria-hidden style={{ position: "absolute", left: (size - fieldW) / 2, top: fieldTop, width: fieldW, height: fieldH, pointerEvents: "none", zIndex: 0 }} />}
         {fluid && glow && <div aria-hidden className={breath && !dragging ? "tpc-breath-glow" : undefined} style={{ position: "absolute", left: "50%", top: cy, width: size * 1.15, height: size * 1.15, transform: "translate(-50%, -50%)", borderRadius: "50%", pointerEvents: "none",
           ...(breath ? BREATH_VARS[breath] : {}),
           background: ambient ? `radial-gradient(circle, ${glow}70 0%, ${glow}28 40%, transparent 68%)` : `radial-gradient(circle, ${glow}38 0%, ${glow}12 45%, transparent 70%)`,

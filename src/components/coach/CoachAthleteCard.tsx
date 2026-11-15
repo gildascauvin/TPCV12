@@ -424,6 +424,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
                 shape="ring"
                 ringSize={ringSz}
                 ringFluid
+                ringField
                 ringGlow={badgeColor}
                 ringBreath={ringBreath}
                 ringAmbient={ringAmbient}
@@ -433,8 +434,8 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               />
             </div>
           )
-            : todaySessions.length === 0 || !topSession ? <RestDecisionRing size={ringSz} hideHint fluid glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath="flat" centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked />
-            : <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} hideZone hideHint fluid glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath={doneGap >= 2 ? "low" : "flat"} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked />}
+            : todaySessions.length === 0 || !topSession ? <RestDecisionRing size={ringSz} hideHint fluid field glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath="flat" centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked />
+            : <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} hideZone hideHint fluid field glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath={doneGap >= 2 ? "low" : "flat"} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked />}
         </div>
         </LockedBlur>
       )}
@@ -463,6 +464,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
                 shape="ring"
                 ringSize={ringSz}
                 ringFluid
+                ringField
                 ringGlow={badgeColor}
                 ringBreath={ringBreath}
                 ringAmbient={ringAmbient}
@@ -489,9 +491,9 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             </div>
           ) : todaySessions.length === 0 || !topSession ? (
             /* Jour de repos (08/11) : « Repos » face à sa forme, comme /today. */
-            <RestDecisionRing size={ringSz} hideHint fluid glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath="flat" restZoneHigh={restZoneFromFeel(decision.restFeel)} centerTitle={decision.title ?? restTitle(restZoneFromFeel(decision.restFeel)) ?? decision.text.split("\n")[0]} />
+            <RestDecisionRing size={ringSz} hideHint fluid field glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath="flat" restZoneHigh={restZoneFromFeel(decision.restFeel)} centerTitle={decision.title ?? restTitle(restZoneFromFeel(decision.restFeel)) ?? decision.text.split("\n")[0]} />
           ) : (
-            <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} zone={decision.doneZone} hideHint fluid glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath={doneGap >= 2 ? "low" : "flat"}
+            <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} zone={decision.doneZone} hideHint fluid field glow={badgeColor} ambient={ringAmbient} legend={ringLegend} breath={doneGap >= 2 ? "low" : "flat"}
               zoneLabel={decision.doneZone ? "Optimal" : undefined} introFrom={decision.doneZone ? (decision.doneZone.low + decision.doneZone.high) / 2 : undefined}
               centerTitle={decision.title ?? decision.text.split("\n")[0]} />
           )}

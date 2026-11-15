@@ -563,6 +563,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       ringBreath={breathForDir(decisionLocked ? null : decision.suggestion?.dir)}
       ringAmbient={ringAmbient}
       ringLegend={ringLegend}
+      ringField
       onHint={setRingHint}
       actionsSlot={decisionLocked ? undefined : autoregActionsSlot}
       severityColor={decision.suggestion && !decisionLocked ? decisionColor : undefined}
@@ -616,7 +617,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
        des 7 jours (elle reste dans la légende « Charge »). */
     (() => {
       const zh = decisionLocked ? null : restZoneFromFeel(decision.restFeel);
-      return <RestDecisionRing hideHint fluid glow={decisionColor} ambient={ringAmbient} breath="flat" legend={ringLegend} restZoneHigh={zh}
+      return <RestDecisionRing hideHint fluid field glow={decisionColor} ambient={ringAmbient} breath="flat" legend={ringLegend} restZoneHigh={zh}
         centerTitle={decision.title ?? restTitle(zh) ?? decision.text.split("\n")[0]} titleLocked={decisionLocked} />;
     })()
   ) : (() => {
@@ -627,7 +628,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
        glisser jusqu'au ressenti (l'écart devient un mouvement). */
     const dz = decision.doneZone;
     const gap = doneTop.rpe != null && doneTop.target_difficulty != null ? doneTop.rpe - doneTop.target_difficulty : 0;
-    return <DoneDecisionRing rpe={doneTop.rpe ?? null} planned={doneTop.target_difficulty ?? null} hideZone={decisionLocked} hideHint zone={dz} fluid glow={decisionColor} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked={decisionLocked}
+    return <DoneDecisionRing rpe={doneTop.rpe ?? null} planned={doneTop.target_difficulty ?? null} hideZone={decisionLocked} hideHint zone={dz} fluid field glow={decisionColor} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked={decisionLocked}
       ambient={ringAmbient} breath={gap >= 2 ? "low" : "flat"} legend={ringLegend}
       zoneLabel={dz && !decisionLocked ? "Optimal" : undefined}
       introFrom={dz && !decisionLocked ? (dz.low + dz.high) / 2 : undefined} />;

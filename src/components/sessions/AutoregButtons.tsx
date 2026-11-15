@@ -129,6 +129,8 @@ interface Props {
   ringBreath?: RingBreath;
   ringAmbient?: boolean;
   ringLegend?: RingLegend;
+  /* Fond vivant derrière l'anneau (15/11), /today seulement. */
+  ringField?: boolean;
   /* Gratuit (2026-10-02) : réglage MANUEL de la difficulté, une entrée — jauge sans zone ni
      recommandation, bouton Appliquer seulement après un déplacement. Ce n'est pas une décision :
      pas de « 1re décision » ni de priming déclenchés. */
@@ -145,7 +147,7 @@ interface Props {
   demo?: boolean;
 }
 
-export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize, ringFluid = false, ringGlow, ringBreath, ringAmbient = false, ringLegend, free = false, onHint, onSetDifficulty, storedDecision, viewer = { role: "athlete" }, actionRequest, demo = false }: Props) {
+export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize, ringFluid = false, ringGlow, ringBreath, ringAmbient = false, ringLegend, ringField = false, free = false, onHint, onSetDifficulty, storedDecision, viewer = { role: "athlete" }, actionRequest, demo = false }: Props) {
   const light = variant === "light";
   const hasSuggestion = dir !== undefined;
   // Neutre (ni rouge "Alléger" ni vert "Surcharger") en mode libre — il n'y a pas de recommandation
@@ -443,7 +445,7 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
                 recoDir={dir}
                 light={light}
                 size={ringSize ?? (light ? 150 : 188)}
-                fluid={ringFluid} glow={ringGlow} breath={ringBreath} ambient={ringAmbient} titleLocked={free} neutralAt={free ? plannedDifficulty : undefined} legend={ringLegend}
+                fluid={ringFluid} glow={ringGlow} breath={ringBreath} ambient={ringAmbient} titleLocked={free} neutralAt={free ? plannedDifficulty : undefined} legend={ringLegend} field={ringField}
                 hideZone={free}
                 /* Gratuit (2026-10-12) : le chiffre + son mot (légère / modérée / dure) au centre, plus
                    rien dessous — le RPE seul ne parle pas à tout le monde. */
@@ -510,7 +512,7 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
                   recoDir={decidedPct ? dir : undefined}
                   light={light}
                   size={ringSize ?? (light ? 150 : 188)}
-                  fluid={ringFluid} glow={ringGlow} breath={ringBreath} ambient={ringAmbient} titleLocked={free} neutralAt={free ? plannedDifficulty : undefined} legend={ringLegend}
+                  fluid={ringFluid} glow={ringGlow} breath={ringBreath} ambient={ringAmbient} titleLocked={free} neutralAt={free ? plannedDifficulty : undefined} legend={ringLegend} field={ringField}
                   zoneLow={appliedZone.zoneLow}
                   zoneHigh={appliedZone.zoneHigh}
                   hideZone={free}
