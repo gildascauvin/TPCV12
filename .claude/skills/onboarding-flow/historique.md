@@ -1195,3 +1195,6 @@ Diagnostic accepté par Gildas : la douleur de l'onboarding était petite et tac
 
 ## 15/11/2026 — POC « Onboarding vécu » documenté
 Diagnostic « personne n'entre sa carte » (10/11, pas de bug Stripe, vrai trou = écran de compte), puis 39 versions de maquette du 10 au 14/11. Détail complet, décisions et refus dans `chantier-onboarding-vecu-2026-11.md`. Rien codé.
+
+## 20/11/2026 : onboarding vécu en prod pour tous
+Gildas : « commit deploy et document, pas d'AB test direct tout la prod ». Interrupteur allumé par défaut (b23034b), funnels PostHog vécu créés (ejH1bgIp sportif, BnwGaRwd coach). Derniers retours avant la mise en prod : feuilles blanches retirées partout, sens du déclic aligné sur le point forme, petits écrans (iPhone SE), bouton Continuer sur la Trame, titre compte coach « Chaque séance, réglée sur la forme de tes sportifs. ».

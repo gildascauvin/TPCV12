@@ -151,11 +151,21 @@ Détails et raisons : grep `historique.md` de ce dossier (sections datées, la p
 ## Note native (08/11/2026)
 `requestStoreReview()` est appelée par `onDecided` de `WeekStepBody` (écran `ob_week`), par-dessus l'écran de décision : 3,2 s après Appliquer (jetons atterris), 0,8 s après Maintenir. Plus au bouton « C'est parti ». Voulu par Gildas (note dans l'onboarding, façon Steven Cravotta) : ne pas la déplacer dans l'usage réel.
 
-## Chantier en cours : « Onboarding vécu » (CODÉ EN LOCAL le 15/11, non commité, derrière `?vecu=1`)
+## « Onboarding vécu » : EN PROD POUR TOUS depuis le 20/11 (commit b23034b, pas d'A/B)
+
+**État actuel (20/11)** : parcours vécu par défaut pour sportif, coach et sportif invité, web et apps (les apps chargent go.theperfclub.com).
+- Sportif : Trame → compte → sport → objectif → jours (sautés si /p/) → stagnation + heures → point forme réel (sans « Qu'as-tu prévu ») → [Santé, apps] → déclic → ce que tes réponses disent (« Améliorer mes séances ») → essai → paywall.
+- Coach : Trame coach → compte → sports (sauté si programme) → nombre → comment tu sais → groupe → décision Thomas → ce que tu ne vois pas → essai → paywall → invitation.
+- Sportif invité : Trame (« Invitation de X », sans « Espace coach ») → compte.
+- Funnels PostHog (dashboard 706709, `date_from` 20/11) : sportif `ejH1bgIp`, coach `BnwGaRwd`. Les anciens `6JLNeyfb` / `M71wHM4I` décrivent l'ancien parcours (jusqu'au 20/11).
+- Retour arrière : `?vecu=0` (un appareil) ou `NEXT_PUBLIC_VECU_ONBOARDING=0` sur Vercel + redéploiement (tous).
+- Rappel d'essai : l'événement Stripe `customer.subscription.trial_will_end` doit être coché dans l'endpoint webhook du Dashboard Stripe.
+
+Journal du chantier (15 → 20/11) ci-dessous ; ce qui contredit l'état actuel ci-dessus est dépassé.
 Refonte inscription + onboarding + paywall (sportif et coach, web / iOS / Android) pour faire vivre l'autorégulation avant la carte bancaire. Tout est dans `chantier-onboarding-vecu-2026-11.md` : parcours écran par écran, règles décidées, idées refusées, points ouverts, composants à réutiliser, références (Opal, Mobbin, Levels, Swile, Cravotta). Maquette : https://claude.ai/artifact/61zkoU967UzqLb2dSTYGko ; source locale et captures dans `poc-onboarding-vecu/`.
 
 Code (15/11, local) :
-- Interrupteur `readVecuFlag()` (`onboardingPath.ts`) : ÉTEINT par défaut ; `?vecu=1` / `?vecu=0` (localStorage `tpc_vecu_onboarding`), `NEXT_PUBLIC_VECU_ONBOARDING=1` pour tous. Sportif direct seulement : invité et coach gardent leur parcours (choisir « Mes sportifs » au présignup bascule sur le parcours coach Elite).
+- Interrupteur `readVecuFlag()` (`onboardingPath.ts`) : ALLUMÉ par défaut depuis le 20/11 (avant : éteint) ; `?vecu=1` / `?vecu=0` (localStorage `tpc_vecu_onboarding`), `NEXT_PUBLIC_VECU_ONBOARDING=1` pour tous. Sportif direct seulement : invité et coach gardent leur parcours (choisir « Mes sportifs » au présignup bascule sur le parcours coach Elite).
 - Parcours `vecuAthletePath()` : `value_intro` (rendu `VecuPresignup`) → `account` (`VecuAccount`, carte de membre) → `ob_sport` → `ob_goal` → `ob_days` (jours cochés, 16/11 : remplace `ob_freq`, réaction `daysReaction` = conseil d'alterner dur / léger si jours d'affilée) → `ob_stag` → `ob_habits` → `ob_fact` → `ob_sess` → `ob_note` → `ob_avap` → `ob_path` → `ob_trial` → `ob_pay`. Claimé : sans sport / objectif / rythme. `ob_health` dans les apps (`HealthScreen`, `syncHealthData` puis écran suivant, sans l'ancien point forme). Test : `node scripts/run-onboarding-path-test.mjs`.
 - Écrans : `src/components/onboarding/VecuSteps.tsx` ; calculs : `src/lib/vecuModel.ts`. Vrais composants : `PointFormeRing` (habitudes, `SCALE_WORDS`), `AutoregButtons demo` en anneau avec le fond vivant (`ringField`, `ringHideLegend`), conseil `AlertBox` + `reliefLine`, boutons Alléger / Maintenir qui réécrivent les lignes ; séances types (`getSessionTemplates`) ou séance du programme claimé dans une feuille du bas en carrousel ; « Continuer » après la décision ; après la décision : note du store (apps) ou `AppSheet` + lien par email (web), `SportStepBody`, `goalOptionsFor`, `PaywallModal` (formulaire Stripe après `PayScreen`).
 - Données : `runPrepare` à l'entrée d'`ob_habits` (profil : sport, `objective`, `freq_target` et `training_days` depuis `ob_days`, `onboarding_done`), programme GÉNÉRÉ depuis le 18/11 (voir plus bas) ; programme claimé enregistré comme avant. Réponses de forme dans `user_metadata.ob_vecu` à l'entrée d'`ob_fact`. Aucune ligne `wellness_daily`.
