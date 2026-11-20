@@ -1,5 +1,6 @@
 "use client";
 
+import { pressable } from "@/lib/pressable";
 import { proposalOfDay } from "@/lib/sessionInsight";
 import { flyToken } from "@/lib/flyToken";
 import { markPrimingSource } from "@/lib/primingSource";
@@ -985,14 +986,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                    comme le planning" (2026-09-24) : plus une boîte flottante séparée sous toute
                    la carte wellness, un continuateur de la même liste. */}
                 {todaySessions.length > 0 && (
-                  <div
+                  <div {...pressable(() => { setAddSessionInitialName(undefined); setShowAddSession(true); })}
                     data-tour="add-session-btn"
                     onClick={() => { setAddSessionInitialName(undefined); setShowAddSession(true); }}
                     style={{
                       border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff",
                       borderRadius: 12, padding: "9px 8px", textAlign: "center", fontSize: 11,
                       cursor: "pointer", fontWeight: 700, marginTop: todaySessions.length > 0 ? 6 : 0,
-                      transition: "all .15s",
+                      transition: "background-color .15s ease, border-color .15s ease",
                     }}
                   >
                     + Ajouter une séance

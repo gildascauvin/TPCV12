@@ -1,5 +1,6 @@
 "use client";
 
+import { pressable } from "@/lib/pressable";
 import DayColumn, { WeekSessionCard } from "@/components/calendar/DayColumn";
 import { useState, useEffect, useRef } from "react";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
@@ -732,7 +733,7 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
               const avg = weekAvgLoads[i];
               const on = i === weekIdx;
               return (
-                <div key={i} onClick={() => setWeekIdx(i)} title={`Semaine ${i + 1}`} style={{ width: 14, flexShrink: 0, height: Math.max(4, Math.round((avg / maxAvgLoad) * 24)), borderRadius: "2px 2px 0 0", background: loadBarColor(avg), opacity: on ? 1 : 0.35, outline: on ? "2px solid #171b1f" : "none", outlineOffset: 1, cursor: "pointer" }} />
+                <div {...pressable(() => setWeekIdx(i))} aria-label={`Semaine ${i + 1}`} key={i} onClick={() => setWeekIdx(i)} title={`Semaine ${i + 1}`} style={{ width: 14, flexShrink: 0, height: Math.max(4, Math.round((avg / maxAvgLoad) * 24)), borderRadius: "2px 2px 0 0", background: loadBarColor(avg), opacity: on ? 1 : 0.35, outline: on ? "2px solid #171b1f" : "none", outlineOffset: 1, cursor: "pointer" }} />
               );
             })}
           </div>

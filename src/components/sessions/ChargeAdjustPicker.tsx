@@ -1,5 +1,6 @@
 "use client";
 
+import { pressable } from "@/lib/pressable";
 import { useState, type ReactNode } from "react";
 import { CHARGE_PRESETS, presetOf, adjustLineCharge, type ChargeAdjust, type ChargePreset } from "@/lib/chargeAdjust";
 import { ExerciseLineView, type ExerciseLineViewData } from "@/components/sessions/ExerciseLineView";
@@ -71,7 +72,7 @@ export default function ChargeAdjustPicker({ value, onChange, title = "Charge de
         {PRESET_CARDS.map(m => {
           const on = preset === m.key;
           return (
-            <div key={m.key} onClick={() => pick(m.key)} style={{ border: `2px solid ${on ? "#d44000" : "#eee"}`, background: on ? "rgba(212,64,0,.05)" : "#fff", borderRadius: 16, padding: "12px 8px", textAlign: "center", cursor: "pointer" }}>
+            <div {...pressable(() => pick(m.key))} aria-pressed={on} key={m.key} onClick={() => pick(m.key)} style={{ border: `2px solid ${on ? "#d44000" : "#eee"}`, background: on ? "rgba(212,64,0,.05)" : "#fff", borderRadius: 16, padding: "12px 8px", textAlign: "center", cursor: "pointer" }}>
               <div style={{ fontSize: 20, marginBottom: 4 }}>{m.icon}</div>
               <div style={{ fontSize: 12.5, fontWeight: 800, color: on ? "#d44000" : "#171b1f" }}>{m.label}</div>
             </div>

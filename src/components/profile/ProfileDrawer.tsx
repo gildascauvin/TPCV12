@@ -250,7 +250,7 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
                       <button
                         key={s} onClick={() => setSport(prev => (prev === s ? "" : s))}
                         style={{
-                          padding: "7px 13px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all .14s",
+                          padding: "7px 13px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "background-color .15s ease, border-color .15s ease, color .15s ease, transform .12s ease, filter .12s ease",
                           border: sport === s ? "1px solid rgba(212,64,0,.40)" : "1px solid rgba(0,0,0,.10)",
                           background: sport === s ? "rgba(212,64,0,.08)" : "#f7f8f9",
                           color: sport === s ? "#d44000" : "#62686e",
@@ -272,7 +272,7 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
                       <button
                         key={label} onClick={() => setSexe(val)}
                         style={{
-                          flex: 1, padding: "10px 10px", borderRadius: 12, fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "all .14s",
+                          flex: 1, padding: "10px 10px", borderRadius: 12, fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "background-color .15s ease, border-color .15s ease, color .15s ease, transform .12s ease, filter .12s ease",
                           border: sexe === val ? "1px solid rgba(212,64,0,.40)" : "1px solid rgba(0,0,0,.10)",
                           background: sexe === val ? "rgba(212,64,0,.08)" : "#f7f8f9",
                           color: sexe === val ? "#d44000" : "#62686e",

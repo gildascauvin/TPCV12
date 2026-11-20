@@ -372,7 +372,7 @@ export default function WellnessModal({ date, onSave, onClose, cancelLabel = "An
           border: checked ? `1px solid ${negative ? "rgba(255,140,90,.65)" : "rgba(127,219,143,.6)"}` : "1px solid rgba(255,255,255,.12)",
           background: checked ? (negative ? "rgba(212,64,0,.18)" : "rgba(47,158,68,.16)") : "rgba(255,255,255,.04)",
           color: checked ? (negative ? "#ffc8a8" : "#a8e6b4") : "rgba(255,255,255,.72)",
-          fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left", transition: "all 0.14s",
+          fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left", transition: "background-color .15s ease, border-color .15s ease, color .15s ease, transform .12s ease, filter .12s ease",
         }}>
         <span style={{ fontSize: 16 }}>{b.emoji}</span>{checked ? "✓ " : ""}{b.label}
         {behaviorCost[b.key] != null && <CostBadge impact={behaviorCost[b.key]} />}

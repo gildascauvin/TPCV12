@@ -1,5 +1,6 @@
 "use client";
 
+import { pressable } from "@/lib/pressable";
 import { Skel } from "@/components/ui/Skeleton";
 import LockedBlur from "@/components/paywall/LockedBlur";
 import { Fragment, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
@@ -2065,7 +2066,7 @@ export function TestLine({ row, expanded, autoAdd = false, onToggle, onQuickAdd,
   const dateText = row.date ? `${row.date}${row.nextLabel ? ` · ${row.nextLabel}` : ""}` : hideDate ? null : "Pas encore testé";
   return (
     <div style={{ borderBottom: bare ? undefined : "1px solid rgba(255,255,255,.06)", padding: bare ? "8px 0 0" : "13px 2px" }}>
-      <div onClick={onToggle} style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+      <div {...pressable(onToggle)} onClick={onToggle} style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
         <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{row.emoji}</div>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>

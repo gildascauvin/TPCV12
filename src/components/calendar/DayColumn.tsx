@@ -1,5 +1,6 @@
 "use client";
 
+import { pressable } from "@/lib/pressable";
 import MiniScoreArc from "@/components/ui/MiniScoreArc";
 import { ExerciseLineView, ExerciseLinesBox, SessionSynthesis, exerciseViews, type ExerciseLineViewData } from "@/components/sessions/ExerciseLineView";
 import { validDecision, type AutoregDecisionRecord } from "@/lib/autoregDecisionRecord";
@@ -233,7 +234,7 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
           termine pas une séance qui n'a pas eu lieu). Aujourd'hui : Démarrer + « Déjà faite ? ».
           Jour passé : Terminer. Dupliquer vit désormais dans le tiroir d'édition. */}
       {!hideActions && session.done && (session.duration || session.rpe) ? (
-        <div onClick={e => { e.stopPropagation(); onComplete(session); }} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, cursor: "pointer" }}>
+        <div {...pressable(() => onComplete(session))} onClick={e => { e.stopPropagation(); onComplete(session); }} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, cursor: "pointer" }}>
           {[{ v: session.duration, l: "MIN", c: "#d44000" }, { v: session.rpe, l: "DIFF.", c: "#d44000" }].map(t => t.v ? (
             <div key={t.l} style={{ background: "#f7f8f9", borderRadius: 8, padding: "5px 4px", textAlign: "center" }}>
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 15, fontWeight: 700, color: t.c, lineHeight: 1 }}>{t.v}</div>
@@ -370,10 +371,10 @@ export default function DayColumn<T extends SessionLike>({ todayRing, ringState,
           <WeekSessionCard key={s.id} session={s} onComplete={onComplete} onEdit={onEdit} onDuplicate={onDuplicate} />
         ))}
         {!hideAddSession && !showEmptyToday && (
-          <div
+          <div {...pressable(() => onAddSession(dstr))}
             data-tour="add-session-btn"
             onClick={e => { e.stopPropagation(); onAddSession(dstr); }}
-            style={{ border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 12, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700, transition: "all .15s" }}
+            style={{ border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 12, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700, transition: "background-color .15s ease, border-color .15s ease" }}
           >
             + Ajouter une séance
           </div>

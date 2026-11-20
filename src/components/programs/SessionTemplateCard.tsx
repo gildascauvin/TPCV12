@@ -1,3 +1,4 @@
+import { pressable } from "@/lib/pressable";
 import type { SessionTemplate, WeekTemplate } from "@/types";
 import SessionRing from "@/components/calendar/SessionRing";
 import { ExerciseLineView, ExerciseLinesBox, SessionSynthesis, exerciseViews, type ExerciseLineViewData } from "@/components/sessions/ExerciseLineView";
@@ -47,7 +48,7 @@ export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef
   const views = exerciseViews(exercises, adjustPct);
   const gaugeValue = gaugeOverride ?? session.target_difficulty ?? null;
   return (
-    <div ref={cardRef} onClick={concealed ? undefined : onClick} style={{
+    <div {...pressable(concealed ? null : onClick)} ref={cardRef} onClick={concealed ? undefined : onClick} style={{
       cursor: onClick && !concealed ? "pointer" : "default",
       border: "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 16,
       padding: "10px 11px", boxShadow: "0 2px 10px rgba(0,0,0,0.045)",

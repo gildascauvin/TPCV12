@@ -243,14 +243,14 @@ select:focus {
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-[10px]
            bg-accent text-white font-bold text-sm
-           hover:bg-accent-strong transition-all duration-150
+           hover:bg-accent-strong transition-[background-color,border-color,transform,filter] duration-150
            border border-accent/20;
   }
 
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-[10px]
            bg-[#f4f4f4] text-text font-semibold text-sm
-           hover:bg-[#ececec] transition-all duration-150
+           hover:bg-[#ececec] transition-[background-color,border-color,transform,filter] duration-150
            border border-black/[0.08];
   }
 
@@ -373,6 +373,13 @@ html.native input, html.native textarea, html.native [contenteditable="true"] { 
 .tpc-press { transition: transform .14s ease, filter .14s ease; -webkit-tap-highlight-color: transparent; }
 /* Pas d'enfoncement de la carte quand c'est un bouton ou un élément glissable à l'intérieur qu'on presse. */
 .tpc-press:active:not(:has(button:active, a:active, input:active, textarea:active, [data-no-press]:active, [aria-roledescription]:active)) { transform: scale(.985); filter: brightness(.96); }
+/* Focus clavier (2026-11-20) : anneau orange visible uniquement au clavier (:focus-visible ne s'allume
+   pas au tap ni au clic). !important pour passer devant les outline:none posés en style inline.
+   Les champs texte gardent leur bordure orange (règle input:focus plus haut). */
+:where(button, a, summary, select, [role="button"], [role="slider"], [role="tab"], [role="switch"], [role="radio"], [role="checkbox"], [tabindex]:not([tabindex="-1"]), input[type="checkbox"], input[type="radio"], input[type="range"]):focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
 .tpc-exit { animation: tpcFadeOut .18s ease forwards !important; pointer-events: none; }
 .tpc-exit > * { animation: tpcPanelOut .18s cubic-bezier(.4,0,1,1) forwards !important; }
 @keyframes tpcFadeOut { to { opacity: 0; } }

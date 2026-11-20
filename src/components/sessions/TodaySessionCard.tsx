@@ -1,5 +1,6 @@
 "use client";
 
+import { pressable } from "@/lib/pressable";
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
@@ -162,7 +163,7 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
       {/* 4. Résultat (séance faite) : durée et difficulté réelle, sans bouton — un tap dessus rouvre
           la saisie du résultat pour le corriger (2026-10-02). */}
       {session.done && (session.duration || session.rpe) ? (
-        <div onClick={e => { e.stopPropagation(); onComplete?.(session); }} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, cursor: "pointer" }}>
+        <div {...pressable(onComplete ? () => onComplete(session) : null)} onClick={e => { e.stopPropagation(); onComplete?.(session); }} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, cursor: "pointer" }}>
           {session.duration ? (
             <div style={{ background: "#f7f8f9", borderRadius: 16, padding: "9px 8px", textAlign: "center" }}>
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#d44000", letterSpacing: "-0.02em", lineHeight: 1 }}>{session.duration}</div>

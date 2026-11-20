@@ -117,7 +117,7 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
                         border: checked ? "1.5px solid rgba(212,64,0,.35)" : "1.5px solid rgba(0,0,0,.09)",
                         borderRadius: 16, padding: "10px 12px",
                         cursor: "pointer", textAlign: "left",
-                        transition: "all 0.15s ease",
+                        transition: "background-color .15s ease, border-color .15s ease, color .15s ease, transform .12s ease, filter .12s ease",
                       }}
                     >
                       <div style={{

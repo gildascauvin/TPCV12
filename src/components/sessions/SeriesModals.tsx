@@ -1,5 +1,6 @@
 "use client";
 
+import { pressable } from "@/lib/pressable";
 import { useState } from "react";
 import ChargeAdjustPicker from "@/components/sessions/ChargeAdjustPicker";
 import { NO_ADJUST, type ChargeAdjust } from "@/lib/chargeAdjust";
@@ -19,7 +20,7 @@ const SECONDARY: React.CSSProperties = { padding: "12px 18px", borderRadius: 12,
 
 function Radio({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 14px", borderRadius: 16, border: `1.5px solid ${on ? "#d44000" : "rgba(0,0,0,.08)"}`, background: on ? "rgba(212,64,0,.04)" : "#fff", marginBottom: 8, cursor: "pointer", fontSize: 14, fontWeight: 600, color: "#171b1f" }}>
+    <div {...pressable(onClick)} aria-pressed={on} onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 14px", borderRadius: 16, border: `1.5px solid ${on ? "#d44000" : "rgba(0,0,0,.08)"}`, background: on ? "rgba(212,64,0,.04)" : "#fff", marginBottom: 8, cursor: "pointer", fontSize: 14, fontWeight: 600, color: "#171b1f" }}>
       <span style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${on ? "#d44000" : "#c9c6c1"}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {on && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#d44000" }} />}
       </span>
