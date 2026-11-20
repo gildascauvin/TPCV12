@@ -4,13 +4,10 @@ import { isNativeApp } from "@/lib/nativeGoogleAuth";
 import { NativePurchasePanel } from "./NativeCheckout";
 import { useEffect, useRef, useState } from "react";
 import posthog from "posthog-js";
-import { ElitePlanCard, PrimingExtras, PricingSideLink, PRICING_PRIMING_GUARANTEE_CAPTION, paywallSimIos } from "./PricingPriming";
+import { ElitePlanCard, PrimingExtras, PricingSideLink, PRICING_PRIMING_GUARANTEE_CAPTION } from "./PricingPriming";
 import LossSheet, { lossSheetDue, markLossSheetSeen, type LossStake } from "./LossSheet";
 import { RiskTimeline } from "./RiskTimeline";
-import ExitOffer from "./ExitOffer";
-import { acceptExitOffer, exitOfferEligible, markExitOfferSeen, setNativeExitReady } from "@/lib/exitOffer";
-import { createClient } from "@/lib/supabase/client";
-import { exitStoreOffer, getStoreProducts, type ExitStoreOffer } from "@/lib/nativePurchases";
+import ExitFeedback, { exitFeedbackDue, markExitFeedbackSeen } from "./ExitFeedback";
 import { PAYWALL_CTA_LABEL } from "./PaywallModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
@@ -60,21 +57,6 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
   const anchorCount = athleteCount ?? ((ctx?.athleteNames.length ?? 0) >= 5 ? ctx?.athleteNames.length : undefined);
   const [exitOpen, setExitOpen] = useState(false);
   const [lossOpen, setLossOpen] = useState(false);
-  /* Apps (2026-11-02) : offre de sortie du store préchargée ; tant qu'elle n'est pas là (produits iOS
-     pas encore validés, offre Play absente), la croix garde la feuille de perte. */
-  const [storeExit, setStoreExit] = useState<Record<"monthly" | "annual", ExitStoreOffer> | null>(null);
-  useEffect(() => {
-    if (!isNativeApp()) return;
-    let alive = true;
-    (async () => {
-      const { data: { user } } = await createClient().auth.getUser();
-      if (!user) return;
-      const products = await getStoreProducts(user.id);
-      const annual = exitStoreOffer(products, mode, "annual"), monthly = exitStoreOffer(products, mode, "monthly");
-      if (alive && annual && monthly) { setStoreExit({ annual, monthly }); setNativeExitReady(true); }
-    })().catch(e => console.error("[exit-offer] store", e));
-    return () => { alive = false; setNativeExitReady(false); };
-  }, [mode]);
 
   useEffect(() => {
     clearPrimingSource();
@@ -130,29 +112,29 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
       <div style={{ textAlign: "center", fontSize: 12, color: "rgba(255,255,255,.5)" }}>{PRICING_PRIMING_GUARANTEE_CAPTION}</div>
     </>
   );
-  /* Fermeture (croix, clic hors modale) : la 1re fois sur le web, l'offre de sortie passe avant (src/lib/exitOffer.ts). */
+  /* Fermeture (croix, clic hors modale) : la 1re fois (web et apps), « Qu'est-ce qui te retient ? »
+     (ExitFeedback, 15/11, remplace l'offre de sortie DEPART30) ; ensuite la feuille de perte, une fois par jour. */
   const requestClose = () => {
-    // Là où l'offre de sortie n'existe pas (apps, ou déjà vue), feuille de perte, une fois par jour (LossSheet.tsx).
-    if (!lossOpen && (paywallSimIos() || !exitOfferEligible()) && lossSheetDue()) {
+    if (!exitOpen && exitFeedbackDue()) {
+      markExitFeedbackSeen();
+      posthog.capture("paywall_exit_feedback_viewed", { plan: mode, source });
+      setExitOpen(true);
+      return;
+    }
+    if (!lossOpen && lossSheetDue()) {
       markLossSheetSeen();
       posthog.capture("paywall_loss_sheet_viewed", { plan: mode, source });
       setLossOpen(true);
-      return;
-    }
-    if (!paywallSimIos() && exitOfferEligible() && !ctx.everPaid) {
-      markExitOfferSeen();
-      posthog.capture("exit_offer_viewed", { plan: mode, source });
-      setExitOpen(true);
       return;
     }
     close();
   };
   escCloseRef.current = requestClose;
   const exitOffer = exitOpen && (
-    <ExitOffer mode={mode} billing={billing} setBilling={setBilling} storeOffers={storeExit}
-      onPurchased={() => { posthog.capture("exit_offer_accepted", { plan: mode, source, billing }); posthog.capture("trial_started", { plan: mode, billing, method: "app_store", promo: "DEPART30" }); if (onPurchased) onPurchased(); else window.location.reload(); }}
-      onAccept={() => { posthog.capture("exit_offer_accepted", { plan: mode, source, billing }); acceptExitOffer(); onContinue(); }}
-      onDecline={() => { posthog.capture("exit_offer_declined", { plan: mode, source }); close(); }} />
+    <ExitFeedback mode={mode} name={displayName} source={source}
+      onResume={() => setExitOpen(false)}
+      onMonthly={() => { setBilling("monthly"); setExitOpen(false); onContinue(); }}
+      onLeave={() => { setExitOpen(false); close(); }} />
   );
   const lossSheet = lossOpen && (
     <LossSheet mode={mode} stake={lossStake}

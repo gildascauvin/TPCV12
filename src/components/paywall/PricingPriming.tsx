@@ -90,7 +90,8 @@ function ValuePath({ steps, hitIndex, hitLabel }: { steps: ValueStep[]; hitIndex
 
 /* Formules l'une sous l'autre (2026-10-30), partagées par le paywall et l'offre de sortie (ExitOffer). */
 export type OfferRow = { b: Billing; label: string; big: string; unit: string; small: React.ReactNode; badge?: string; tag?: string };
-export function OfferRows({ rows, billing, setBilling }: { rows: OfferRow[]; billing: Billing; setBilling: (b: Billing) => void }) {
+/* `check` (onboarding vécu, 16/11) : case cochée façon Opal à la place du bouton radio. */
+export function OfferRows({ rows, billing, setBilling, check }: { rows: OfferRow[]; billing: Billing; setBilling: (b: Billing) => void; check?: boolean }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }} role="radiogroup" aria-label="Formule">
       {rows.map(r => {
@@ -104,7 +105,12 @@ export function OfferRows({ rows, billing, setBilling }: { rows: OfferRow[]; bil
             transition: "background .15s, border-color .15s",
           }}>
             {r.tag && <span style={{ position: "absolute", top: 0, right: 14, transform: "translateY(-50%)", fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#fff", background: "#D44000", borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap" }}>{r.tag}</span>}
-            <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: "50%", border: on ? "6px solid #ff8a55" : "2px solid rgba(255,255,255,.35)", transition: "border .15s" }} />
+            {check ? (
+              <span aria-hidden style={{ flexShrink: 0, width: 22, height: 22, borderRadius: "50%", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 900, color: "#fff",
+                background: on ? "#ff5a14" : "transparent", border: on ? "none" : "2px solid rgba(255,255,255,.35)", transition: "background .15s" }}>{on ? "✓" : ""}</span>
+            ) : (
+              <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: "50%", border: on ? "6px solid #ff8a55" : "2px solid rgba(255,255,255,.35)", transition: "border .15s" }} />
+            )}
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "flex", alignItems: "center", gap: "4px 8px", flexWrap: "wrap" }}>
                 <span style={{ fontSize: 14.5, fontWeight: 800 }}>{r.label}</span>

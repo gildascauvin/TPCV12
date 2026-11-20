@@ -165,7 +165,7 @@ const metaChip: React.CSSProperties = {
 };
 
 let libraryCache: Promise<LibraryProgram[]> | null = null;
-function loadLibrary(): Promise<LibraryProgram[]> {
+export function loadLibrary(): Promise<LibraryProgram[]> {
   if (!libraryCache) {
     libraryCache = fetch("/api/programs/library")
       .then(r => (r.ok ? r.json() : Promise.reject()))

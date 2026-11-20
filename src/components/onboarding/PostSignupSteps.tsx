@@ -144,12 +144,14 @@ export function OptionCard({ icon, label, hint, on, onClick }: { icon: React.Rea
   );
 }
 
-export function ChoiceChip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+/* `noCheck` (20/11, Gildas) : sans le ✓, pour les jours (la coche faisait passer la rangée à la ligne). La sélection
+   reste lisible sans la couleur : bordure épaisse + fond. */
+export function ChoiceChip({ on, onClick, children, noCheck }: { on: boolean; onClick: () => void; children: React.ReactNode; noCheck?: boolean }) {
   return (
-    <button type="button" onClick={onClick}
+    <button type="button" onClick={onClick} aria-pressed={on}
       style={{ padding: "10px 14px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 14, color: on ? ORANGE : INK,
         border: on ? `2px solid ${ORANGE}` : `1px solid ${LINE}`, background: on ? "rgba(212,64,0,.06)" : "#fff" }}>
-      {on ? "✓ " : ""}{children}
+      {on && !noCheck ? "✓ " : ""}{children}
     </button>
   );
 }

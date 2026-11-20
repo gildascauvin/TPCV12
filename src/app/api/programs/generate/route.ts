@@ -1,4 +1,5 @@
 import type { ProgramTemplate, WeekTemplate, SessionTemplate, ProgramLevel, ProgramFocus, SessionLoad, SessionType } from "@/types";
+import { WEAKNESS_LINES } from "@/lib/weaknessLines";
 import { seriesFromRepeats } from "@/lib/sessionSeries";
 import { familiesIn, movementFamily } from "@/lib/movementFamily";
 
@@ -3250,28 +3251,28 @@ const SPORT_CURRICULUM: Partial<Record<SportCategory, (dayCount: number, ctx?: C
 // exactement comme pour n'importe quel autre archétype de curriculum.
 export interface WeaknessMeta { extraLine: string; typeHints: SessionType[] }
 const WEAKNESS_META: Record<string, WeaknessMeta> = {
-  jambes:            { extraLine: "Squat — 3×12\nFentes marchées — 3×12", typeHints: ["volume", "intensite", "technique"] },
-  dos_bras:          { extraLine: "Tirage horizontal — 3×12\nCurl haltères — 3×12", typeHints: ["volume", "intensite", "technique"] },
-  pecs_epaules:      { extraLine: "Développé incliné haltères — 3×12\nÉlévations latérales — 3×12", typeHints: ["volume", "intensite", "technique"] },
-  dos:               { extraLine: "Tirage vertical — 3×12\nRowing haltère — 3×12 par bras", typeHints: ["volume", "intensite", "technique"] },
-  pectoraux:         { extraLine: "Développé couché — 3×12\nÉcarté couché — 3×12", typeHints: ["volume", "intensite", "technique"] },
-  epaules:           { extraLine: "Développé militaire — 3×12\nÉlévations latérales — 3×12", typeHints: ["volume", "intensite", "technique"] },
-  bras:              { extraLine: "Curl haltères — 3×12\nExtension triceps poulie — 3×12", typeHints: ["volume", "intensite", "technique"] },
-  arrache:           { extraLine: "Snatch balance — 4×3@60%\nTirage arraché — 4×3@90%", typeHints: ["technique", "volume", "recuperation"] },
-  epaule_jete:       { extraLine: "Épaulé suspendu — 4×3@65%\nJerk balance — 4×3@60%", typeHints: ["technique", "volume", "recuperation"] },
-  mobilite:          { extraLine: "Squat cosaque — 2×8 par côté\nBascule adducteurs à genou — 2×10", typeHints: ["technique", "recuperation", "volume"] },
-  vitesse:           { extraLine: "Sprints courts : 4×20m départ arrêté (récup complète)", typeHints: ["intensite", "volume"] },
-  endurance_vitesse: { extraLine: "Répétitions longues : 4×150m allure soutenue", typeHints: ["volume", "intensite"] },
-  endurance_fond:    { extraLine: "Extension endurance fondamentale : +10 min à allure facile", typeHints: ["volume", "recuperation"] },
-  explosivite:       { extraLine: "Squat jump — 4×6", typeHints: ["intensite", "volume"] },
-  technique:         { extraLine: "Travail technique ciblé (vidéo/feedback) — 15 min", typeHints: ["technique", "volume", "recuperation"] },
-  technique_course:  { extraLine: "Éducatifs de course : montées de genoux + talons-fesses — 4×20m", typeHints: ["technique", "volume", "recuperation"] },
-  recuperation:      { extraLine: "Récupération active ciblée : mobilité + étirements — 15 min", typeHints: ["recuperation", "technique", "volume"] },
-  cardio:            { extraLine: "Finisher cardio vélo ou rameur : 10 min zone modérée", typeHints: ["volume", "intensite"] },
-  force_generale:    { extraLine: "Squat — 3×10\nTirage horizontal — 3×10\nPlanche — 3×40s", typeHints: ["volume", "intensite", "technique"] },
-  puissance:         { extraLine: "Box jump — 4×5\nPush press — 4×5@70%", typeHints: ["intensite", "volume"] },
-  gainage:           { extraLine: "Planche — 3×40s\nPallof press tenu — 3×30s par côté", typeHints: ["technique", "volume", "recuperation"] },
-  frappe:            { extraLine: "Sac lourd : 5×10 frappes puissance maximale", typeHints: ["intensite", "volume"] },
+  jambes:            { extraLine: WEAKNESS_LINES.jambes, typeHints: ["volume", "intensite", "technique"] },
+  dos_bras:          { extraLine: WEAKNESS_LINES.dos_bras, typeHints: ["volume", "intensite", "technique"] },
+  pecs_epaules:      { extraLine: WEAKNESS_LINES.pecs_epaules, typeHints: ["volume", "intensite", "technique"] },
+  dos:               { extraLine: WEAKNESS_LINES.dos, typeHints: ["volume", "intensite", "technique"] },
+  pectoraux:         { extraLine: WEAKNESS_LINES.pectoraux, typeHints: ["volume", "intensite", "technique"] },
+  epaules:           { extraLine: WEAKNESS_LINES.epaules, typeHints: ["volume", "intensite", "technique"] },
+  bras:              { extraLine: WEAKNESS_LINES.bras, typeHints: ["volume", "intensite", "technique"] },
+  arrache:           { extraLine: WEAKNESS_LINES.arrache, typeHints: ["technique", "volume", "recuperation"] },
+  epaule_jete:       { extraLine: WEAKNESS_LINES.epaule_jete, typeHints: ["technique", "volume", "recuperation"] },
+  mobilite:          { extraLine: WEAKNESS_LINES.mobilite, typeHints: ["technique", "recuperation", "volume"] },
+  vitesse:           { extraLine: WEAKNESS_LINES.vitesse, typeHints: ["intensite", "volume"] },
+  endurance_vitesse: { extraLine: WEAKNESS_LINES.endurance_vitesse, typeHints: ["volume", "intensite"] },
+  endurance_fond:    { extraLine: WEAKNESS_LINES.endurance_fond, typeHints: ["volume", "recuperation"] },
+  explosivite:       { extraLine: WEAKNESS_LINES.explosivite, typeHints: ["intensite", "volume"] },
+  technique:         { extraLine: WEAKNESS_LINES.technique, typeHints: ["technique", "volume", "recuperation"] },
+  technique_course:  { extraLine: WEAKNESS_LINES.technique_course, typeHints: ["technique", "volume", "recuperation"] },
+  recuperation:      { extraLine: WEAKNESS_LINES.recuperation, typeHints: ["recuperation", "technique", "volume"] },
+  cardio:            { extraLine: WEAKNESS_LINES.cardio, typeHints: ["volume", "intensite"] },
+  force_generale:    { extraLine: WEAKNESS_LINES.force_generale, typeHints: ["volume", "intensite", "technique"] },
+  puissance:         { extraLine: WEAKNESS_LINES.puissance, typeHints: ["intensite", "volume"] },
+  gainage:           { extraLine: WEAKNESS_LINES.gainage, typeHints: ["technique", "volume", "recuperation"] },
+  frappe:            { extraLine: WEAKNESS_LINES.frappe, typeHints: ["intensite", "volume"] },
 };
 
 // Lignes propres à un sport quand la ligne générique ne convient pas (2026-11-02) : en powerlifting,

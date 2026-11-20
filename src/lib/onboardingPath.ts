@@ -27,12 +27,16 @@ export type StepId =
   | "account"
   // Questions post-signup (2026-10-05) : la configuration du « device » (le programme).
   | "ob_sport" | "ob_program" | "ob_import" | "ob_goal" | "ob_weak" | "ob_days" | "ob_invite"
+  // Onboarding vécu coach (18/11) : « Comment tu sais qu'un sportif est fatigué ? » (miroir de l'impuissance).
+  | "ob_know"
   // Parcours Elite (2026-10-17).
   | "ob_when" | "ob_mirror" | "ob_health" | "ob_checkin" | "ob_week" | "ob_notif" | "ob_pay"
   // Parcours Elite coach (2026-10-19) : taille du groupe, puis Coach Control démo.
   | "ob_count" | "ob_control"
   // Argumentaire avant paywall (2026-10-29).
-  | "ob_plan" | "ob_decide" | "ob_insight";
+  | "ob_plan" | "ob_decide" | "ob_insight"
+  // Onboarding vécu (2026-11-15, POC 61zkoU967UzqLb2dSTYGko v40) : questions de forme, problème, déclic, offre.
+  | "ob_freq" | "ob_stag" | "ob_habits" | "ob_fact" | "ob_sess" | "ob_note" | "ob_avap" | "ob_path" | "ob_trial";
 
 export const ATHLETE_PATH: StepId[] = ["value_intro", "decision_2a", "account"];
 export const COACH_PATH: StepId[] = ["value_intro", "decision_2b", "account"];
@@ -62,6 +66,28 @@ export interface PathOptions {
   pushAvailable?: boolean;
   /** false dès qu'on sait qu'aucun programme n'a été créé (génération ou import en échec). */
   programReady?: boolean;
+  /** Onboarding vécu (sportif direct seulement pour l'instant). */
+  vecu?: boolean;
+}
+
+/* Onboarding vécu, sportif : value_intro = présignup, account = carte de membre. Pas de programme créé
+   (chantier activation à part). Programme claimé : sport, objectif et rythme sont connus par le programme. */
+export function vecuAthletePath(o: Pick<PathOptions, "claimed" | "healthAvailable">): StepId[] {
+  /* v55 (20/11, Gildas) : plus de point faible ni de « Ce que tu gagnes » (ob_path, le paywall le porte). ob_habits =
+     le VRAI point forme du jour (« Qu'as-tu prévu aujourd'hui ? » puis les questions de l'app), enregistré. */
+  const q: StepId[] = o.claimed ? [] : ["ob_sport", "ob_goal", "ob_days"];
+  /* Le point forme enchaîne sur le déclic (20/11) ; « Ce que tes réponses disent » vient après, personnalisé par lui. */
+  return ["value_intro", "account", ...q, "ob_stag", "ob_habits", ...(o.healthAvailable ? ["ob_health" as StepId] : []),
+    "ob_sess", "ob_fact", "ob_trial", "ob_pay"];
+}
+
+/* Onboarding vécu, coach (18/11, parallèle du sportif) : même présignup (Trame, voix coach), questions du groupe,
+   miroir de l'impuissance, déclic au radar, offre au prix par sportif, puis l'invitation du premier sportif. */
+export function vecuCoachPath(o: Pick<PathOptions, "claimed">): StepId[] {
+  /* Pas d'objectif (18/11, Gildas : chaque sportif a le sien). Sports : plusieurs choix possibles. */
+  const q: StepId[] = o.claimed ? ["ob_count"] : ["ob_sport", "ob_count"];
+  /* v55 (20/11) : déclic avant « Ce que ça dit de ton groupe », plus d'écran de gains (le paywall le porte). */
+  return ["value_intro", "account", ...q, "ob_know", "ob_habits", "ob_sess", "ob_fact", "ob_trial", "ob_pay", "ob_invite"];
 }
 
 export function isInvitedAthlete(o: Pick<PathOptions, "role" | "invited">): boolean {
@@ -71,6 +97,8 @@ export function isInvitedAthlete(o: Pick<PathOptions, "role" | "invited">): bool
 export function buildOnboardingPath(o: PathOptions): StepId[] {
   const invited = isInvitedAthlete(o);
   const coach = o.role === "coach";
+  if (o.vecu && !coach && !invited) return vecuAthletePath(o);
+  if (o.vecu && coach) return vecuCoachPath(o);
 
   if (!o.elite) {
     if (invited) return INVITE_ATHLETE_PATH;
@@ -128,6 +156,22 @@ export function readEliteFlag(): boolean {
     const p = new URLSearchParams(window.location.search).get("elite");
     if (p === "1" || p === "0") localStorage.setItem(ELITE_KEY, p);
     const s = localStorage.getItem(ELITE_KEY);
+    if (s === "1") return true;
+    if (s === "0") return false;
+  } catch { /* stockage bloqué */ }
+  return envOn;
+}
+
+/* Interrupteur de l'onboarding vécu : ALLUMÉ pour tous depuis le 20/11 (Gildas : toute la prod, pas d'A/B).
+   `?vecu=0` l'éteint sur un appareil (mémorisé), NEXT_PUBLIC_VECU_ONBOARDING=0 l'éteint pour tous. */
+const VECU_KEY = "tpc_vecu_onboarding";
+export function readVecuFlag(): boolean {
+  const envOn = process.env.NEXT_PUBLIC_VECU_ONBOARDING !== "0";
+  if (typeof window === "undefined") return envOn;
+  try {
+    const p = new URLSearchParams(window.location.search).get("vecu");
+    if (p === "1" || p === "0") localStorage.setItem(VECU_KEY, p);
+    const s = localStorage.getItem(VECU_KEY);
     if (s === "1") return true;
     if (s === "0") return false;
   } catch { /* stockage bloqué */ }

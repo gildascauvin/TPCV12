@@ -20,7 +20,10 @@ import DoneBurst, { useJustDone } from "@/components/sessions/DoneBurst";
    retiré par `body.ath-dark`, contrairement à `.card`/`.ana-card`) : contraste volontaire, contenu
    actionnable qui doit "ressortir" du fond sombre ambiant. Retour explicite de Gildas : "les
    background des séances doivent rester light (même dans le wellness card, partout)". ─── */
-export default function TodaySessionCard({ session, onComplete, onEdit, previewPct, onReorderExercises, authorName, hideGauge, onStart, viewer = "athlete", concealed, flashOriginal }: {
+export default function TodaySessionCard({ session, onComplete, onEdit, previewPct, onReorderExercises, authorName, hideGauge, onStart, viewer = "athlete", concealed, flashOriginal, statusLabel, hideShare }: {
+  /** Onboarding vécu (17/11) : étiquette à la place de « Prévu » (« Séance type »), sans bouton de partage. */
+  statusLabel?: string;
+  hideShare?: boolean;
   /* Décision qu'on vient d'appliquer (2026-11-06) : les lignes changées montrent l'ancienne valeur et flashent. */
   flashOriginal?: string | null;
   /* Difficulté que laissait attendre la FC de la séance (physioCompare.ts) : 3e tuile « ♥ CŒUR ». */
@@ -104,9 +107,9 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
             background: session.done ? "rgba(47,158,68,.13)" : "rgba(212,64,0,0.10)",
             color: session.done ? "#2f9e44" : "#d44000",
           }}>
-            {session.done ? "Terminé" : live ? `● En cours · ${formatChrono(liveElapsedMs(session))}` : "Prévu"}
+            {session.done ? "Terminé" : live ? `● En cours · ${formatChrono(liveElapsedMs(session))}` : statusLabel ?? "Prévu"}
           </span>
-          {!concealed && <ShareButton
+          {!concealed && !hideShare && <ShareButton
             resourceType="session"
             buildSnapshot={() => ({
               name: session.name,

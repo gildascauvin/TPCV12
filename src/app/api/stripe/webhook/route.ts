@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { markBrevoClient } from "@/lib/email/brevoContact";
+import { sendTrialReminderEmail } from "@/lib/email/trialReminderEmail";
+import { sendTrialPush } from "@/lib/trialPush";
 
 function getServiceClient() {
   return createServiceClient(
@@ -68,6 +70,38 @@ export async function POST(request: Request) {
           .from("profiles")
           .update({ subscription_status: "expired" })
           .eq("user_id", userId);
+      }
+      break;
+    }
+    /* 3 jours avant la fin de l'essai : rappel par email et notification, tout de suite (3 jours) ou à J-2
+       si c'est son choix (user_metadata.trial_reminder_days, onboarding vécu). L'événement doit être coché
+       dans l'endpoint du Dashboard Stripe. Essai déjà résilié : rien à rappeler. */
+    case "customer.subscription.trial_will_end": {
+      const sub = event.data.object as Stripe.Subscription;
+      const userId = sub.metadata?.user_id;
+      if (!userId || sub.cancel_at_period_end || sub.status !== "trialing" || !sub.trial_end) break;
+      const { data } = await supabase.auth.admin.getUserById(userId);
+      const user = data?.user;
+      if (!user?.email) break;
+      const days = user.user_metadata?.trial_reminder_days === 2 ? 2 : 3;
+      const trialEnd = new Date(sub.trial_end * 1000);
+      const remindAt = new Date(trialEnd.getTime() - days * 86400_000);
+      remindAt.setUTCHours(8, 0, 0, 0);
+      const later = days === 2 && remindAt.getTime() > Date.now() + 3600_000;
+      const { data: prof, error: profErr } = await supabase.from("profiles").select("name").eq("user_id", userId).maybeSingle();
+      if (profErr) console.error("[trial-reminder] profile", profErr.message);
+      const price = sub.items.data[0]?.price;
+      await sendTrialReminderEmail(user.email, {
+        first: (prof?.name as string | null)?.trim().split(/\s+/)[0] || null,
+        trialEnd, amountCents: price?.unit_amount ?? null, interval: price?.recurring?.interval ?? null,
+        daysLeft: days, sendAt: later ? remindAt : undefined,
+      }).catch(e => console.error("[trial-reminder] send", e));
+      if (later) {
+        // Notification du jour J-2 : partie au passage de 9 h de /api/push/send (trialReminderPushes).
+        const { error: metaErr } = await supabase.auth.admin.updateUserById(userId, { user_metadata: { ...user.user_metadata, trial_push_at: remindAt.toISOString(), trial_end_at: trialEnd.toISOString() } });
+        if (metaErr) console.error("[trial-reminder] metadata", metaErr.message);
+      } else {
+        await sendTrialPush(supabase, userId, trialEnd, days).catch(e => console.error("[trial-reminder] push", e));
       }
       break;
     }

@@ -51,3 +51,6 @@ description: Règles de texte et de design visuel de ThePerfClub, à relire avan
 - Pas d'annonce de données futures dans les bilans (« dès ton 5e point forme… ») : on dit ce qu'on sait dès J0.
 - Côté coach : « sa norme », jamais « ta norme ».
 - Pas de pastille de difficulté dans l'encadré du jour : l'anneau dit déjà la difficulté ; un seul mot par niveau (Facile / Dure / Très dure).
+
+## 18/11/2026
+- Onboarding vécu : **une phrase par ligne**. Quand un texte affiché contient plusieurs phrases, on va à la ligne après chaque point (helper `sent()` dans `VecuSteps.tsx`, sans lookbehind regex pour Safari < 16.4). Pour un titre écrit en JSX, mettre `<br />` après le point.

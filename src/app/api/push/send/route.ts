@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runLifecycleEmails } from "@/lib/email/lifecycle";
 import { sendOnce } from "@/lib/pushSend";
+import { trialReminderPushes } from "@/lib/trialPush";
 import { qualitativeDifficulty } from "@/lib/autoregulation";
 
 /* Passage horaire des notifications (2026-10-14), déclenché par pg_cron (Supabase, gratuit) au lieu
@@ -171,7 +172,10 @@ async function handle(req: Request) {
   const lifecycleSent = parisHour === 9
     ? await runLifecycleEmails(admin).catch((err) => { console.error("[lifecycle]", err); return null; })
     : null;
-  return Response.json({ ok: true, sent, lifecycleSent });
+  const trialSent = parisHour === 9
+    ? await trialReminderPushes(admin).catch((err) => { console.error("[trial-push]", err); return null; })
+    : null;
+  return Response.json({ ok: true, sent, lifecycleSent, trialSent });
 }
 
 export async function GET(req: Request) { return handle(req); }

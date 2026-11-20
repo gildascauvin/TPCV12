@@ -188,7 +188,12 @@ type BigRingProps = { fluid?: boolean; centerTitle?: string; titleLocked?: boole
   /* Lot 4 (2026-11-06) : la légende de l'essaim ouvre le détail de la récup et de la charge (à la place des onglets). */
   legend?: RingLegend;
   /* Fond vivant derrière l'anneau (15/11) : l'essaim étalé autour de lui, /today seulement. */
-  field?: boolean };
+  field?: boolean;
+  /* Sans la légende Récup / Charge de l'essaim (onboarding vécu, 15/11). */
+  hideLegend?: boolean;
+  /* Fond vivant plus haut et fondu sur tous ses bords (présignup « Trame », 17/11) : sur un écran noir, sans
+     contenu autour, le cadre du canvas se voyait. */
+  fieldFade?: boolean };
 export type RingLegend = { recup: { value: number | null; color?: string; onClick: () => void }; charge: { value: number | null; color?: string; onClick: () => void } };
 
 /* Jour de repos (08/11, Gildas) : même sens que les autres jours, la difficulté de la journée (« Repos », au
@@ -399,7 +404,7 @@ function useDecisionField(cvRef: React.RefObject<HTMLCanvasElement> | null, live
 
 export default function DecisionRing({
   zoneLow, zoneHigh, recoDir, value, onChange, readOnly, plannedMarker, hint: hintOverride, size: sizeProp = 188, light, centerLabel, hideZone = false, hideHint = false, onHint,
-  fluid = false, centerTitle, titleLocked = false, glow, introFrom, breath, ambient = false, zoneLabel, kicker, axis, locked = false, celebrate = false, neutralAt, legend, field = false,
+  fluid = false, centerTitle, titleLocked = false, glow, introFrom, breath, ambient = false, zoneLabel, kicker, axis, locked = false, celebrate = false, neutralAt, legend, field = false, hideLegend = false, fieldFade = false,
 }: BigRingProps & {
   /* Gratuit (zone masquée) : couleur et essaim lus par rapport à la séance prévue, jamais au conseil. */
   neutralAt?: number;
@@ -591,7 +596,7 @@ export default function DecisionRing({
     m(); window.addEventListener("resize", m);
     return () => window.removeEventListener("resize", m);
   }, [field]);
-  const fieldW = Math.round(Math.min(size * 2.4, vw ?? size * 2.4)), fieldH = Math.round(h + size * 1.1);
+  const fieldW = Math.round(Math.min(size * 2.4, vw ?? size * 2.4)), fieldH = Math.round(h + size * (fieldFade ? 2 : 1.1));
   const fieldTop = Math.round(cy - fieldH * 0.42);
   const fieldGeo = useRef<FieldGeo>({ w: fieldW, h: fieldH, rx: fieldW / 2, ry: cy - fieldTop });
   fieldGeo.current = { w: fieldW, h: fieldH, rx: fieldW / 2, ry: cy - fieldTop };
@@ -604,7 +609,8 @@ export default function DecisionRing({
   return (
     <div ref={wrapRef} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: fluid ? "100%" : undefined }}>
       <div style={{ position: "relative", width: size, height: h }}>
-        {swarm && field && <canvas ref={fieldRef} aria-hidden style={{ position: "absolute", left: (size - fieldW) / 2, top: fieldTop, width: fieldW, height: fieldH, pointerEvents: "none", zIndex: 0 }} />}
+        {swarm && field && <canvas ref={fieldRef} aria-hidden style={{ position: "absolute", left: (size - fieldW) / 2, top: fieldTop, width: fieldW, height: fieldH, pointerEvents: "none", zIndex: 0,
+          ...(fieldFade ? { maskImage: "radial-gradient(ellipse 50% 50% at 50% 50%, #000 45%, transparent 100%)", WebkitMaskImage: "radial-gradient(ellipse 50% 50% at 50% 50%, #000 45%, transparent 100%)" } : {}) }} />}
         {fluid && glow && <div aria-hidden className={breath && !dragging ? "tpc-breath-glow" : undefined} style={{ position: "absolute", left: "50%", top: cy, width: size * 1.15, height: size * 1.15, transform: "translate(-50%, -50%)", borderRadius: "50%", pointerEvents: "none",
           ...(breath ? BREATH_VARS[breath] : {}),
           background: ambient ? `radial-gradient(circle, ${glow}70 0%, ${glow}28 40%, transparent 68%)` : `radial-gradient(circle, ${glow}38 0%, ${glow}12 45%, transparent 70%)`,
@@ -731,7 +737,7 @@ export default function DecisionRing({
             </button>
           ))}
         </div>
-      ) : swarm && <div aria-hidden style={{ display: "flex", gap: 14, justifyContent: "center", marginTop: 2, fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: light ? "rgba(23,27,31,.6)" : "rgba(255,255,255,.55)" }}>
+      ) : swarm && !hideLegend && <div aria-hidden style={{ display: "flex", gap: 14, justifyContent: "center", marginTop: 2, fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: light ? "rgba(23,27,31,.6)" : "rgba(255,255,255,.55)" }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><i style={{ width: 7, height: 7, borderRadius: "50%", background: "#80b8cc" }} />Récup</span>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><i style={{ width: 7, height: 7, borderRadius: "50%", background: "#f6803f" }} />Charge</span>
       </div>}

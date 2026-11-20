@@ -281,8 +281,9 @@ export default function PointFormeRing({ value, min = MIN, max = MAX, ticks = 10
         <canvas ref={cvRef} aria-hidden style={{ position: "absolute", left: "-12%", top: "-12%", width: "124%", height: "124%", pointerEvents: "none", zIndex: 2 }} />
         <div style={{ position: "relative", zIndex: 1 }} dangerouslySetInnerHTML={{ __html: ringSvg(f, score, fin, !labels && !wordOf && !final, palette, ticks) }} />
         <div ref={centerRef} style={{ position: "absolute", left: 0, right: 0, top: `${centerY}%`, transform: "translateY(-50%)", zIndex: 3, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", pointerEvents: "none" }}>
-          <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 4, maxWidth: "60%" }}>{centerScore && !final ? centerScore.label : kicker}</span>
-          {centerScore && !final ? (
+          <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 4, maxWidth: "60%" }}>{centerScore ? centerScore.label : kicker}</span>
+          {/* Le score reste au centre en fin de questions (17/11, Gildas : « Ce qui revient dans ta semaine »). */}
+          {centerScore ? (
             <strong style={{ fontFamily: "var(--font-mono), monospace", fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1, color: "#fff" }}>{centerScore.value == null ? "–" : Math.round(centerScore.value)}</strong>
           ) : final ? (
             <strong style={{ fontSize: 26, fontWeight: 900, letterSpacing: "-0.02em", lineHeight: 1.05 }}>{placeholder}</strong>

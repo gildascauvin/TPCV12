@@ -48,12 +48,15 @@ export async function GET() {
     const admin = createAdminClient();
     const [athRes, assignRes] = await Promise.all([
       // Vrai sportif seulement (inscrit ou invité) : le sportif démo ne compte pas.
-      supabase.from("coach_athletes").select("id").eq("coach_id", user.id).or("user_id.not.is.null,invite_email.not.is.null").limit(1),
-      admin.from("program_assignments").select("id, programs(name)").eq("coach_id", user.id).eq("status", "active"),
+      supabase.from("coach_athletes").select("id").eq("coach_id", user.id).or("user_id.not.is.null,invite_email.not.is.null"),
+      admin.from("program_assignments").select("id, athlete_id, user_id, programs(name)").eq("coach_id", user.id).eq("status", "active"),
     ]);
+    /* Thomas (démo) ne compte pas (20/11, Gildas) : le programme de l'onboarding lui est assigné, il faut une
+       assignation à un vrai sportif (inscrit ou invité). */
+    const realIds = new Set((athRes.data ?? []).map(r => r.id));
     const ownAssign = (assignRes.data ?? []).some(a => {
       const p = Array.isArray(a.programs) ? a.programs[0] : a.programs;
-      return (p as { name?: string } | null)?.name !== "Programme démo";
+      return (p as { name?: string } | null)?.name !== "Programme démo" && ((!!a.athlete_id && realIds.has(a.athlete_id)) || (!!a.user_id && a.user_id !== user.id));
     });
     steps = [
       // Toujours faite : la checklist ne part pas de 0 (2026-10-01).

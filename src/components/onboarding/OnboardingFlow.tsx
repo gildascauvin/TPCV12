@@ -13,6 +13,7 @@ import { sessionsComplement } from "@/lib/sportCategories";
 import { isNativeApp, nativeGoogleSignIn, nativeAppleSignIn } from "@/lib/nativeGoogleAuth";
 import { useState, useEffect, useRef } from "react";
 import posthog from "posthog-js";
+import { plannedSession, PLANNED_RPE, type PlannedIntensity } from "@/lib/plannedIntensity";
 import { createClient } from "@/lib/supabase/client";
 import { getSessionTemplates } from "@/lib/sessionTemplates";
 import { buildCoachDemoSessions } from "@/lib/coachDemoSessions";
@@ -26,7 +27,7 @@ import { AhaMorningCard, type DemoSession } from "@/components/onboarding/AhaPre
 import { PAYWALL_AVATARS } from "@/components/paywall/paywallAvatars";
 import Actions from "@/components/onboarding/Actions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
-import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, PROGRAM_QUESTION_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
+import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, readVecuFlag, ELITE_STEPS, PROGRAM_QUESTION_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
 import { COUNT_OPTIONS, HealthStepBody, WeekStepBody, PlannedWeekBody, NOTIF_HOURS, type ObCount, type WeekSession } from "@/components/onboarding/EliteSteps";
 import { requestStoreReview } from "@/lib/storeReview";
 import type { HealthRow } from "@/lib/deviceWellness";
@@ -46,6 +47,18 @@ const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 import { signupPlatform, isAndroidApp, healthAppName } from "@/lib/native";
+import { WEAKNESS_LINES } from "@/lib/weaknessLines";
+import {
+  VecuPresignup, VecuAccount, QuestionScreen, FactScreen, SessScreen, NoteScreen, AvapScreen, PathScreen, TrialScreen, PayScreen,
+  HealthScreen, AppSheet, EffortScreen, IllusReaction, GoalIllus, DaysIllus, goodDays, type VecuSession,
+  RoutineScreen, coachMessage, CoachBlindScreen, CoachHabitsScreen, CoachFactScreen, CoachPathScreen, CoachPayScreen, VecuFrame, Sheet, Pill,
+} from "@/components/onboarding/VecuSteps";
+import ExitFeedback, { exitFeedbackDue, markExitFeedbackSeen } from "@/components/paywall/ExitFeedback";
+import { NativePurchasePanel } from "@/components/paywall/NativeCheckout";
+import {
+  FREQ_OPTIONS, STAG_OPTIONS, FREQ_REACTIONS, STAG_REACTIONS, sportReaction, goalReaction, coachGoalReaction, goalPhrase as vecuGoalPhrase, habitsScore, effortHours, demoLoads, daysReaction,
+  type VecuHabits,
+} from "@/lib/vecuModel";
 
 type Level = "beginner" | "intermediate" | "elite";
 
@@ -65,6 +78,11 @@ function templateWeekRows(tpl: ProgramTemplate): WeekSession[] {
   })).sort((a, b) => a.date.localeCompare(b.date));
 }
 
+/* Nom court du test /o/ pour la ligne de la Trame (« Ton résultat … est gardé »). */
+const O_TEST_KICKER: Record<string, string> = {
+  detente: "de détente", rsi: "de drop jump", "1rm": "de 1RM", sprint: "de sprint", vo2max: "de VO2max", fcmax: "de FC max",
+  zones: "de zones cardiaques", zone2: "de zone 2", vfc: "de VFC", bronco: "au Bronco test", eur: "CMJ / Squat Jump",
+};
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 /* Messages Supabase de l'inscription, en français (31/10 : ils s'affichaient en anglais). */
@@ -337,6 +355,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [hasCoachInvite, setHasCoachInvite] = useState<boolean | null>(null);
   const [coachInviteCode, setCoachInviteCode] = useState<string | null>(null);
   const [coachInviteName, setCoachInviteName] = useState<string | null>(null);
+  const [oTestKey, setOTestKey] = useState<string | null>(null);
   const [inviteJoinFailed, setInviteJoinFailed] = useState(false);
 
   /* Les A/B tests "short-onboarding-signup" et "skip-value-intro" (control/test de la position du
@@ -503,6 +522,36 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [obBilling, setObBilling] = useState<"monthly" | "annual">("annual");
   const builtRef = useRef<{ name: string; sport: string; template: ProgramTemplate } | null>(null);
 
+  /* Onboarding vécu (2026-11-15, src/components/onboarding/VecuSteps.tsx), derrière ?vecu=1. */
+  const [vecu] = useState(readVecuFlag);
+  const [vcPicked, setVcPicked] = useState(false);
+  const [obFreq, setObFreq] = useState<number | null>(null);
+  /* Jours d'entraînement (0 = lundi), à la place du nombre de séances (16/11, Gildas) : fréquence, récupération entre
+     les séances, et training_days pour générer son programme plus tard. */
+  const [vcDays, setVcDays] = useState<number[]>([]);
+  const [obStag, setObStag] = useState<number | null>(null);
+  const [obHabits, setObHabits] = useState<VecuHabits>({ sleep: null, stress: null, recovery: null });
+  const [obBeh, setObBeh] = useState<string[]>([]);
+  /* v55 : réponse à « Qu'as-tu prévu aujourd'hui ? » et score du point forme du jour (déclic). */
+  const [obPlanned, setObPlanned] = useState<PlannedIntensity | null>(null);
+  const [obTodayScore, setObTodayScore] = useState<number | null>(null);
+  /* Réaction posée sur la photo après une réponse (~2,3 s), puis l'écran suivant. */
+  const [vcReact, setVcReact] = useState<string | null>(null);
+  /* Réaction affichée : elle reste jusqu'au tap (16/11, plus de minuteur). */
+  const vcReactOn = useRef(false);
+  /* Page de l'effort après « depuis quand » (16/11). */
+  const [vcEffort, setVcEffort] = useState(false);
+  const [vcReactNode, setVcReactNode] = useState<React.ReactNode>(null);
+  const [vcAppSheet, setVcAppSheet] = useState(false);
+  /* Programme généré pendant le parcours vécu (semaine 1 = séances de démo du déclic). */
+  const [vcBuilt, setVcBuilt] = useState<ProgramTemplate | null>(null);
+  const demoGenRef = useRef(false);
+  /* Coach vécu : réponse à « Comment tu sais qu'un sportif est fatigué ? ». */
+  const [vcKnow, setVcKnow] = useState<string | null>(null);
+  const [vcSports, setVcSports] = useState<string[]>([]);
+  const [vcExit, setVcExit] = useState(false);
+  const [vcBusy, setVcBusy] = useState(false);
+
   /* Ancien fallback "coach → 4 jours par défaut, pas de sélecteur" (2026-08-14) supprimé le
      2026-08-19 : déjà mort en pratique depuis la 3e itération du 2026-08-17 (days_2a redemande de
      vrais jours aux deux rôles, voir sa doc plus bas — "ce choix réel le remplace"), mais inoffensif
@@ -594,6 +643,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const getPath = (r: Role, has: ObHas = obHas, programOk: boolean | null = obProgramOk): StepId[] => buildOnboardingPath({
     role: r, has, claimed: !!hasClaimedProgram, invited: !!hasCoachInvite,
     elite, coachPaying, healthAvailable, pushAvailable, programReady: programOk === false ? false : undefined,
+    vecu,
   });
   const path         = getPath(role);
   // Tout parcours sauf celui du sportif invité (ni profil généré ni sportif démo).
@@ -612,6 +662,37 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     savedObStepRef.current = currentStep;
     createClient().auth.updateUser({ data: { ob_step: currentStep } }).then(({ error }) => { if (error) console.error("[onboarding] ob_step", error.message); });
   }, [currentStep, userId, newUserId]);
+  /* Vécu : profil (sport, objectif, rythme) et onboarding_done dès les habitudes, comme le parcours Elite ;
+     ses réponses de forme gardées sur le compte au moment du problème. */
+  /* Le sportif invité a aussi la Trame (20/11, Gildas), puis le compte, rien d'autre. */
+  const vecuInvited = vecu && isInvitedAthlete({ role, invited: !!hasCoachInvite });
+  const vecuPath = vecu && (path.includes("ob_habits") || vecuInvited);
+  useEffect(() => {
+    const uid = userId || newUserId;
+    if (!vecuPath) return;
+    /* Sans compte (?dbgstep, ou si la préparation n'a pas tourné) : le programme est généré pour la démo du déclic
+       seulement, rien n'est enregistré. Le générateur ne demande pas de compte. */
+    if (!uid) {
+      if ((currentStep === "ob_habits" || currentStep === "ob_fact" || currentStep === "ob_sess") && !vcBuilt && !demoGenRef.current) {
+        demoGenRef.current = true;
+        obBuildProgram().then(b => { if (b) setVcBuilt(b.template); else demoGenRef.current = false; }).catch(() => { demoGenRef.current = false; });
+      }
+      return;
+    }
+    if (currentStep === "ob_habits") runPrepare(uid).then(() => setVcBuilt(builtRef.current?.template ?? null)).catch(e => console.error("[vecu] prepare", e));
+    if (currentStep === "ob_fact") {
+      createClient().auth.updateUser({ data: { ob_vecu: { freq: vcDays.length || obFreq, days: vcDays, stag_months: obStag, habits: obHabits, behaviors: obBeh, weak: obWeak } } })
+        .then(({ error }) => { if (error) console.error("[vecu] ob_vecu", error.message); });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, vecuPath]);
+  /* Sport hors catalogue analysé (20/11) : la réaction en direct arrive seule et allume le « Continuer » du bas
+     (avant, un second « Continuer » dans le sélecteur). */
+  useEffect(() => {
+    if (!vecuPath || role !== "athlete" || currentStep !== "ob_sport" || obAnalyzing || !obCustom || obCustom.status === "failed") return;
+    setVcReact(sportReaction(obSportLabel() || obCustom.sportLabel, sportFamily(obChosenSport() || obCustom.sportLabel)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [obCustom, obAnalyzing, currentStep, vecuPath, role]);
   /* Étape d'insight (2026-11-04) : sa vraie nuit (Apple Santé / Health Connect) pour l'écran « ressenti
      vs mesures » en tête du carrousel. Lu une fois, seulement si la Santé a été connectée (obReplay). */
   const [obHealthRows, setObHealthRows] = useState<HealthRow[] | null>(null);
@@ -723,6 +804,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     /* Résultat d'un outil public /o/ (« Enregistrer ce résultat ») : enregistré une fois le compte
        prêt (prepareOnboarding), chez le sportif ou sur Thomas (démo) côté coach. */
     const oTest = stashPendingOTest(params);
+    if (oTest) setOTestKey(oTest);
     if (oTest) {
       posthog.setPersonProperties({ onboarding_test: oTest });
       posthog.capture("test_onboarding_start", { tool: oTest });
@@ -946,8 +1028,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     await supabase.from("profiles").upsert({
       user_id: uid,
       sport: sportValue, mode: role,
-      freq_target:        (obTrainingDays ?? trainingDays).length || null,
-      training_days:      (obTrainingDays ?? trainingDays).length ? (obTrainingDays ?? trainingDays) : null,
+      freq_target:        vecu && (vcDays.length || obFreq) ? (vcDays.length || obFreq) : (obTrainingDays ?? trainingDays).length || null,
+      training_days:      vecu ? (vcDays.length ? vcDays.map(d => (d + 1) % 7).sort((a, b) => a - b) : null) : (obTrainingDays ?? trainingDays).length ? (obTrainingDays ?? trainingDays) : null,
       objective:          obGoal || goal || null,
       frustration:        role === "athlete" ? (obPickRef.current || frustration || null) : (obPickRef.current ? `coach_${obPickRef.current}` : null),
       coaching_challenge: role === "coach"   ? (coachingChallenge || null) : null,
@@ -1084,10 +1166,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     if (hasClaimedProgram && wizardTemplate) return { template: wizardTemplate, name: wizardProgramName, sport: sport || "Autre", focus: "mixte", origin: "template" };
     const label = obSportLabel();
     if (obHas === "import" && obImportTemplate) return { template: obImportTemplate, name: label ? `Mon programme ${label}` : "Mon programme", sport: obChosenSport() || "Programme importé", focus: "mixte", origin: "imported" };
-    if (obHas !== "generate") return null;
+    /* Vécu (18/11, Gildas) : le programme est toujours généré, sur ses réponses (sport, objectif, point faible, jours),
+       enregistré puis assigné ; ses séances de semaine 1 servent de séances de démo au déclic. */
+    const vecuGen = vecu && path.includes("ob_habits");
+    if (obHas !== "generate" && !vecuGen) return null;
     const focus: ProgramFocus = obGoal ?? "mixte";
     try {
-      const days = [...obDays].sort((a, b) => a - b).map(d => WEEK_DAY_LABELS[d]);
+      const days = [...(vecuGen ? vcDays : obDays)].sort((a, b) => a - b).map(d => WEEK_DAY_LABELS[d]);
       const res = await fetchWithTimeout("/api/programs/generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2024,6 +2109,480 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       </OnboardingBackground>
     );
   }
+  /* ───────── Onboarding vécu (sportif) ───────── */
+  if (vecuPath && currentStep === "value_intro") {
+    /* « Espace coach » / « Espace sportif » (18/11, Gildas) : bascule de voix sur place, l'URL prend ?role=, la Trame
+       repart du début. Le rôle déjà connu (?role=) ne saute plus la Trame : elle est dite dans sa voix. */
+    const pickRole = (r: Role) => {
+      setRole(r); setRoleChosen(true); setVcPicked(false); posthog.setPersonProperties({ role: r });
+      posthog.capture("onboarding_role_switched", { role: r, surface: "trame" });
+      try { const u = new URL(window.location.href); u.searchParams.set("role", r); window.history.replaceState(null, "", u.toString()); } catch { /* ignore */ }
+    };
+    const claimedShort = hasClaimedProgram && claimedProgramName ? claimedProgramName.split(/\s[—–-]\s/)[0].trim() : "";
+    const kicker = vecuInvited ? (coachInviteName ? `Invitation de ${coachInviteName}` : "Invitation de ton coach")
+      : role === "coach" && claimedAthleteName ? `${claimedAthleteName} t'attend`
+      : oTestKey && O_TEST_KICKER[oTestKey] ? `Ton résultat ${O_TEST_KICKER[oTestKey]} est gardé`
+      : claimedShort ? `Ton programme : ${claimedShort}` : null;
+    return (
+      <VecuPresignup key={role} coach={role === "coach"} picked={vcPicked} onPick={pickRole} onRepick={() => setVcPicked(false)}
+        kicker={kicker} lockRole={vecuInvited}
+        onGoogle={() => { setRoleChosen(true); handleGoogleRegister(); }}
+        onApple={nativeShell && !isAndroidApp() ? () => { setRoleChosen(true); handleAppleRegister(); } : undefined}
+        onEmail={() => { setRoleChosen(true); posthog.setPersonProperties({ role }); next(); }}
+        busy={saving} error={error} onStep={k => posthog.capture("onboarding_trame_step", { step: k })} />
+    );
+  }
+  if (vecuPath && currentStep === "account" && !emailSent) {
+    return (
+      <VecuAccount name={name} email={email} setName={setName} setEmail={setEmail} onSubmit={handleFinish} onBack={canGoBack ? goBack : undefined}
+        saving={saving} error={error} valid={name.trim().length > 0 && EMAIL_RE.test(email.trim())}
+        sub={vecuInvited && coachPaying ? `Ton accès est offert par ${coachInviteName ?? "ton coach"}.` : undefined} />
+    );
+  }
+  /* 18/11 : le parcours vécu est le même dans les apps iOS / Android, paiement compris (achat intégré dans PayScreen). */
+  if (vecuPath && currentStep.startsWith("ob_")) {
+    const post = path.slice(path.indexOf("account") + 1);
+    const k = post.indexOf(currentStep);
+    const prev = k > 0 ? post[k - 1] : null;
+    const back = prev ? () => { vcReactOn.current = false; setVcReact(null); setVcReactNode(null); setStepIdx(path.indexOf(prev)); } : undefined;
+    const THEMES: StepId[][] = [["ob_sport", "ob_count", "ob_goal", "ob_weak", "ob_days", "ob_freq", "ob_stag", "ob_know", "ob_habits", "ob_health"], ["ob_fact", "ob_sess", "ob_note"], ["ob_avap", "ob_path", "ob_trial"]] /* ob_note / ob_avap hors parcours depuis le 17/11, gardés pour la frise si on les remet */;
+    const themeSteps = THEMES.map(t => post.filter(st => t.includes(st)));
+    const cur = themeSteps.findIndex(t => t.includes(currentStep));
+    const progress = themeSteps.map((t, j) => j < cur ? 1 : j > cur ? 0 : (t.indexOf(currentStep) + 1) / Math.max(1, t.length)) as [number, number, number];
+    const sportValue = obChosenSport() || sport;
+    const fam = sportFamily(sportValue);
+    const photo = sportCover(obSport || (obCustom?.status === "matched" ? findCatalogEntry(obCustom.sportLabel)?.value : null)) ?? claimedCover ?? DEFAULT_ONBOARDING_COVER;
+    /* Réaction : posée sur la photo jusqu'au tap « Touche pour continuer ». */
+    const react = (text: string, node?: React.ReactNode) => {
+      if (vcReactOn.current) return;
+      vcReactOn.current = true;
+      setVcReact(text); setVcReactNode(node ?? null);
+    };
+    const skipReact = () => {
+      if (!vcReactOn.current) return;
+      vcReactOn.current = false; setVcReact(null); setVcReactNode(null); obAdvance();
+    };
+    /* Réaction en direct (20/11) : chaque tap la remplace, « Continuer » passe à la suite. */
+    const liveReact = (text: string | null, node?: React.ReactNode) => { setVcReact(text); setVcReactNode(text ? node ?? null : null); };
+    const liveNext = () => { vcReactOn.current = false; setVcReact(null); setVcReactNode(null); obAdvance(); };
+    const firstName = name.trim().split(/\s+/)[0] ?? "";
+    const factInput = {
+      freq: vcDays.length || obFreq || (wizardTemplate ? Math.max(2, Object.values(wizardTemplate.weeks[0] ?? {}).filter(x => (x as unknown[]).length > 0).length) : 3),
+      stagMonths: obStag, habits: obHabits, behaviors: obBeh, fam, goal: vecuGoalPhrase(obGoal, fam),
+    };
+    /* ── Parcours vécu coach (18/11) : parallèle du sportif, primitive = le radar, douleur = l'impuissance. ── */
+    if (role === "coach") {
+      const nCount = COUNT_OPTIONS.find(c => c.value === obCount)?.n ?? 10;
+      const uid = userId || newUserId;
+      if (currentStep === "ob_sport") {
+        /* Plusieurs sports (18/11, Gildas : préparateurs et clubs multi-disciplines). Le programme du sportif démo se
+           génère sur le premier. */
+        const toggleSport = (v: string) => setVcSports(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+        return (
+          <QuestionScreen photo={photo} onBack={back} progress={progress} title="Tu entraînes quel sport ?" sub="Plusieurs choix possibles." reaction={vcReact}
+            onContinue={() => { setObSport(vcSports[0] ?? obSport); posthog.capture("onboarding_sports_answered", { count: vcSports.length }); liveNext(); }}
+            body={
+              <div style={{ marginTop: 14 }}>
+                <SportStepBody dark value={vcSports[vcSports.length - 1] ?? ""} customLabel={obCustom && obCustom.status !== "failed" ? obCustom.sportLabel : null}
+                  analyzing={obAnalyzing} analysisFailed={obCustom?.status === "failed"}
+                  onSelect={v => {
+                    setObCustom(null); setObWeak([]);
+                    const next = vcSports.includes(v) ? vcSports.filter(x => x !== v) : [...vcSports, v];
+                    toggleSport(v);
+                    /* Réaction en direct (20/11) : comme le sportif. */
+                    liveReact(next.length ? (next.length > 1 ? `${next.length} sports, autant de façons de fatiguer. Leurs séances, elles, sont écrites d'avance.` : "Leur forme varie d'un jour à l'autre. Tes séances, elles, sont écrites d'avance.") : null);
+                  }}
+                  onAnalyze={tx => { obAnalyzeSport(tx); }} />
+                {vcSports.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
+                    {vcSports.map(v => (
+                      <button key={v} type="button" onClick={() => toggleSport(v)} style={{ border: "1.5px solid rgba(255,176,138,.6)", background: "rgba(240,74,8,.22)", color: "#fff", borderRadius: 999, padding: "6px 10px", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+                        {catalogEntry(v)?.label ?? v} ×
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            } />
+        );
+      }
+      if (currentStep === "ob_count") {
+        return (
+          <QuestionScreen photo={photo} onBack={back} progress={progress} title="Combien de sportifs suis-tu ?" reaction={vcReact} onContinue={liveNext}
+            options={COUNT_OPTIONS.map(c => ({ key: c.value, label: `${c.label} sportifs`, on: obCount === c.value,
+              onPick: () => { setObCount(c.value); posthog.capture("onboarding_count_answered", { answer: c.value }); posthog.setPersonProperties({ team_size: c.value });
+                liveReact(c.n <= 5 ? "Un petit groupe. Chaque sportif compte, chaque mauvais jour aussi." : c.n <= 15 ? "Une dizaine de sportifs. Impossible de deviner la forme de chacun à l'œil." : `${c.label} sportifs. Leur forme varie chaque jour, tes séances non.`); } }))} />
+        );
+      }
+      if (currentStep === "ob_goal") {
+        return (
+          <QuestionScreen photo={photo} onBack={back} progress={progress} title="Leur prochain objectif" reaction={vcReact} onReactTap={skipReact}
+            /* Voix coach (18/11) : « ma capacité » → « leur capacité », « sans te griller » → « sans les griller ». */
+            options={goalOptionsFor(sportValue, fam).map(g => ({ key: g.value, icon: g.icon, on: obGoal === g.value,
+              label: g.label.replace(/\bma\b/g, "leur").replace(/\bmes\b/g, "leurs").replace(/\bmon\b/g, "leur"),
+              hint: g.hint?.replace(/\bte\b/g, "les").replace(/\bton\b/g, "leur").replace(/\btes\b/g, "leurs").replace(/\bta\b/g, "leur"),
+              onPick: () => { setObGoal(g.value); react(coachGoalReaction(g.value, fam)); } }))} />
+        );
+      }
+      if (currentStep === "ob_know") {
+        if (vcKnow) return <CoachBlindScreen count={nCount} know={vcKnow} onBack={() => setVcKnow(null)} onNext={() => obAdvance()} progress={progress} />;
+        return (
+          <QuestionScreen photo={photo} onBack={back} progress={progress} title="Comment tu sais qu'un sportif est fatigué ?" reaction={null}
+            options={[["says", "Il me le dit"], ["warmup", "Je le vois à l'échauffement"], ["after", "Je l'apprends après la séance"], ["unknown", "Je ne le sais pas"]].map(([k, l]) => ({ key: k, label: l, on: vcKnow === k,
+              onPick: () => { setVcKnow(k); posthog.capture("onboarding_know_answered", { answer: k }); } }))} />
+        );
+      }
+      if (currentStep === "ob_habits") {
+        return <CoachHabitsScreen behaviors={obBeh} setBehaviors={setObBeh} onBack={() => back?.()} progress={progress}
+          onDone={() => { posthog.capture("onboarding_habits_done", { behaviors: obBeh.length, role: "coach" }); obAdvance(); }} />;
+      }
+      if (currentStep === "ob_fact") return <CoachFactScreen count={nCount} behaviors={obBeh} onBack={() => back?.()} onNext={() => obAdvance()} progress={progress} cta="Améliorer mes séances" />;
+      if (currentStep === "ob_sess") {
+        /* La séance de Thomas : la plus chargée de la semaine 1 du programme généré, sinon la séance dure de la banque. */
+        const pool: VecuSession[] = vcBuilt?.weeks[0]
+          ? Object.values(vcBuilt.weeks[0] as Record<string, SessionTemplate[]>).flat().filter(x => x.type !== "test")
+              .map(x => ({ name: x.name.split(" — ")[0], lines: (x.notes ?? "").split("\n").map(l => l.trim()).filter(Boolean).map(demoLoads), planned: x.target_difficulty ?? 6 }))
+          : [];
+        const sp = obChosenSport();
+        const bank = sp ? plannedSession(sp, "hard") : null;
+        const kg = (s: VecuSession) => s.lines.filter(l => /\bkg\b|@\s*\d+\s*%/.test(l)).length;
+        const ses = pool.sort((a, b) => kg(b) - kg(a) || b.planned - a.planned)[0]
+          ?? (bank && !/^Séance du jour/.test(bank.name) ? { name: bank.name, lines: bank.notes.split("\n").filter(Boolean).map(demoLoads), planned: PLANNED_RPE.hard } : null)
+          ?? { name: "Force bas du corps", lines: ["Squat — 5×5 100 kg", "Soulevé de terre roumain — 4×8 90 kg", "Fentes bulgares — 3×10 2x20 kg"], planned: 7 };
+        /* L'anneau sur Thomas (18/11, Gildas : le radar est déjà passé sur « Ce qui revient dans ton groupe ») : forme basse,
+           nuit courte et courbatures, la décision allège sa séance ; même écran que le déclic sportif. */
+        const thomasScore = 35, thomasHabits = { sleep: 3, stress: 7, recovery: 3 };
+        const tPct = computeAutoregSuggestion(thomasScore, ses.planned, syntheticBaselineFor(thomasScore))?.reco ?? -10;
+        return <SessScreen sessions={[ses]} score={thomasScore} habits={thomasHabits} behaviors={[]} coachFor="Thomas" fam={factInput.fam}
+          message={coachMessage("Thomas", ses.lines, tPct)} progress={progress} onBack={() => back?.()} onNext={() => obAdvance()} />;
+      }
+      if (currentStep === "ob_path") return <CoachPathScreen first={firstName} count={nCount} onBack={() => back?.()} onNext={() => obAdvance()} progress={progress} />;
+      if (currentStep === "ob_trial") {
+        const save = (days: 2 | 3) => supabase.auth.updateUser({ data: { trial_reminder_days: days } }).then(({ error: e }) => { if (e) console.error("[vecu] rappel", e.message); });
+        return <TrialScreen coach onBack={() => back?.()} progress={progress}
+          onEnable={days => {
+            void save(days);
+            if (notificationSupport()) enableNotifications(obNotifHour).catch(() => false).then(ok => posthog.capture("notif_prompt_enabled", { role, ok, surface: "onboarding_trial", days }));
+            obAdvance();
+          }} />;
+      }
+      if (currentStep === "ob_pay") {
+        const toInvite = () => obAdvance();
+        if (obPayStage === "paywall") {
+          return (
+            <OnboardingBackground variant="dark">
+              <PaywallModal mode="coach" allowDismiss initialBilling={obBilling} onClose={() => setObPayStage("priming")}
+                onSuccess={() => { posthog.capture("onboarding_pay_purchased", { role: "coach" }); toInvite(); }} />
+            </OnboardingBackground>
+          );
+        }
+        return (
+          <>
+            <CoachPayScreen first={firstName} goal={factInput.goal} count={nCount} billing={obBilling} setBilling={setObBilling}
+              onView={() => posthog.capture("paywall_priming_viewed", { plan: "coach", source: "onboarding_vecu", platform: isNativeApp() ? (isAndroidApp() ? "android" : "ios") : "web" })}
+              native={isNativeApp() ? <NativePurchasePanel key={obBilling} mode="coach" billing={obBilling} ctaLabel="Démarrer mon essai gratuit"
+                onSuccess={() => { posthog.capture("onboarding_pay_purchased", { role: "coach", method: "store" }); toInvite(); }} /> : undefined}
+              onPay={() => setObPayStage("paywall")}
+              onClose={() => {
+                if (exitFeedbackDue()) { markExitFeedbackSeen(); posthog.capture("paywall_exit_feedback_viewed", { plan: "coach", source: "onboarding_vecu" }); setVcExit(true); return; }
+                posthog.capture("onboarding_pay_free", { role: "coach" }); toInvite();
+              }} />
+            {vcExit && (
+              <ExitFeedback mode="coach" name={name} source="onboarding_vecu"
+                onResume={() => setVcExit(false)}
+                onMonthly={() => { setObBilling("monthly"); setVcExit(false); if (!isNativeApp()) setObPayStage("paywall"); }}
+                onLeave={() => { setVcExit(false); posthog.capture("onboarding_pay_free", { role: "coach" }); toInvite(); }} />
+            )}
+          </>
+        );
+      }
+      if (currentStep === "ob_invite") {
+        /* Après le paiement, payé ou non (18/11) : sans sportif, l'essai coach ne montre rien. */
+        if (uid && !obInviteCode) void ensureInviteCode(uid);
+        const finishCoach = () => { if (uid) finishOnboarding(uid); };
+        const hasEmail = obInvites.some(r => r.email.trim());
+        return (
+          <VecuFrame glow center sheet={
+            <Sheet title="Invite tes sportifs" sub="Gratuit pour eux. Le lien est prêt, à envoyer sur votre groupe.">
+              <div style={{ marginTop: 12 }}><InviteForm inviteCode={obInviteCode} invites={obInvites} setInvites={setObInvites} error={obError} readyMessage /></div>
+              <div style={{ marginTop: 14 }}>
+                <Pill light disabled={obInviteBusy} onClick={async () => {
+                  if (!hasEmail) { posthog.capture("onboarding_invite_skipped", { surface: "vecu" }); finishCoach(); return; }
+                  setObInviteBusy(true); setObError(null);
+                  const failed = await sendObInvites();
+                  setObInviteBusy(false);
+                  if (failed.length) { setObError(`Invitation non envoyée à ${failed.join(", ")}. Vérifie l'adresse et réessaie.`); return; }
+                  setObInvitesSent(true); finishCoach();
+                }}>{obInviteBusy ? "Envoi…" : hasEmail ? "Envoyer les invitations" : "Plus tard"}</Pill>
+              </div>
+            </Sheet>
+          }>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, letterSpacing: ".12em", textTransform: "uppercase", color: "#ffb08a" }}>Ton essai est actif</div>
+              <h2 style={{ fontFamily: "var(--font-display)", fontSize: 27, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.12, margin: "8px 0 0" }}>Invite ton premier sportif.<br /><em style={{ fontStyle: "normal", color: "#ff8a55" }}>Son point forme arrive demain.</em></h2>
+            </div>
+          </VecuFrame>
+        );
+      }
+    }
+    if (currentStep === "ob_sport") {
+      return (
+        <QuestionScreen photo={photo} onBack={back} progress={progress} title="Tu t'entraînes à quoi ?" reaction={vcReact} onContinue={liveNext}
+          body={
+            <div style={{ marginTop: 14 }}>
+              <SportStepBody dark value={obSport} customLabel={obCustom && obCustom.status !== "failed" ? obCustom.sportLabel : null}
+                analyzing={obAnalyzing} analysisFailed={obCustom?.status === "failed"}
+                onSelect={v => { setObSport(v); setObCustom(null); setObWeak([]); liveReact(sportReaction(catalogEntry(v)?.label ?? v, sportFamily(v))); }}
+                onAnalyze={t => { obAnalyzeSport(t); }} />
+            </div>
+          } />
+      );
+    }
+    if (currentStep === "ob_goal") {
+      return (
+        <QuestionScreen photo={photo} onBack={back} progress={progress} title="Ton prochain objectif" reaction={vcReact} reactionNode={vcReactNode} onContinue={liveNext} chips
+          options={goalOptionsFor(sportValue, fam).map(g => ({ key: g.value, label: g.label, icon: g.icon, hint: g.hint, on: obGoal === g.value,
+            onPick: () => { setObGoal(g.value); const t = goalReaction(g.value, fam); liveReact(t, <IllusReaction text={t}><GoalIllus goal={g.value} /></IllusReaction>); } }))} />
+      );
+    }
+    if (currentStep === "ob_weak") {
+      /* Un tap (règle des écrans de choix vécu) ; la clé sert à la séance de démo du déclic et au générateur. */
+      const opts = obCustom?.status === "generated" ? obCustom.weaknessOptions : WEAKNESSES_BY_SPORT[weaknessKeyFor(obChosenSport() || sportValue)] ?? WEAKNESSES_BY_SPORT["Autre"] ?? [];
+      return (
+        <QuestionScreen photo={photo} onBack={back} progress={progress} title="Ton point à travailler en priorité" reaction={vcReact} onReactTap={skipReact}
+          options={opts.map(w => ({ key: w.key, label: w.label, on: obWeak[0] === w.key,
+            onPick: () => { setObWeak([w.key]); posthog.capture("onboarding_weak_answered", { weak: w.key }); react(`${w.label}. On l'ajoute à tes séances, dès la première.`); } }))} />
+      );
+    }
+    if (currentStep === "ob_freq") {
+      return (
+        <QuestionScreen photo={photo} onBack={back} progress={progress} title="Combien de séances par semaine ?" reaction={vcReact} onReactTap={skipReact}
+          options={FREQ_OPTIONS.map((o, j) => ({ key: String(o.value), label: o.label, on: obFreq === o.value, onPick: () => { setObFreq(o.value); react(FREQ_REACTIONS[j]); } }))} />
+      );
+    }
+    if (currentStep === "ob_days") {
+      /* Miroir en direct (20/11, Gildas : comme le POC) : chaque jour touché recalcule la semaine dure / légère. */
+      const toggle = (k: number) => {
+        const next = vcDays.includes(k) ? vcDays.filter(x => x !== k) : [...vcDays, k].sort((a, b) => a - b);
+        setVcDays(next);
+        if (!next.length) { liveReact(null); return; }
+        const t = daysReaction(next);
+        liveReact(t, <IllusReaction text={t}><DaysIllus days={next} /></IllusReaction>);
+      };
+      return (
+        <QuestionScreen photo={photo} onBack={back} progress={progress} title="Tes jours d'entraînement" reaction={vcReact} reactionNode={vcReactNode}
+          onContinue={() => { posthog.capture("onboarding_days_answered", { count: vcDays.length }); liveNext(); }}
+          chips noCheck options={WEEK_DAY_LABELS.map((d, k) => ({ key: d, label: d, on: vcDays.includes(k), onPick: () => toggle(k) }))} />
+      );
+    }
+    if (currentStep === "ob_stag") {
+      const j = STAG_OPTIONS.findIndex(o => o.months === obStag);
+      if (vcEffort && j >= 0) {
+        return (
+          <EffortScreen hours={effortHours(factInput.freq, obStag ?? 0, fam)} stagMonths={obStag || null}
+            sport={obSportLabel() || "sport"} insight={STAG_REACTIONS[j]} progress={progress}
+            onBack={() => setVcEffort(false)}
+            onNext={() => { posthog.capture("onboarding_effort_cta"); setVcEffort(false); obAdvance(); }} />
+        );
+      }
+      return (
+        <QuestionScreen photo={photo} onBack={back} progress={progress} title="Tes perfs n'ont pas bougé depuis quand ?" reaction={null}
+          options={STAG_OPTIONS.map(o => ({ key: String(o.months), label: o.label, on: obStag === o.months, onPick: () => { setObStag(o.months); setVcEffort(true); } }))} />
+      );
+    }
+    if (currentStep === "ob_habits") {
+      /* v55 (20/11, Gildas) : le VRAI point forme du jour, le composant de l'app. « Qu'as-tu prévu aujourd'hui ? » d'abord
+         (sauf programme partagé : la séance vient de son programme), il choisit la séance du déclic. Enregistré comme sur
+         /today : il arrive sur l'Accueil avec son premier point forme fait. Ses réponses nourrissent le chiffre, les cartes
+         et l'anneau du déclic. */
+      const uidPf = userId || newUserId;
+      const todayStr = localTodayStr();
+      const keep = (d: { sleep: number; stress: number; recovery: number; behaviors: string[]; score: number; plannedIntensity?: PlannedIntensity | null }) => {
+        setObHabits({ sleep: d.sleep, stress: d.stress, recovery: d.recovery }); setObBeh(d.behaviors);
+        setObPlanned(d.plannedIntensity ?? null); setObTodayScore(d.score);
+      };
+      return (
+        /* Le point forme a sa propre navigation : pas de frise ni de retour du parcours derrière (20/11, double nav). */
+        <div style={{ position: "fixed", inset: 0, background: "#070a0d" }}>
+          <WellnessModal date={todayStr} offline={!uidPf} skipResult required onBack={() => back?.()}
+            onClose={() => back?.()}
+            onSave={async data => {
+              if (!uidPf) { keep(data); posthog.capture("onboarding_checkin_saved", { ok: false, role, surface: "vecu", offline: true }); obAdvance(); return; }
+              /* La préparation (completeProfile) refuse d'écrire si un ressenti existe déjà : elle doit être finie avant. */
+              await runPrepare(uidPf).catch(() => null);
+              const { plannedIntensity: _p, ...w } = data;
+              void _p;
+              const payload = await withDeviceScore(supabase, uidPf, todayStr, w);
+              const { data: saved, error } = await supabase.from("wellness_daily")
+                .upsert({ user_id: uidPf, date: todayStr, ...payload }, { onConflict: "user_id,date" }).select().single();
+              if (error) { console.error("[vecu] point forme", error); return false; }
+              posthog.capture("onboarding_checkin_saved", { ok: true, role, surface: "vecu", planned: data.plannedIntensity ?? null });
+              keep({ ...data, score: (saved as { score?: number } | null)?.score ?? payload.score });
+              obAdvance();
+            }} />
+        </div>
+      );
+    }
+    if (currentStep === "ob_health") {
+      const connect = async () => {
+        const uid = userId || newUserId;
+        if (!uid) { obAdvance(); return; }
+        setObHealthBusy(true);
+        try {
+          const { syncHealthData } = await import("@/lib/healthSync");
+          const days = await syncHealthData(supabase, uid);
+          posthog.capture("onboarding_health_connected", { days });
+        } catch (e) {
+          console.error("[vecu] santé", e);
+          posthog.capture("onboarding_health_failed");
+        } finally { setObHealthBusy(false); }
+        obAdvance();
+      };
+      return <HealthScreen appName={healthAppName()} onConnect={connect} busy={obHealthBusy} progress={progress} onBack={() => back?.()}
+        onSkip={() => { posthog.capture("onboarding_health_skipped"); obAdvance(); }} />;
+    }
+    /* v55 : après le déclic (20/11, Gildas : le point forme enchaîne sur la séance ajustée, puis ce qu'il dit de lui). */
+    if (currentStep === "ob_fact") return <FactScreen input={factInput} onBack={() => back?.()} onNext={() => obAdvance()} progress={progress} cta="Améliorer mes séances" />;
+    /* Feuille « l'app » (web) : APRÈS le paywall, qu'il ait payé ou non (17/11, Gildas : avant, elle faisait quitter le
+       parcours vers le store avant l'offre). Le lien de connexion part par email au même moment. */
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const phone: "iphone" | "android" | null = /iPhone|iPad|iPod/.test(ua) ? "iphone" : /Android/.test(ua) && PLAY_STORE_URL ? "android" : null;
+    const store = phone === "iphone"
+      ? { storeHref: APP_STORE_URL, badgeSrc: "https://levplovrwwsqvswmolik.supabase.co/storage/v1/object/public/email-assets/emails/app-appstore-badge.png", badgeAlt: "Télécharger dans l'App Store", badgeH: 52 }
+      : phone === "android" ? { storeHref: PLAY_STORE_URL, badgeSrc: "https://play.google.com/intl/en_us/badges/static/images/badges/fr_badge_web_generic.png", badgeAlt: "Disponible sur Google Play", badgeH: 76 } : {};
+    const openAppSheet = () => {
+      setVcAppSheet(true);
+      posthog.capture("onboarding_ob_notif_viewed", { role, surface: "sheet_app_vecu" });
+      (async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user?.email) return;
+        const { error: otpErr } = await supabase.auth.signInWithOtp({ email: user.email, options: { shouldCreateUser: false, emailRedirectTo: `${location.origin}/auth/callback` } });
+        if (otpErr) console.error("[vecu] lien app", otpErr.message);
+        posthog.capture("onboarding_app_link_sent", { ok: !otpErr, surface: "vecu" });
+      })();
+    };
+    if (currentStep === "ob_sess") {
+      const sessions: VecuSession[] = claimDemo
+        ? [{ name: claimDemo.name, lines: claimDemo.lines, planned: 7 }]
+        : (() => {
+            /* Séances de son sport (17/11) : la banque par sport du point forme (foot, rugby, tennis, natation…), ses
+               4 niveaux du plus dur au plus léger (plusieurs cas dans le carrousel) ; repli sur la banque par catégorie. */
+            const sp = obChosenSport();
+            const bank = sp ? (["vhard", "hard", "mod", "easy"] as const).map(i => ({ ...plannedSession(sp, i), planned: PLANNED_RPE[i] })) : [];
+            return bank.length && !bank.some(b => /^Séance du jour/.test(b.name))
+              ? bank.map(b => ({ name: b.name, lines: b.notes.split("\n").filter(Boolean).map(demoLoads), planned: b.planned }))
+              : getSessionTemplates(sportValue).map(([n, notes, d]) => ({ name: n, lines: notes.split("\n").filter(Boolean).map(demoLoads), planned: d }));
+          })();
+      /* Ses vraies séances (18/11) : la semaine 1 du programme généré sur ses réponses et déjà enregistré, jour par
+         jour (hors tests) ; la séance qui contient son point faible est étiquetée. Repli : la banque par sport. */
+      const DAY_NAMES = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+      const wkLabelOf = (key: string | undefined) => key ? (obCustom?.status === "generated" ? obCustom.weaknessOptions : WEAKNESSES_BY_SPORT[weaknessKeyFor(obChosenSport() || sportValue)] ?? [])?.find(w => w.key === key)?.label ?? null : null;
+      const wkFirst = (WEAKNESS_LINES[obWeak[0] ?? ""] ?? "").split("\n")[0]?.split(" — ")[0]?.trim();
+      const progSessions: VecuSession[] = !claimDemo && vcBuilt?.weeks[0]
+        ? WEEK_DAY_LABELS.flatMap((d, i) => ((vcBuilt.weeks[0] as Record<string, SessionTemplate[]>)[d] ?? []).filter(x => x.type !== "test").map(x => {
+            const lines = (x.notes ?? "").split("\n").map(l => l.trim()).filter(Boolean);
+            const hasWeak = !!wkFirst && lines.some(l => l.startsWith(wkFirst));
+            return { name: `${DAY_NAMES[i]} · ${x.name.split(" — ")[0]}`, lines: lines.map(demoLoads), planned: x.target_difficulty ?? 6, ...(hasWeak ? { tag: `Ton point faible : ${(wkLabelOf(obWeak[0]) ?? "").toLowerCase()}` } : {}) };
+          }))
+        : [];
+      if (progSessions.length) sessions.splice(0, sessions.length, ...progSessions);
+      /* Repli (programme pas encore prêt) : la séance dure enrichie des lignes que le générateur ajoutera (WEAKNESS_LINES). */
+      const wk = progSessions.length ? undefined : obWeak[0], wkLines = wk ? WEAKNESS_LINES[wk] : null;
+      const wkLabel = wk ? (obCustom?.status === "generated" ? obCustom.weaknessOptions : WEAKNESSES_BY_SPORT[weaknessKeyFor(obChosenSport() || sportValue)] ?? [])?.find(w => w.key === wk)?.label : null;
+      if (!claimDemo && wkLines && sessions[0]) sessions.unshift({ ...sessions[0], lines: [...sessions[0].lines, ...wkLines.split("\n").map(demoLoads)], tag: `Pour ton point faible : ${(wkLabel ?? "").toLowerCase()}` });
+      /* v55 (20/11, Gildas) : une seule séance, et toujours un ajustement (l'illustration est plus forte). On prend, dans
+         son programme, celle que sa forme du jour ajuste vraiment, au plus près de ce qu'il a prévu ; si aucune ne bouge,
+         l'écran décale la zone (comme avant). Son point forme, lui, est vrai. */
+      const dayScore = obTodayScore ?? habitsScore(obHabits) ?? 60;
+      const target = obPlanned && obPlanned !== "rest" ? PLANNED_RPE[obPlanned] : 6;
+      /* Le sens suit son point forme (20/11, Gildas) : forme basse, on allège ; en forme, on pousse. Seules comptent les
+         séances que le moteur ajuste dans ce sens ; sinon l'ajustement est montré dans ce sens (SessScreen `dir`). */
+      const dir: "up" | "down" = dayScore >= 65 ? "up" : "down";
+      const moves = (x: VecuSession) => { const r = computeAutoregSuggestion(dayScore, x.planned, syntheticBaselineFor(dayScore))?.reco; return !!r && (dir === "up" ? r > 0 : r < 0); };
+      const near = (a: VecuSession, b: VecuSession) => Math.abs(b.planned - target) < Math.abs(a.planned - target) ? b : a;
+      const adjusting = sessions.filter(moves);
+      const pickOne = claimDemo || !sessions.length ? sessions[0] : (adjusting.length ? adjusting : sessions).reduce(near);
+      const honestOk = !!pickOne && moves(pickOne);
+      const today1 = pickOne ? [{ ...pickOne, name: pickOne.name.replace(/^(Lundi|Mardi|Mercredi|Jeudi|Vendredi|Samedi|Dimanche) · /, "") }] : sessions;
+      return (
+        <>
+        <SessScreen sessions={today1} score={dayScore} progress={progress} onBack={() => back?.()} fam={factInput.fam} habits={obHabits} behaviors={obBeh} honest={honestOk} dir={dir}
+          onShown={(inZone, pct) => posthog.capture("onboarding_declic_shown", { in_zone: inZone, pct, planned: obPlanned, surface: "vecu" })}
+          fromProgram={claimDemo && claimedProgramName ? claimedProgramName.split(/\s[—–-]\s/)[0].trim() : "Ta séance"}
+          /* Fin du déclic : note du store dans l'app ; sur le web on avance (la feuille « l'app » vient après le paywall). */
+          onNext={() => {
+            if (isNativeApp()) requestStoreReview().then(asked => { if (asked) posthog.capture("store_review_requested", { role, surface: "onboarding" }); });
+            obAdvance();
+          }}
+          />
+        </>
+      );
+    }
+    if (currentStep === "ob_note") return <NoteScreen first={firstName} onBack={() => back?.()} onNext={() => obAdvance()} progress={progress} />;
+    if (currentStep === "ob_avap") return <AvapScreen photo={photo} fam={factInput.fam} onBack={() => back?.()} onNext={() => obAdvance()} progress={progress} />;
+    if (currentStep === "ob_path") return <PathScreen first={firstName} input={factInput} onBack={() => back?.()} onNext={() => obAdvance()} progress={progress} />;
+    if (currentStep === "ob_trial") {
+      /* Rappel choisi : gardé sur le compte, lu par le webhook Stripe (trial_will_end) et le passage de 9 h. */
+      const save = (days: 2 | 3) => supabase.auth.updateUser({ data: { trial_reminder_days: days } })
+        .then(({ error: e }) => { if (e) console.error("[vecu] rappel", e.message); });
+      return (
+        <TrialScreen onBack={() => back?.()} progress={progress} busy={vcBusy}
+          /* « Me prévenir avant » seul (18/11, Gildas : plus de « Plus tard ») : la demande du système s'ouvre et on passe à
+             l'écran suivant tout de suite, partout (sur desktop, la petite demande du navigateur ne bloque plus). */
+          onEnable={days => {
+            void save(days);
+            if (notificationSupport()) {
+              enableNotifications(obNotifHour).catch(() => false)
+                .then(ok => posthog.capture("notif_prompt_enabled", { role, ok, hour: obNotifHour, surface: "onboarding_trial", days }));
+            } else posthog.capture("notif_prompt_enabled", { role, ok: false, hour: obNotifHour, surface: "onboarding_trial", days, unsupported: true });
+            obAdvance();
+          }} />
+      );
+    }
+    if (currentStep === "ob_pay") {
+      const uid = userId || newUserId;
+      const finish = () => { if (uid) finishOnboarding(uid); };
+      /* Payé ou non : sur le web, la feuille « l'app » d'abord ; elle termine l'onboarding en se fermant. */
+      const done = () => { if (isNativeApp()) finish(); else openAppSheet(); };
+      const appSheet = vcAppSheet && (
+        <AppSheet phone={phone} qrSrc={PLAY_STORE_URL ? "/app-qr.svg" : "/app-store-qr.svg"} {...store}
+          onStore={() => { posthog.capture("onboarding_app_push", { device: phone ?? "desktop", surface: "apres_paywall" }); if (store.storeHref) window.open(store.storeHref, "_blank"); setVcAppSheet(false); finish(); }}
+          onSkip={() => { posthog.capture("onboarding_app_push_skipped"); setVcAppSheet(false); finish(); }} />
+      );
+      if (obPayStage === "paywall") {
+        return (
+          <OnboardingBackground variant="dark">
+            <PaywallModal mode="athlete" allowDismiss initialBilling={obBilling}
+              onClose={() => setObPayStage("priming")}
+              onSuccess={() => { posthog.capture("onboarding_pay_purchased"); done(); }} />
+            {appSheet}
+          </OnboardingBackground>
+        );
+      }
+      return (
+        <>
+          <PayScreen first={firstName} stag={!!obStag} hours={obStag ? effortHours(factInput.freq, obStag, fam) : undefined} fit={goodDays(factInput).fit} billing={obBilling} setBilling={setObBilling}
+            onView={() => posthog.capture("paywall_priming_viewed", { plan: "athlete", source: "onboarding_vecu", platform: isNativeApp() ? (isAndroidApp() ? "android" : "ios") : "web" })}
+            /* Apps : l'achat du store directement dans la feuille (même écran que le web). */
+            native={isNativeApp() ? <NativePurchasePanel key={obBilling} mode="athlete" billing={obBilling} ctaLabel="Démarrer mon essai gratuit"
+              onSuccess={() => { posthog.capture("onboarding_pay_purchased", { method: "store" }); done(); }} /> : undefined}
+            onPay={() => setObPayStage("paywall")}
+            onClose={() => {
+              if (exitFeedbackDue()) { markExitFeedbackSeen(); posthog.capture("paywall_exit_feedback_viewed", { plan: "athlete", source: "onboarding_vecu" }); setVcExit(true); return; }
+              posthog.capture("onboarding_pay_free"); done();
+            }} />
+          {vcExit && (
+            <ExitFeedback mode="athlete" name={name} source="onboarding_vecu"
+              onResume={() => setVcExit(false)}
+              onMonthly={() => { setObBilling("monthly"); setVcExit(false); if (!isNativeApp()) setObPayStage("paywall"); }}
+              onLeave={() => { setVcExit(false); posthog.capture("onboarding_pay_free"); done(); }} />
+          )}
+          {appSheet}
+        </>
+      );
+    }
+  }
+
   if (currentStep.startsWith("ob_")) {
     const coach = role === "coach";
     // Le paywall n'a ni compteur ni frise : on ne le compte pas, la frise finit sur le dernier écran.

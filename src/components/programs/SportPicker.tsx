@@ -27,6 +27,9 @@ type Props = {
   initialQuery?: string;
   onSelect: (value: string) => void;
   onAnalyze: (text: string) => void;
+  /* Sur fond sombre (onboarding vécu, 20/11) : pastilles, recherche et suggestions translucides. Le catalogue
+     « Tous les sports » reste la feuille blanche de l'app. */
+  dark?: boolean;
 };
 
 const chip = (on: boolean, dashed = false): React.CSSProperties => ({
@@ -37,7 +40,18 @@ const chip = (on: boolean, dashed = false): React.CSSProperties => ({
   fontWeight: 600, fontSize: 13, fontFamily: "inherit",
 });
 
-export default function SportPicker({ value, customLabel, profileSport, analyzing, analysisFailed, initialQuery, onSelect, onAnalyze }: Props) {
+const darkChip = (on: boolean, dashed = false): React.CSSProperties => ({
+  padding: "9px 14px", borderRadius: 999, cursor: "pointer", whiteSpace: "nowrap", color: "#fff",
+  border: on ? "2px solid #ffb08a" : dashed ? "1.5px dashed rgba(255,176,138,.6)" : "1.5px solid rgba(255,255,255,.12)",
+  background: on ? "rgba(240,74,8,.32)" : "rgba(255,255,255,.06)",
+  fontWeight: 700, fontSize: 14, fontFamily: "inherit",
+});
+
+export default function SportPicker({ value, customLabel, profileSport, analyzing, analysisFailed, initialQuery, onSelect, onAnalyze, dark = false }: Props) {
+  /* Thème clair (app) ou sombre (onboarding vécu) : seules les surfaces changent. */
+  const c = dark
+    ? { chip: darkChip, fieldBg: "rgba(255,255,255,.06)", fieldBorder: "1.5px solid rgba(255,255,255,.14)", ink: "#fff", muted: "rgba(255,255,255,.55)", rowBg: "rgba(20,24,28,.92)", rowLine: "1px solid rgba(255,255,255,.08)", accent: "#ffb08a" }
+    : { chip, fieldBg: "#fff", fieldBorder: "1.5px solid rgba(0,0,0,.10)", ink: "#171b1f", muted: "#8a8f94", rowBg: "#fff", rowLine: "1px solid rgba(0,0,0,.08)", accent: "#d44000" };
   const { isMd } = useBreakpoint();
   const [query, setQuery] = useState(initialQuery ?? "");
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -63,23 +77,23 @@ export default function SportPicker({ value, customLabel, profileSport, analyzin
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
         {top.map(v => {
           const e = catalogEntry(v)!;
-          return <button key={v} type="button" style={chip(value === v)} onClick={() => pick(v)}>{e.icon} {e.label}</button>;
+          return <button key={v} type="button" style={c.chip(value === v)} onClick={() => pick(v)}>{e.icon} {e.label}</button>;
         })}
-        <button type="button" style={chip(false, true)} onClick={() => { setSheetOpen(true); setOpenFam(selected && GROUPED_FAMILIES[selected.fam] ? selected.fam : null); }}>+ Plus de sports</button>
+        <button type="button" style={c.chip(false, true)} onClick={() => { setSheetOpen(true); setOpenFam(selected && GROUPED_FAMILIES[selected.fam] ? selected.fam : null); }}>+ Plus de sports</button>
       </div>
 
       {(selectedOutside || customLabel) && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, background: "rgba(212,64,0,0.06)", border: "1px solid rgba(212,64,0,.22)", borderRadius: 12, padding: "9px 12px", fontSize: 13.5 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, background: dark ? "rgba(240,74,8,.18)" : "rgba(212,64,0,0.06)", border: dark ? "1.5px solid rgba(255,176,138,.5)" : "1px solid rgba(212,64,0,.22)", borderRadius: 12, padding: "9px 12px", fontSize: 13.5, color: c.ink }}>
           <span>✓</span>
-          <b style={{ color: "#d44000" }}>{selectedOutside ? `${selected!.icon} ${entryLabel(selected!)}` : customLabel}</b>
-          {!selectedOutside && <span style={{ marginLeft: "auto", fontSize: 11.5, color: "#8a8f94" }}>analysé par l&apos;IA</span>}
+          <b style={{ color: c.accent }}>{selectedOutside ? `${selected!.icon} ${entryLabel(selected!)}` : customLabel}</b>
+          {!selectedOutside && <span style={{ marginLeft: "auto", fontSize: 11.5, color: c.muted }}>analysé par l&apos;IA</span>}
         </div>
       )}
 
       {/* Couche 2 : recherche. Suggestions en flux (pas en surcouche) : rien n'est rogné dans un
           tiroir qui défile. */}
       <div style={{ position: "relative", marginTop: 10 }}>
-        <span style={{ position: "absolute", left: 12, top: 11, fontSize: 14, color: "#8a8f94" }}>🔍</span>
+        <span style={{ position: "absolute", left: 12, top: 11, fontSize: 14, color: c.muted }}>🔍</span>
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
@@ -89,33 +103,33 @@ export default function SportPicker({ value, customLabel, profileSport, analyzin
             if (hits.length) pick(hits[0].entry.value); else analyze();
           }}
           placeholder="Cherche ton sport (ex. hyrox, genou, kitesurf)"
-          style={{ width: "100%", boxSizing: "border-box", fontSize: 16, border: "1.5px solid rgba(0,0,0,.10)", borderRadius: 12, padding: "10px 12px 10px 36px", fontFamily: "inherit", background: "#fff", outline: "none" }}
+          style={{ width: "100%", boxSizing: "border-box", fontSize: 16, border: c.fieldBorder, borderRadius: 12, padding: "10px 12px 10px 36px", fontFamily: "inherit", background: c.fieldBg, color: c.ink, outline: "none" }}
         />
       </div>
       {showSugg && (
-        <div style={{ marginTop: 6, border: "1px solid rgba(0,0,0,.10)", borderRadius: 12, overflow: "hidden", background: "#fff" }}>
+        <div style={{ marginTop: 6, border: dark ? "1px solid rgba(255,255,255,.14)" : "1px solid rgba(0,0,0,.10)", borderRadius: 12, overflow: "hidden", background: c.rowBg }}>
           {hits.map(({ entry, hit }, k) => (
             <button key={entry.value} type="button" onClick={() => pick(entry.value)}
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, width: "100%", textAlign: "left", border: 0, borderTop: k ? "1px solid rgba(0,0,0,.08)" : 0, background: "#fff", padding: "10px 12px", fontSize: 14, fontWeight: 600, color: "#171b1f", cursor: "pointer", fontFamily: "inherit" }}>
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, width: "100%", textAlign: "left", border: 0, borderTop: k ? c.rowLine : 0, background: c.rowBg, padding: "10px 12px", fontSize: 14, fontWeight: 600, color: c.ink, cursor: "pointer", fontFamily: "inherit" }}>
               <span>{entry.icon} {hit !== entry.label ? `${hit} → ${entryLabel(entry)}` : entryLabel(entry)}</span>
-              <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, color: "#8a8f94", textTransform: "uppercase", letterSpacing: ".04em", whiteSpace: "nowrap" }}>{entry.fam}</span>
+              <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, color: c.muted, textTransform: "uppercase", letterSpacing: ".04em", whiteSpace: "nowrap" }}>{entry.fam}</span>
             </button>
           ))}
           <button type="button" onClick={analyze} disabled={analyzing}
-            style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, width: "100%", textAlign: "left", border: 0, borderTop: hits.length ? "1px solid rgba(0,0,0,.08)" : 0, background: "#fff", padding: "10px 12px", fontSize: 14, fontWeight: 700, color: "#d44000", cursor: "pointer", fontFamily: "inherit" }}>
+            style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, width: "100%", textAlign: "left", border: 0, borderTop: hits.length ? c.rowLine : 0, background: c.rowBg, padding: "10px 12px", fontSize: 14, fontWeight: 700, color: c.accent, cursor: "pointer", fontFamily: "inherit" }}>
             <span>✨ Analyser « {query.trim()} » avec l&apos;IA</span>
-            <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, color: "#8a8f94", textTransform: "uppercase" }}>{hits.length ? "autre" : "aucun résultat"}</span>
+            <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, color: c.muted, textTransform: "uppercase" }}>{hits.length ? "autre" : "aucun résultat"}</span>
           </button>
         </div>
       )}
-      {analyzing && <p style={{ fontSize: 12, color: "#8a8f94", marginTop: 6 }}>Analyse de ton sport…</p>}
-      {analysisFailed && !analyzing && <p style={{ fontSize: 11.5, color: "#c81e1e", marginTop: 6 }}>Analyse indisponible : contenu générique utilisé à la place.</p>}
+      {analyzing && <p style={{ fontSize: 12, color: c.muted, marginTop: 6 }}>Analyse de ton sport…</p>}
+      {analysisFailed && !analyzing && <p style={{ fontSize: 11.5, color: dark ? "#ffb3a7" : "#c81e1e", marginTop: 6 }}>Analyse indisponible : contenu générique utilisé à la place.</p>}
 
       {/* Couche 3 : catalogue complet par famille. */}
       {sheetOpen && (
         <div className={exitClass} onClick={closeSheet} style={{ position: "fixed", inset: 0, zIndex: 2147483300, background: "rgba(7,10,13,.4)", display: "flex", alignItems: isMd ? "center" : "flex-end", justifyContent: "center", padding: isMd ? 24 : 0 }}>
           <div role="dialog" aria-label="Tous les sports" onClick={e => e.stopPropagation()}
-            style={{ width: "100%", maxWidth: 560, maxHeight: isMd ? "80dvh" : "82dvh", background: "#fff", borderRadius: isMd ? 24 : "24px 24px 0 0", boxShadow: isMd ? "0 42px 120px rgba(0,0,0,.34)" : undefined, display: "flex", flexDirection: "column", animation: isMd ? "modalIn .2s ease-out" : "sheetInUp .22s ease-out", paddingBottom: isMd ? 0 : "env(safe-area-inset-bottom, 0px)" }}>
+            style={{ width: "100%", maxWidth: 560, maxHeight: isMd ? "80dvh" : "82dvh", background: "#fff", color: "#171b1f", borderRadius: isMd ? 24 : "24px 24px 0 0", boxShadow: isMd ? "0 42px 120px rgba(0,0,0,.34)" : undefined, display: "flex", flexDirection: "column", animation: isMd ? "modalIn .2s ease-out" : "sheetInUp .22s ease-out", paddingBottom: isMd ? 0 : "env(safe-area-inset-bottom, 0px)" }}>
             <div style={{ padding: "14px 20px 12px", borderBottom: "1px solid rgba(0,0,0,.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <b style={{ fontFamily: "var(--font-display)", fontSize: 18 }}>Tous les sports</b>
               <button type="button" onClick={closeSheet} aria-label="Fermer" style={{ width: 32, height: 32, borderRadius: 999, border: 0, background: "#f4f3f1", cursor: "pointer", color: "#5f656b" }}>✕</button>

@@ -33,7 +33,8 @@ function initials(name: string) {
   return name.split(" ").map(s => s[0]).join("").toUpperCase().slice(0, 2);
 }
 
-export default function CoachRadar({ points, onSelect }: { points: RadarPoint[]; onSelect: (id: string) => void }) {
+/* `animate` (onboarding vécu coach, 18/11) : les points glissent vers leur nouvelle place quand leur séance change. */
+export default function CoachRadar({ points, onSelect, animate = false }: { points: RadarPoint[]; onSelect: (id: string) => void; animate?: boolean }) {
 
   const placed = points.filter(p => p.score !== null && p.diff !== null).map(p => ({ p, x: xs(p.score!), y: ys(p.diff!) }));
   const noData = points.filter(p => p.score === null || p.diff === null);
@@ -89,7 +90,8 @@ export default function CoachRadar({ points, onSelect }: { points: RadarPoint[];
             </g>
           ))}
         </svg>
-        {placed.map(q => dot(q.p, { position: "absolute", left: `${(q.x / W) * 100}%`, top: `${(q.y / H) * 100}%`, marginLeft: -DOT / 2, marginTop: -DOT_CY }))}
+        {placed.map(q => dot(q.p, { position: "absolute", left: `${(q.x / W) * 100}%`, top: `${(q.y / H) * 100}%`, marginLeft: -DOT / 2, marginTop: -DOT_CY,
+          ...(animate ? { transition: "top 1.1s cubic-bezier(.23,1,.32,1), left 1.1s cubic-bezier(.23,1,.32,1)" } : {}) }))}
       </div>
     </div>
     {noData.length > 0 && (
