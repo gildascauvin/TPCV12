@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { syncRevenueCatStatus } from "@/lib/revenuecat";
+import { captureServer, hoursSince } from "@/lib/serverAnalytics";
+
+/* Événements RevenueCat → PostHog (2026-11-20) : la résiliation se fait dans les réglages du store, l'app ne la voit pas. */
+const TRACKED: Record<string, string> = { CANCELLATION: "subscription_canceled", UNCANCELLATION: "subscription_uncanceled", EXPIRATION: "subscription_ended" };
 
 /* Webhook RevenueCat (renouvellement, résiliation, expiration, remboursement...). RevenueCat envoie
    l'en-tête Authorization configuré dans son dashboard : il doit valoir REVENUECAT_WEBHOOK_AUTH.
@@ -21,6 +25,18 @@ export async function POST(request: Request) {
     console.error("[revenuecat/webhook]", event.type, e);
     // 500 : RevenueCat réessaie plus tard.
     return NextResponse.json({ error: "Sync failed" }, { status: 500 });
+  }
+  // Après la synchro seulement : un 500 fait réessayer RevenueCat, l'événement partirait deux fois.
+  const tracked = TRACKED[event.type];
+  if (tracked && ids[0]) {
+    await captureServer(ids[0], tracked, {
+      store: event.store === "PLAY_STORE" ? "google_play" : event.store === "APP_STORE" ? "app_store" : String(event.store ?? "").toLowerCase() || null,
+      product: event.product_id ?? null,
+      billing: /year|annual|annuel/i.test(String(event.product_id ?? "")) ? "annual" : "monthly",
+      during_trial: event.period_type === "TRIAL",
+      hours_since_start: hoursSince(event.purchased_at_ms),
+      reason: event.cancel_reason ?? event.expiration_reason ?? null,
+    });
   }
   return NextResponse.json({ received: true });
 }

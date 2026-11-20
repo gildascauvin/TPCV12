@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { deleteBrevoContact } from "@/lib/email/brevoContact";
+import { captureServer } from "@/lib/serverAnalytics";
 
 /* Suppression de compte par l'utilisateur lui-même (2026-10-01) — exigée par Apple (guideline
    5.1.1(v)) dès qu'on peut créer un compte dans l'app, et utile au RGPD sur le web.
@@ -34,7 +35,12 @@ export async function POST() {
   const email = user.email?.toLowerCase() ?? null;
 
   try {
-    const { data: profile } = await admin.from("profiles").select("stripe_customer_id").eq("user_id", uid).maybeSingle();
+    const { data: profile } = await admin.from("profiles").select("stripe_customer_id, subscription_status, mode").eq("user_id", uid).maybeSingle();
+    await captureServer(uid, "account_deleted", {
+      role: profile?.mode === "coach" ? "coach" : "athlete",
+      subscription_status: profile?.subscription_status ?? null,
+      days_since_signup: Math.floor((Date.now() - new Date(user.created_at).getTime()) / 86400_000),
+    });
 
     // 1. Résilier l'abonnement Stripe (sinon le prélèvement continuerait sur un compte supprimé).
     if (profile?.stripe_customer_id && process.env.STRIPE_SECRET_KEY) {

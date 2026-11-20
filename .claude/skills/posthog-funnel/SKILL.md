@@ -81,3 +81,12 @@ Règles :
 - PostHog ignore les navigateurs détectés comme robots : un Playwright headless ne prouve pas que le tracking marche.
 
 Détails et raisons : grep `historique.md` de ce dossier.
+
+## 8. Événements serveur (abonnements, 20/11/2026, en local)
+
+L'app ne voit ni la résiliation ni la fin d'un abonnement (elles se font dans Stripe ou dans les réglages du store). `src/lib/serverAnalytics.ts` (`captureServer`, distinct_id = id Supabase) les envoie depuis le serveur, propriété `source: "server"` :
+- `subscription_canceled` : Stripe (`cancel_at_period_end` qui passe à true, ou `customer.subscription.deleted` sans résiliation programmée avant, `immediate: true`), RevenueCat `CANCELLATION`.
+- `subscription_uncanceled` : reprise (Stripe, RevenueCat `UNCANCELLATION`).
+- `subscription_ended` : fin effective (Stripe `deleted` avec `reason`, RevenueCat `EXPIRATION`).
+- `account_deleted` : `/api/account/delete`, avec `subscription_status` et `days_since_signup`.
+Propriétés communes : `store` (stripe / google_play / app_store), `plan`, `billing`, `during_trial`, `hours_since_start`. **Essais nets = `trial_started` moins `subscription_canceled` avec `during_trial`.** Avant le 20/11 aucune annulation n'est dans PostHog : la relire dans Stripe / RevenueCat.

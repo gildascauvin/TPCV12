@@ -4,6 +4,7 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { markBrevoClient } from "@/lib/email/brevoContact";
 import { sendTrialReminderEmail } from "@/lib/email/trialReminderEmail";
 import { sendTrialPush } from "@/lib/trialPush";
+import { captureServer, hoursSince } from "@/lib/serverAnalytics";
 
 function getServiceClient() {
   return createServiceClient(
@@ -19,6 +20,16 @@ async function markBrevoClientByUser(userId: string) {
   const email = data?.user?.email;
   if (!email) return;
   await markBrevoClient(email).catch(e => console.error("[brevo] mark client", e));
+}
+
+function stripeProps(sub: Stripe.Subscription) {
+  const price = sub.items.data[0]?.price;
+  return {
+    store: "stripe", plan: sub.metadata?.plan ?? null, billing: price?.recurring?.interval === "year" ? "annual" : "monthly",
+    during_trial: sub.status === "trialing" || (!!sub.trial_end && sub.trial_end * 1000 > Date.now()),
+    hours_since_start: hoursSince(sub.created * 1000),
+    feedback: sub.cancellation_details?.feedback ?? null, comment: sub.cancellation_details?.comment ?? null,
+  };
 }
 
 export async function POST(request: Request) {
@@ -54,6 +65,11 @@ export async function POST(request: Request) {
       const sub = event.data.object as Stripe.Subscription;
       const userId = sub.metadata?.user_id;
       const plan = sub.metadata?.plan;
+      /* Résiliation (ou reprise) programmée : passe par cancel_at_period_end, jamais vue par l'app. */
+      const prev = (event.data as { previous_attributes?: Partial<Stripe.Subscription> }).previous_attributes;
+      if (userId && event.type === "customer.subscription.updated" && prev && "cancel_at_period_end" in prev && prev.cancel_at_period_end !== sub.cancel_at_period_end) {
+        await captureServer(userId, sub.cancel_at_period_end ? "subscription_canceled" : "subscription_uncanceled", stripeProps(sub));
+      }
       if (userId && plan && (sub.status === "trialing" || sub.status === "active") && !sub.cancel_at_period_end) {
         await supabase
           .from("profiles")
@@ -109,6 +125,11 @@ export async function POST(request: Request) {
       const sub = event.data.object as Stripe.Subscription;
       const userId = sub.metadata?.user_id;
       if (userId) {
+        /* Résiliation immédiate (portail, suppression de compte, dashboard) : pas de cancel_at_period_end
+           avant, c'est donc aussi la résiliation. Fin à échéance d'une résiliation déjà comptée : seulement « ended ». */
+        const reason = sub.cancellation_details?.reason ?? null;
+        if (!sub.cancel_at_period_end && reason !== "payment_failed") await captureServer(userId, "subscription_canceled", { ...stripeProps(sub), immediate: true });
+        await captureServer(userId, "subscription_ended", { ...stripeProps(sub), reason });
         await supabase
           .from("profiles")
           .update({ subscription_status: "expired" })
