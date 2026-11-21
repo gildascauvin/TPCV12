@@ -56,7 +56,7 @@ import {
 import ExitFeedback, { exitFeedbackDue, markExitFeedbackSeen } from "@/components/paywall/ExitFeedback";
 import { NativePurchasePanel } from "@/components/paywall/NativeCheckout";
 import {
-  FREQ_OPTIONS, STAG_OPTIONS, FREQ_REACTIONS, STAG_REACTIONS, sportReaction, goalReaction, coachGoalReaction, goalPhrase as vecuGoalPhrase, habitsScore, effortHours, demoLoads, daysReaction,
+  FREQ_OPTIONS, STAG_OPTIONS, FREQ_REACTIONS, STAG_REACTIONS, sportReaction, goalReaction, coachGoalReaction, goalPhrase as vecuGoalPhrase, habitsScore, effortHours, demoLoads, trameSessionFrom, daysReaction,
   type VecuHabits,
 } from "@/lib/vecuModel";
 
@@ -2125,7 +2125,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       : claimedShort ? `Ton programme : ${claimedShort}` : null;
     return (
       <VecuPresignup key={role} coach={role === "coach"} picked={vcPicked} onPick={pickRole} onRepick={() => setVcPicked(false)}
-        kicker={kicker} lockRole={vecuInvited}
+        kicker={kicker} lockRole={vecuInvited} session={hasClaimedProgram ? trameSessionFrom(wizardTemplate) : null}
         onGoogle={() => { setRoleChosen(true); handleGoogleRegister(); }}
         onApple={nativeShell && !isAndroidApp() ? () => { setRoleChosen(true); handleAppleRegister(); } : undefined}
         onEmail={() => { setRoleChosen(true); posthog.setPersonProperties({ role }); next(); }}

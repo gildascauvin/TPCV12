@@ -4,6 +4,7 @@
    présentés comme des mesures. */
 import type { ObGoal } from "@/components/onboarding/PostSignupSteps";
 import { parseAndApply } from "./loadAdjust";
+import type { ProgramTemplate, SessionTemplate } from "@/types";
 
 export type VecuFamily = "force" | "endurance" | "collectif" | "mixte";
 export type VecuHabits = { sleep: number | null; stress: number | null; recovery: number | null };
@@ -185,7 +186,7 @@ export function dayLabel(offsetDays: number): string {
    que l'anneau ajuste en kg. Exemples d'onboarding seulement, jamais enregistrés. */
 const DEMO_KG: [RegExp, string][] = [
   [/^soulevé de terre roumain/i, "90 kg"], [/^soulevé de terre/i, "130 kg"], [/^front squat|^squat avant/i, "80 kg"],
-  [/^back squat|^squats?(?! au poids| à vide| unipodal| clair| sauté)/i, "100 kg"], [/^développé couché/i, "80 kg"], [/^développé militaire/i, "45 kg"],
+  [/^back squat|^squats?(?! au poids| à vide| unipodal| clair| sauté| jump)/i, "100 kg"], [/^développé couché/i, "80 kg"], [/^développé militaire/i, "45 kg"],
   [/^leg press/i, "160 kg"], [/^hip thrust/i, "110 kg"], [/^fentes( bulgares)?/i, "2x20 kg"], [/^rowing/i, "70 kg"],
   [/^tirage (vertical|horizontal)/i, "60 kg"], [/^épaulé-jeté|^clean & jerk/i, "80 kg"], [/^arraché(?! à vide)/i, "60 kg"],
   [/^push press/i, "60 kg"], [/^thrusters/i, "40 kg"], [/^kettlebell swings/i, "24 kg"], [/^curl/i, "2x14 kg"],
@@ -231,4 +232,19 @@ export function loadDelta(before: string, after: string): string | null {
   const a = loadOf(before), b = loadOf(after);
   if (!a || !b || a.unit !== b.unit || a.v === b.v) return null;
   return `${b.v < a.v ? "−" : "+"}${String(Math.round(Math.abs(b.v - a.v) * 10) / 10).replace(".", ",")} ${a.unit}`;
+}
+
+/* Séance de la Trame pour un programme /p/ (21/11, Gildas) : une séance de SON programme, donc de son sport, à la
+   place de la séance de force. 1re semaine qui a des séances, hors tests ; la séance clé = la plus dure, la 1re dans
+   l'ordre des jours (sprint → Accélération, haltéro → Arraché ; pas le renfo d'à côté). Charges en % de la max
+   (demoLoads), comme le reste de l'onboarding. */
+const TRAME_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+export function trameSessionFrom(tpl: ProgramTemplate | null): { name: string; lines: string[] } | null {
+  const week = tpl?.weeks.find(w => Object.values(w as Record<string, SessionTemplate[]>).some(d => d?.some(x => x.type !== "test")));
+  if (!week) return null;
+  const pool = TRAME_DAYS.flatMap(k => ((week as Record<string, SessionTemplate[]>)[k] ?? []).filter(x => x && x.type !== "test"))
+    .map(x => ({ name: x.name.split(" — ")[0], lines: (x.notes ?? "").split("\n").map(l => l.trim()).filter(Boolean).map(demoLoads), d: x.target_difficulty ?? 6 }))
+    .filter(x => x.lines.length);
+  const best = pool.reduce<(typeof pool)[number] | null>((a, x) => (!a || x.d > a.d ? x : a), null);
+  return best ? { name: best.name, lines: best.lines } : null;
 }

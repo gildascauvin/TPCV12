@@ -530,7 +530,7 @@ function GChip({ children, at, hot, delay = 0, emoji }: { children: React.ReactN
   );
 }
 
-export function VecuPresignup({ picked, onPick, onGoogle, onApple, onEmail, busy, error, onStep, coach = false, kicker, lockRole = false }: {
+export function VecuPresignup({ picked, onPick, onGoogle, onApple, onEmail, busy, error, onStep, coach = false, kicker, lockRole = false, session: sessionIn }: {
   picked: boolean;
   onPick: (r: "athlete" | "coach") => void;
   onRepick: () => void;
@@ -547,7 +547,10 @@ export function VecuPresignup({ picked, onPick, onGoogle, onApple, onEmail, busy
   kicker?: string | null;
   /* Sportif invité : pas de bascule « Espace coach ». */
   lockRole?: boolean;
+  /* Programme /p/ (21/11, Gildas) : une séance de SON programme (donc de son sport) remplace la séance de force. */
+  session?: { name: string; lines: string[] } | null;
 }) {
+  const TS = sessionIn?.lines.length ? sessionIn : TRAME_SESSION;
   const reduced = useReducedMotion();
   const TR = coach ? TRAME_COACH : TRAME;
   /* Rôle déjà connu (retour en arrière, ?role=) : directement l'écran du compte. */
@@ -567,7 +570,8 @@ export function VecuPresignup({ picked, onPick, onGoogle, onApple, onEmail, busy
   const ring = useRingTween(target, acct && phase >= 1 ? 1100 : 750, reduced);
   const tags = acct ? [] : [...sc.tags, ...(sc.then && phase >= 1 ? sc.then.tags : [])];
   const adjusted = acct && phase >= 1;
-  const original = TRAME_SESSION.lines.join("\n");
+  const original = TS.lines.join("\n");
+  const adjLines = demoAdjustLines(TS.lines, TRAME_PCT);
   const cardRef = useRef<HTMLDivElement>(null);
   /* Place libre sous l'anneau (18/11, Gildas : l'anneau passait sous la séance) : au compte, la carte ne monte jamais
      plus haut que le bas de l'anneau. */
@@ -591,13 +595,14 @@ export function VecuPresignup({ picked, onPick, onGoogle, onApple, onEmail, busy
       /* Seulement les lignes visibles au-dessus du fondu. */
       const lines = Array.from(card.querySelectorAll("[data-ex-line='changed']")).filter(el => el.getBoundingClientRect().top < box.bottom - 40).slice(0, 3);
       lines.forEach((el, n) => {
-        const k = Number((el as HTMLElement).dataset.exIdx ?? n), src = TRAME_SESSION.lines[k] ?? "", d = loadDelta(src, demoAdjust(src, TRAME_PCT));
+        const k = Number((el as HTMLElement).dataset.exIdx ?? n), d = loadDelta(TS.lines[k] ?? "", adjLines[k] ?? "");
         if (!d) return;
         ts.push(window.setTimeout(() => flyToken(knob, el, d, d.startsWith("−") ? "#d44000" : "#2f9e44"), n * 380));
       });
     }, 1100));
     return () => ts.forEach(clearTimeout);
-  }, [adjusted, reduced]);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [adjusted, reduced, original]);
   const go = (d: number) => setI(x => Math.max(0, Math.min(TRAME.length, x + d)));
   const btn: React.CSSProperties = { height: 52, borderRadius: 16, border: 0, fontSize: 15, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, cursor: busy ? "default" : "pointer", fontFamily: "inherit", width: "100%", opacity: busy ? 0.7 : 1 };
   return (
@@ -656,7 +661,7 @@ export function VecuPresignup({ picked, onPick, onGoogle, onApple, onEmail, busy
         <div aria-hidden style={{ position: "absolute", inset: 0, zIndex: 3, pointerEvents: "none", transition: `background .5s ${EASE}`,
           background: `linear-gradient(180deg, rgba(7,10,13,${acct ? 0 : 0.5}) 0%, rgba(7,10,13,${acct ? 0 : 0.5}) ${acct ? 82 : 42}%, #070a0d 100%)` }} />
         <TodaySessionCard hideGauge hideShare statusLabel="Séance prévue" authorName="Toi" onEdit={() => {}}
-          session={{ id: "vc-trame", user_id: "", date: "", name: TRAME_SESSION.name, notes: adjusted ? demoAdjustLines(TRAME_SESSION.lines, TRAME_PCT).join("\n") : original, target_difficulty: adjusted ? applyAutoregDifficulty(7, TRAME_PCT) : 7, duration: null, rpe: null, done: false, created_at: "" } as unknown as Session}
+          session={{ id: "vc-trame", user_id: "", date: "", name: TS.name, notes: adjusted ? adjLines.join("\n") : original, target_difficulty: adjusted ? applyAutoregDifficulty(7, TRAME_PCT) : 7, duration: null, rpe: null, done: false, created_at: "" } as unknown as Session}
           flashOriginal={adjusted ? original : null} />
         </div>
         {!acct && (
