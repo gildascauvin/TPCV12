@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
 
 interface Props {

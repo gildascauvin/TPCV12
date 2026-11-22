@@ -4,7 +4,7 @@ import { openInvite } from "@/components/coach/InviteHost";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { useInstallMode, runInstall } from "@/lib/pwaInstall";
 import {
   useOnboardingProgress, refreshOnboardingProgress, OPEN_QUICKADD, OPEN_PRIMING,

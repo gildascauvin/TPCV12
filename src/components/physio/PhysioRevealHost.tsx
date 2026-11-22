@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { loadPhysioData, PHYSIO_REVEAL, PHYSIO_REPLAY, type PhysioData, type PhysioRevealDetail, type PhysioReplayDetail } from "@/lib/physioData";
 import { heartResultFor, matchWorkout, physioVerdictAt, type HeartResult, type PhysioVerdict, type PhysioWorkout } from "@/lib/physioCompare";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import type { HealthRow } from "@/lib/deviceWellness";
 import { checkinResult, type CheckinResult, type CheckinRow } from "@/lib/checkinInsight";
 import { sessionResult, type SessionResult, type ResultSession, type WeekSession } from "@/lib/sessionInsight";

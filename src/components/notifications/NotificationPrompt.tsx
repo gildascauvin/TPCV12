@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { notificationSupport, notificationsEnabled, enableNotifications } from "@/lib/notifications";
 import { HourSelect } from "@/components/profile/NotificationToggle";
 

@@ -12,7 +12,7 @@ import { InviteForm, type InviteRow } from "@/components/coach/InviteModal";
 import { sessionsComplement } from "@/lib/sportCategories";
 import { isNativeApp, nativeGoogleSignIn, nativeAppleSignIn } from "@/lib/nativeGoogleAuth";
 import { useState, useEffect, useRef } from "react";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { plannedSession, PLANNED_RPE, type PlannedIntensity } from "@/lib/plannedIntensity";
 import { createClient } from "@/lib/supabase/client";
 import { getSessionTemplates } from "@/lib/sessionTemplates";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { createClient } from "@/lib/supabase/client";
 import type { Program, SessionTemplate, WeekTemplate } from "@/types";
 import { avgWeekRpe, loadBarColor } from "@/components/programs/SessionTemplateCard";

@@ -16,6 +16,15 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
+  /* Ouverture de l'app (22/11) : l'app native démarre sur « / », qui ne fait que renvoyer vers /today. Avec un
+     cookie de session, on renvoie tout de suite, sans vérifier la session ici : /today la vérifie juste après.
+     Un aller-retour Supabase de moins au lancement. */
+  if (request.nextUrl.pathname === "/" && request.cookies.getAll().some(c => c.name.startsWith("sb-") && c.name.includes("-auth-token"))) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/today";
+    return NextResponse.redirect(url);
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -42,12 +51,12 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user: fetchedUser },
-    error: userError,
-  } = await supabase.auth.getUser();
+  /* getClaims (22/11) au lieu de getUser : le jeton est vérifié sur place avec la clé publique du projet (ES256,
+     clés mises en cache) au lieu d'un appel au serveur Auth à chaque page. Il rafraîchit la session expirée comme
+     avant (cookies posés via setAll). Les pages serveur gardent getUser (getAuthUser). */
+  const { data: claimsData, error: userError } = await supabase.auth.getClaims();
 
-  let user = fetchedUser;
+  let user: { id: string } | null = claimsData?.claims?.sub ? { id: claimsData.claims.sub } : null;
 
   /* Un refresh token invalide/déjà consommé (rotation Supabase, cookie périmé resté
      coincé sur un appareil) faisait échouer getUser() en silence — user retombait à

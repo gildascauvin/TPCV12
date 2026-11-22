@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { markPrimingSource, sourceFromSurface } from "@/lib/primingSource";
 
 /* Freemium "dispositif éteint" (2026-09-30, POC https://claude.ai/artifact/GBoj2wydy4kK8N8skjTAwW) :

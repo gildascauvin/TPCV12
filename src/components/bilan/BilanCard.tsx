@@ -6,7 +6,7 @@
    n'a pas au moins 3 points forme (un bilan vide ne donne pas envie de revenir). */
 
 import { useEffect, useState } from "react";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { createClient } from "@/lib/supabase/client";
 import { mondayOf, periodFor, type BilanPeriodKind } from "@/lib/bilan";
 

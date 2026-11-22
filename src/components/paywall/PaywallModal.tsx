@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, PaymentRequestButtonElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import type { PaymentRequest } from "@stripe/stripe-js";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { DARK_CARD_BG } from "@/lib/theme";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 
 /* Sandbox uniquement (2026-08-20) — remplace la redirection directe vers /register par un palier
    plus doux, demandé explicitement par Gildas ("plutot que rediriger vers /register pour la gate,

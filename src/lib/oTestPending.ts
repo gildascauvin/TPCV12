@@ -4,7 +4,7 @@
    Gardé en localStorage à l'arrivée sur l'inscription, enregistré dans test_results une fois le
    compte prêt (prepareOnboarding) : chez le sportif pour lui-même, chez le coach sur Thomas (démo). */
 
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { createClient } from "@/lib/supabase/client";
 import { upsertTestResult, type TestSubject } from "@/lib/testResults";
 import { METRIC_DISPLAY, type MetricKey } from "@/lib/testNorms";

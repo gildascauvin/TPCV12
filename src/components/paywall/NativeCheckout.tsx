@@ -3,7 +3,7 @@
 import { Skel } from "@/components/ui/Skeleton";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import type { PurchasesStoreProduct } from "@revenuecat/purchases-capacitor";
 import { createClient } from "@/lib/supabase/client";
 import { isAndroidApp, storeName } from "@/lib/native";

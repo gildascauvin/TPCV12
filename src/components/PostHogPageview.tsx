@@ -1,7 +1,7 @@
 "use client";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, Suspense } from "react";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 
 function PageviewTracker() {
   const pathname = usePathname();

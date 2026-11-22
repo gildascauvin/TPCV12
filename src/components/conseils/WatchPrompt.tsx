@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { createClient } from "@/lib/supabase/client";
 import { signupPlatform, isAndroidApp, healthAppName } from "@/lib/native";
 import { APP_STORE_URL, PLAY_STORE_URL } from "@/lib/storeLinks";

@@ -9,7 +9,7 @@ import { validDecision } from "@/lib/autoregDecisionRecord";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { format, addDays, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { realToView, demoToView } from "@/lib/coachSessions";

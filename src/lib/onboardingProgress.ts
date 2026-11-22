@@ -37,7 +37,7 @@ async function trackCompletions(p: OnboardingProgress) {
   const tracked = new Set(seen ?? []);
   const newlyDone = p.steps.filter(s => s.done && !tracked.has(s.key));
   if (!newlyDone.length && !(p.complete && !tracked.has("__complete"))) return;
-  const posthog = (await import("posthog-js")).default;
+  const posthog = (await import("@/lib/ph")).default;
   for (const s of newlyDone) {
     const props = { role: p.role, step: s.key, step_index: p.steps.findIndex(x => x.key === s.key) + 1, steps_total: p.steps.length, already_done_on_arrival: firstObservation };
     posthog.capture("onboarding_checklist_step_completed", props);
@@ -109,7 +109,7 @@ export async function markFirstAdjustment() {
     notifyOnboardingProgress();
     const paid = profile.subscription_status === "athlete" || profile.subscription_status === "coach";
     if (!paid) {
-      const posthog = (await import("posthog-js")).default;
+      const posthog = (await import("@/lib/ph")).default;
       posthog.capture("priming_after_first_decision");
       // Laisse le temps de voir la décision appliquée avant d'ouvrir le priming.
       setTimeout(() => window.dispatchEvent(new CustomEvent(OPEN_PRIMING, { detail: { source: "first_decision" } })), 1200);

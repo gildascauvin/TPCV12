@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { addDays, format } from "date-fns";
 import { fr } from "date-fns/locale";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import {
   useActivityStatus, refreshActivityStatus, refreshActivityStatusIfStale, useDisplayedPeriod,
   type ActivityPeriod, type ActivityStatus, type ActivitySubject,

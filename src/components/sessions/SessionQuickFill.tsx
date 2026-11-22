@@ -3,7 +3,7 @@
 import { ExerciseLinesBox } from "@/components/sessions/ExerciseLineView";
 import { Skel } from "@/components/ui/Skeleton";
 import { useEffect, useMemo, useState } from "react";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import type { ProgramTemplate, SessionTemplate } from "@/types";
 import { SPORT_CATEGORIES, guessSportChip, WEAKNESSES_BY_SPORT } from "@/lib/sportCategories";
 import { findCatalogEntry, weaknessKeyFor } from "@/lib/sportCatalog";

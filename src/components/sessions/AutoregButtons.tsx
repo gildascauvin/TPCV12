@@ -2,7 +2,7 @@
 
 import { haptic } from "@/lib/native";
 import { useEffect, useRef, useState } from "react";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { adjustNotes } from "@/lib/sessionLevers";
 import { markFirstAdjustment } from "@/lib/onboardingProgress";
 import { createPortal } from "react-dom";

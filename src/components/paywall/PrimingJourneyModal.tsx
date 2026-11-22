@@ -3,7 +3,7 @@
 import { isNativeApp } from "@/lib/nativeGoogleAuth";
 import { NativePurchasePanel } from "./NativeCheckout";
 import { useEffect, useRef, useState } from "react";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { ElitePlanCard, PrimingExtras, PricingSideLink, PRICING_PRIMING_GUARANTEE_CAPTION } from "./PricingPriming";
 import LossSheet, { lossSheetDue, markLossSheetSeen, type LossStake } from "./LossSheet";
 import { RiskTimeline } from "./RiskTimeline";

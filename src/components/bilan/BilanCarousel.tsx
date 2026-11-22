@@ -7,7 +7,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { computeBilan, isSynthetic, periodFor, type Bilan, type BilanCheckin, type BilanPeriodKind, type BilanSession, type BilanSlide, type BilanTest } from "@/lib/bilan";
 import type { PersonalDim } from "@/lib/autoregPersonal";

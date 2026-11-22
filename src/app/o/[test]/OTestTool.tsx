@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { O_TESTS, encodeOValues } from "@/lib/oTests";
 import { CMJ_NORMS, CMJ_SPORTS_WITHOUT_NORM } from "@/lib/cmjNorms";
 import { TestLine, previewTestRow } from "@/components/tests/TestsPanel";

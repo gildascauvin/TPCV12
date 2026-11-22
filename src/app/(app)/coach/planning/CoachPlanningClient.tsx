@@ -11,7 +11,7 @@ import { todayRingState, type SessionRingState } from "@/components/calendar/Ses
 import { useSearchParams, useRouter } from "next/navigation";
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import dynamic from "next/dynamic";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { format, addDays, subDays, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "@/lib/toast";

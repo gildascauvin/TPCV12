@@ -5,7 +5,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { buildAthleteFixture, buildTestFixture } from "@/lib/sandboxFixtures";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { createClient } from "@/lib/supabase/client";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import CoachPageBg from "@/components/calendar/CoachPageBg";

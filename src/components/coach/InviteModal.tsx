@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useExitAnimation } from "@/hooks/useExitAnimation";

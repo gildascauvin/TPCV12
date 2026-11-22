@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { SessionExtras, RecalNote, checkRecalAfter, type RecalNotice } from "@/components/physio/PhysioRevealHost";
 import MiniBilan from "@/components/physio/MiniBilan";
 import { sessionSlides, todaySlide } from "@/components/physio/miniSlides";

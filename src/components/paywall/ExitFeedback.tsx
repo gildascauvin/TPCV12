@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { isNativeApp } from "@/lib/nativeGoogleAuth";
 import { isAndroidApp } from "@/lib/native";
 import { PRICING } from "./PaywallModal";

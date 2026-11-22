@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { useInstallMode, runInstall } from "@/lib/pwaInstall";
 
 /* Profil : accès permanent à l'installation (la checklist disparaît une fois terminée). */

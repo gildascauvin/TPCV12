@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { createClient } from "@/lib/supabase/client";
 
 /* Freemium (2026-09-30) : un compte gratuit voit sa 1re vraie décision en clair, puis les sorties

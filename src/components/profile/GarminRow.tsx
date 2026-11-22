@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { Capacitor } from "@capacitor/core";
 import { invalidatePhysio } from "@/lib/physioData";
 import { isAndroidApp } from "@/lib/native";

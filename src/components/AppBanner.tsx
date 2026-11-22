@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { createClient } from "@/lib/supabase/client";
 import { isStandalone } from "@/lib/push";
 import { storeForUserAgent, type Store } from "@/lib/storeLinks";

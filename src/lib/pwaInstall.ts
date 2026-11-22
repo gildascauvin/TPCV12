@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { Capacitor } from "@capacitor/core";
-import posthog from "posthog-js";
+import posthog from "@/lib/ph";
 import { isIOS, isStandalone } from "@/lib/push";
 
 /* Installation de l'app web (2026-10-07). Chrome (Android, ordinateur) envoie `beforeinstallprompt`
