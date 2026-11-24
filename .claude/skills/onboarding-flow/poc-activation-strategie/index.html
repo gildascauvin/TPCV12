@@ -354,6 +354,41 @@ h1{font-size:28px;line-height:1.1;letter-spacing:-.02em;margin:6px 0 10px;text-w
 .reco b{display:block;font-size:14px;margin-top:2px}
 .reco small{display:block;font-size:11.5px;color:var(--muted)}
 .reco .r{color:var(--faint)}
+/* Lot 1 : grille et cartes de la prod */
+.ggrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.gcard{position:relative;height:150px;border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:#11161a;padding:0;cursor:pointer;text-align:left;color:#fff}
+.gcard.on{border:2px solid #fff}
+.gcard img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.1) brightness(.5)}
+.gcard::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,10,13,.05),rgba(7,10,13,.35) 45%,rgba(7,10,13,.94))}
+.gcard>span{position:absolute;z-index:2}
+.gchip{top:9px;left:9px;font-size:10.5px;font-weight:800;padding:3px 7px;border-radius:999px;background:rgba(0,0,0,.6);color:#ff8a7a}
+.gtx{left:11px;right:42px;bottom:11px;display:flex;flex-direction:column;gap:2px}
+.gtx b{font-size:14px;line-height:1.15}.gtx small{font-size:11.5px;color:rgba(255,255,255,.65)}
+.gplus{right:9px;bottom:9px;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.22);display:grid;place-items:center;font-weight:900}
+.gcard.on .gplus{background:#fff;color:#111}
+.stepper{display:grid;grid-template-columns:56px 1fr 56px;align-items:center;gap:10px;margin-top:6px}
+.stepper button{height:56px;border-radius:16px;border:1px solid rgba(0,0,0,.1);background:#f1f0ee;font-size:24px;font-weight:700;cursor:pointer;color:var(--tink)}
+.stepper span{text-align:center;font-size:34px;font-weight:900;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.tg{text-align:center;font-size:14px;color:var(--tmuted);margin-top:8px}.tg b{color:var(--accent)}
+.wks{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}
+.wks button{border:1px solid rgba(0,0,0,.1);background:#fff;border-radius:12px;padding:8px 2px;font-size:13px;font-weight:800;cursor:pointer;color:var(--tink);display:flex;flex-direction:column;align-items:center;gap:2px}
+.wks button small{font-size:10.5px;font-weight:600;color:var(--tmuted)}
+.wks button.on{border-color:var(--tink);background:#f7f6f4}
+.pl{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;padding:7px 2px;border-top:1px solid rgba(255,255,255,.06)}.pl:first-child{border-top:0}
+.rcard{flex:0 0 78%;scroll-snap-align:start;position:relative;height:230px;border-radius:24px;overflow:hidden;border:1px solid rgba(255,255,255,.16);background:#0d1114;box-shadow:0 18px 40px rgba(0,0,0,.45)}
+.rcard img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.15) brightness(.42)}
+.rcard::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,10,13,.25),rgba(7,10,13,.15) 30%,rgba(7,10,13,.92) 72%)}
+.rcard>span{position:absolute;z-index:2}
+.rtop{top:12px;left:12px}.rtop i{font-style:normal;font-size:11.5px;font-weight:800;padding:4px 9px;border-radius:999px;background:rgba(0,0,0,.5)}
+.rbot{left:14px;right:14px;bottom:14px;display:flex;flex-direction:column}
+.rbot small{font-size:12.5px;font-weight:700;color:rgba(255,255,255,.7)}
+.rbot b{font-size:30px;font-weight:900;letter-spacing:-.03em;line-height:1.05}
+.rbar{display:block;height:9px;margin-top:12px;border-radius:5px;background:rgba(255,255,255,.14);position:relative}
+.rbar i{position:absolute;left:0;top:50%;width:14px;height:14px;margin-top:-7px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(240,74,8,.6)}
+.rfoot{display:flex;justify-content:space-between;margin-top:8px;font-size:12px;color:rgba(255,255,255,.62)}
+.rfoot em{font-style:normal;font-weight:800;color:#ff8a55}
+.rcard.add{flex-basis:34%;border:2px dashed rgba(255,255,255,.2);background:rgba(255,255,255,.03);box-shadow:none;display:grid;place-items:center;text-align:center;color:rgba(255,255,255,.7);font-weight:700;font-size:13px}
+.rcard.add::after{display:none}
 /* Carnet de bord */
 .log{display:flex;flex-direction:column;gap:8px}
 .step{display:grid;grid-template-columns:30px minmax(0,1fr);gap:12px;padding:14px 16px;border-radius:16px;border:1px solid var(--line);background:var(--panel);cursor:pointer;text-align:left;width:100%;color:var(--ink);transition:border-color .2s,background .2s}
@@ -376,17 +411,19 @@ h1{font-size:28px;line-height:1.1;letter-spacing:-.02em;margin:6px 0 10px;text-w
 <div class="wrap">
   <div class="phone-col"><div class="ctl" id="ctl"></div><div class="device"><div class="phone" id="phone"></div></div></div>
   <div>
-    <div class="kicker">POC · parcours complet · v15</div>
+    <div class="kicker">POC · parcours complet · v16</div>
     <h1>Du problème à l'app, sans redite</h1>
-    <p class="lead">La première question du point forme devient « Ta séance du jour » (photo de ta séance ou de ton programme, je l'écris, propose-m'en une, repos) : elle branche la séance et le programme, dans l'onboarding comme dans l'app. Plus de feuille de choix au déclic, plus d'écran « Branche tes séances » ni d'import à part. Bascule A / B au-dessus du téléphone : A = vécu avant le paywall, B = mise en scène avant le paywall et vrai premier point forme dans l'app.</p>
+    <p class="lead"><b style="color:var(--ink)">v16 : parcours « Lot 1 » (sélectionné par défaut)</b> = l'onboarding de la prod + l'écran objectifs avec les vraies cartes et la question du record, un paywall titré avec l'objectif, puis l'arrivée dans l'onglet Objectifs déjà en prod. Les points à trancher sont en bas, avec mon avis. Lot 2 (ci-dessous, bascules A / B) : la première question du point forme devient « Ta séance du jour » (photo de ta séance ou de ton programme, je l'écris, propose-m'en une, repos) : elle branche la séance et le programme, dans l'onboarding comme dans l'app. Plus de feuille de choix au déclic, plus d'écran « Branche tes séances » ni d'import à part. Bascule A / B au-dessus du téléphone : A = vécu avant le paywall, B = mise en scène avant le paywall et vrai premier point forme dans l'app.</p>
     <div class="log" id="log"></div>
     <div class="box">
-      <div class="k">Questions ouvertes</div>
+      <div class="k">À trancher (avis de Claude, 24/11)</div>
       <ul>
-        <li><b>Table des caps :</b> sport × point faible → repère, départ, cible à 8 semaines. Les valeurs du POC sont des exemples plausibles, à valider avant de coder (progressions réalistes par test).</li>
-        <li><b>Point de départ d'un objectif :</b> sans test ni séries saisies, la valeur de départ est inconnue. Proposition : l'objectif affiche « départ à ton 1er test / ta 1re séance » et la cible se pose en pourcentage jusqu'à la première mesure.</li>
-        <li><b>Paywall :</b> la croix mène à la même suite que le paiement (désacralisé). En gratuit, l'ajustement du jour est flouté sur /today : 2e moment de conversion, sur sa vraie séance.</li>
-        <li><b>Apple Santé</b> (étape de prod, si disponible) n'est pas dessinée : elle reste entre le point forme et le déclic.</li>
+        <li><b>1. Ordre A ou B :</b> attendre les funnels de l'onboarding vécu (~27/11). Pari : A.</li>
+        <li><b>2. Cibles :</b> on abandonne la table du POC, la cible vient du calcul de la prod (+4 % force, −2 % sprint…), un seul calcul partout.</li>
+        <li><b>3. Point de départ :</b> une question dans la feuille de l'objectif, « Ton record ? » (sélecteur, ou « Je ne sais pas, je le testerai »). Connu : chiffre sur la carte et le paywall. Inconnu : « +4 % à ton 1er test ».</li>
+        <li><b>4. Écran objectifs :</b> les vraies cartes de la prod, filtrées sur son sport, point faible en tête, rien de coché d'avance, une échéance par objectif (8 sem. par défaut).</li>
+        <li><b>5 + 6. « Ta séance du jour » et « Ton programme aujourd'hui » :</b> lot 2 (ils touchent aussi l'app). Lot 1 = parcours « Lot 1 » au-dessus du téléphone.</li>
+        <li><b>7. Paywall :</b> croix = même suite, ajustement flouté en gratuit : déjà en prod, rien à trancher.</li>
       </ul>
     </div>
   </div>
@@ -460,7 +497,7 @@ const TODAY=new Date(2026,10,22);
 const fmtDate=d=>`${d.getDate()===1?"1er":d.getDate()} ${MONTHS[d.getMonth()]}`;
 const addW=w=>new Date(TODAY.getTime()+w*7*864e5);
 
-const S={caps:["main"],custom:null,customOpen:false,order:"A",pf:0,seance:null,photoKind:"seance",hasProg:null,capState:"run",capEdit:false,i:0,dir:1,name:"Gildas",sport:"muscu",goal:null,weak:null,days:[0,2,4,5],stag:6,plan:null,
+const S={obj:[],objSheet:null,objVal:0,objW:8,caps:["main"],custom:null,customOpen:false,order:"L1",pf:0,seance:null,photoKind:"seance",hasProg:null,capState:"run",capEdit:false,i:0,dir:1,name:"Gildas",sport:"muscu",goal:null,weak:null,days:[0,2,4,5],stag:6,plan:null,
   decPick:null,decShow:false,fact:0,cap:"main",weeks:null,dateSheet:false,all:false,billing:"annual",tier:"elite",
   src:null,flip:false,picked:false,perfKind:"main",j1:false};
 
@@ -622,7 +659,7 @@ K.j1notif={g:"Dans l'app",h:"J1 · la notification",tag:"prod",p:"Notification n
 
 /* ── Point forme : 1re question « Ta séance du jour » (si rien n'est prévu), puis la récupération (résumée) ── */
 const lv=n=>`<span class="lv">${[6,11,16].map((h,i)=>`<b style="height:${h}px;${i<n?"background:#d44000":""}"></b>`).join("")}</span>`;
-const SRC_TXT={mine:()=>S.photoKind==="prog"?"Ton programme : séance du jour":`Ta séance : ${sp().sess[1].length} exercices`,propose:()=>`Séance proposée : ${sp().sess[0].toLowerCase()}`};
+const SRC_TXT={mine:()=>S.photoKind==="prog"?"Ton programme : séance du jour":`Ta séance : ${sp().sess[1].length} exercices`,propose:()=>`Séance proposée : ${sp().sess[0].toLowerCase()}`,tpc:()=>`Ta séance du programme ThePerfClub`};
 function pointForme(ctx){
   const inApp=ctx!=="onb";
   const bg=inApp?`<div class="bgdark"></div><div class="app-top"><span class="pill"><i></i>${ctx==="j1"?"Mardi":"Aujourd'hui"}</span></div>`:`<div class="bgdark"></div>${topb(.4)}<div class="body"><h2 class="t">Ton point forme du jour.</h2><p class="st">10 secondes.<br>Ta séance se règle dessus.</p></div>`;
@@ -636,7 +673,7 @@ function pointForme(ctx){
   }else if(S.pf===1){
     inner=`<div class="k">Question 1 · suite</div><h3>Ta séance.</h3><div class="seg2" style="margin:0 0 10px"><button class="on">📷 Photo</button><button>✍️ Texte</button></div><div class="readout">${I.check.replace(/22/g,"16")} ${S.photoKind==="prog"?"Programme lu : 4 séances, rangées dans ton planning.":`Séance lue : ${sp().sess[1].length} exercices, dans ton planning.`}</div><div class="seg2"><button class="${S.photoKind!=="prog"?"on":""}" data-photo="seance">Exemple : une séance</button><button class="${S.photoKind==="prog"?"on":""}" data-photo="prog">Exemple : un programme</button></div><button class="cta" style="margin-top:12px" data-pf="2">Continuer</button>`;
   }else{
-    inner=`<div class="k">Question 2 · résumé</div><h3>Ta nuit ?</h3><div class="scale">${[["Moins de 6 h",1],["6 à 7 h",2],["Plus de 7 h",3]].map(([l,n])=>`<button data-pfdone="1">${lv(n)}${l}</button>`).join("")}</div>`;
+    inner=`<div class="k">${S.order==="L1"?"Point forme · résumé":"Question 2 · résumé"}</div><h3>Ta nuit ?</h3><div class="scale">${[["Moins de 6 h",1],["6 à 7 h",2],["Plus de 7 h",3]].map(([l,n])=>`<button data-pfdone="1">${lv(n)}${l}</button>`).join("")}</div>`;
   }
   return `${bg}<div class="wm">${inner}</div>`;
 }
@@ -692,20 +729,80 @@ K.fus={g:"Piste à part : objectifs et programmes",h:"Avec fusion : onglet « Ob
   <div class="servi"><div class="mono" style="color:var(--soft)">Le programme qui les sert</div><div class="nm">${PROG_NAME()}</div><div class="sub">Prochaine séance : demain · ${sp().sess[0].toLowerCase()}</div>${blocks()}<div class="sub" style="margin-top:8px;color:var(--soft);font-weight:700">Changer de programme · Bibliothèque ›</div></div>
   <div class="enab"><div class="h mono" style="color:var(--faint)">Tes mesures</div>${[["✓","Régularité","92 %"],["✓","Charge dans la zone","1,1"],["↓","Récupération","−6"],["→","Prochain test",fmtDate(addW(3))]].map(([s2,h,v])=>`<div class="en"><span class="s">${s2}</span><span><b>${h}</b></span><span class="v">${v}</span></div>`).join("")}</div></div>
   <div class="bnav" style="grid-template-columns:repeat(3,1fr)"><span><i></i>Accueil</span><span><i></i>Planning</span><span class="on"><i></i>Objectifs</span></div>`};
+
+/* ── Lot 1 (24/11) : vrais objectifs de la prod (catalogue par sport, gain calculé), record demandé, paywall titré, arrivée dans l'onglet Objectifs ── */
+/* T(id, nom, unité, gain %, semaines par défaut, plus bas = mieux, valeur d'exemple, pas du sélecteur) : gains = src/lib/objectives.ts */
+const T=(id,nm,u,g,w,low,ex,step,img)=>({id,nm,u,g,w,low,ex,step,img});
+const OBJ_TESTS={
+  muscu:{tests:[T("sq","Back squat","kg",4,8,0,120,2.5,"p_cross.webp"),T("dl","Soulevé de terre","kg",4,8,0,150,2.5,"p_cross.webp"),T("bp","Développé couché","kg",3,8,0,90,2.5,"p_groupe.webp"),T("ohp","Développé militaire","kg",3,8,0,60,2.5,"p_stress.webp")],
+    weak:{"Jambes":"sq","Dos":"dl","Pectoraux":"bp","Épaules":"ohp","Bras":"ohp"}},
+  foot:{tests:[T("cmj","Saut vertical (CMJ)","cm",6,6,0,38,0.5,"p_collectif.webp"),T("s10","Sprint 10 m","s",2,6,1,1.85,0.01,"p_sprint.webp"),T("dj","Drop Jump (RSI)","",6,6,0,1.6,0.05,"p_cross.webp"),T("sq","Back squat","kg",4,8,0,90,2.5,"p_groupe.webp")],
+    weak:{"Puissance":"cmj","Vitesse":"s10","Explosivité":"dj","Gainage / contact":"sq"}},
+  course:{tests:[T("vma","VMA","km/h",3,12,0,16,0.5,"p_sprint.webp"),T("10k","10 km","min",2,12,1,45,0.5,"p_collectif.webp"),T("5k","5 km","min",2,8,1,22,0.25,"p_groupe.webp"),T("cmj","Saut vertical (CMJ)","cm",5,6,0,32,0.5,"p_cross.webp")],
+    weak:{"Vitesse":"vma","Endurance de fond":"10k","Explosivité":"cmj","Technique de course":"5k"}},
+  sprint:{tests:[T("s10","Sprint 10 m","s",2,6,1,1.78,0.01,"p_sprint.webp"),T("100","Sprint 100 m","s",1.5,8,1,11.6,0.05,"p_collectif.webp"),T("cmj","Saut vertical (CMJ)","cm",6,6,0,45,0.5,"p_cross.webp"),T("fly","30 m lancé","s",1.5,8,1,3.30,0.01,"p_groupe.webp")],
+    weak:{"Vitesse pure":"s10","Endurance de vitesse":"100","Explosivité":"cmj","Technique de course":"fly"}},
+  combat:{tests:[T("sj","Squat Jump","cm",6,6,0,32,0.5,"p_cross.webp"),T("5k","5 km","min",3,8,1,24,0.25,"p_sprint.webp"),T("cmj","Saut vertical (CMJ)","cm",5,6,0,36,0.5,"p_collectif.webp")],
+    weak:{"Puissance de frappe":"sj","Endurance cardio":"5k","Explosivité":"cmj"}},
+};
+const OT=()=>OBJ_TESTS[S.sport];
+const otById=id=>OT().tests.find(t=>t.id===id);
+const weakTestId=()=>S.weak&&OT().weak[S.weak]||null;
+const orderedTests=()=>{const w=weakTestId();return [...OT().tests].sort((a,b)=>(b.id===w)-(a.id===w))};
+const fmtV=(v,u)=>{if(u==="min"){const t=Math.round(v*60);return `${Math.floor(t/60)}:${String(t%60).padStart(2,"0")}`}if(u==="s")return `${v.toFixed(2).replace(".",",")} s`;if(u==="")return v.toFixed(2).replace(".",",");const r=u==="kg"?Math.round(v*2)/2:Math.round(v*10)/10;return `${String(r).replace(".",",")} ${u}`};
+const tgt=(t,v)=>t.low?v*(1-t.g/100):v*(1+t.g/100);
+const goalTxt=o=>{const t=otById(o.id);return o.rec!=null?`${fmtV(o.rec,t.u)} → ${fmtV(tgt(t,o.rec),t.u)}`:`${t.low?"−":"+"}${String(t.g).replace(".",",")} % à ton 1er test`};
+const OBJ_MAX=3;
+
+K.obj={g:"Offre",h:"Tes objectifs (vraies cartes de la prod)",tag:"mod",p:"Avis 2 + 4 : le catalogue « Pour toi » de son sport (même liste que l'onglet Objectifs), son point faible en tête et marqué, RIEN de coché d'avance (règle des étapes de choix). Tap sur une carte = feuille du bas : « Ton record ? » (avis 3) + échéance par objectif (8 sem. par défaut, comme en prod). Cible = calcul de la prod (+4 % force, −2 % sprint…), plus de table propre au POC. Jusqu'à 3.",r:()=>{
+  const n=S.obj.length, w=weakTestId();
+  const card=t=>{const o=S.obj.find(x=>x.id===t.id);return `<button class="gcard ${o?"on":""}" data-objpick="${t.id}"><img src="${t.img}" alt="">${t.id===w?`<span class="gchip">▼ Ton point faible</span>`:""}<span class="gtx"><b>${t.nm}</b><small>${o?`${goalTxt(o)}`:"Pas encore testé"}</small></span><span class="gplus">${o?"✓":"+"}</span></button>`};
+  const sheet=S.objSheet?(()=>{const t=otById(S.objSheet);return `<div class="dim" data-act="objclose"></div><div class="sheet"><div class="sh"><div class="grab"></div><h3>Ton record au ${t.nm.toLowerCase()} ?</h3><p class="sub">Ton dernier résultat, même approximatif. Ta cible part de là.</p></div><div class="sc">
+    <div class="stepper"><button data-objstep="-1" aria-label="Moins">−</button><span>${fmtV(S.objVal,t.u)}</span><button data-objstep="1" aria-label="Plus">+</button></div>
+    <div class="tg">Cible : <b>${fmtV(tgt(t,S.objVal),t.u)}</b> (${t.low?"−":"+"}${String(t.g).replace(".",",")} %)</div>
+    <div class="sep" style="margin-top:16px">Échéance</div>
+    <div class="wks">${[6,8,12,16].map(k=>`<button class="${S.objW===k?"on":""}" data-objw="${k}">${k} sem.<small>${fmtDate(addW(k))}</small></button>`).join("")}</div>
+    <button class="cta" style="margin-top:16px" data-act="objok">Valider</button>
+    <button class="ghost" style="color:var(--tmuted)" data-act="objidk">Je ne sais pas, je le testerai</button></div></div>`})():"";
+  return `<div class="bgdark"></div>${topb(.72)}<div class="body" style="overflow:auto"><h2 class="t">${S.name}, choisis tes objectifs.</h2><p class="st">Jusqu'à 3. Ton point faible est en premier.</p>
+  <div class="ggrid">${orderedTests().map(card).join("")}</div></div>
+  <div class="foot"><button class="cta" data-go="next" ${n?"":"disabled"} style="${n?"":"opacity:.45"}">${n?`Garder ${n>1?`mes ${n} objectifs`:"cet objectif"}`:"Choisis au moins un objectif"}</button><button class="ghost" data-go="next">Je choisirai plus tard</button></div>${sheet}`;
+}};
+
+K.pay1={g:"Offre",h:"Paywall titré avec son objectif",tag:"mod",p:"Le titre reprend SON objectif, avec son chiffre si le record est connu (« Back squat : 125 kg d'ici le 18 janvier. »), sinon le pourcentage. Sans objectif choisi : titre actuel de la prod. La croix mène à la même suite (point 7, déjà en prod).",r:()=>{
+  const o=S.obj[0], t=o&&otById(o.id);
+  const title=o?`${t.nm} : ${o.rec!=null?fmtV(tgt(t,o.rec),t.u):`${t.low?"−":"+"}${String(t.g).replace(".",",")} %`} d'ici le ${fmtDate(addW(o.w))}.`:"Ta séance s'ajuste à ta forme, chaque jour.";
+  return `<div class="bgdark"></div><div class="pw"><button class="x" data-act="skip" aria-label="Fermer">✕</button><div class="k">${S.obj.length>1?`Tes ${S.obj.length} objectifs`:o?`Ton objectif · ${o.w} semaines`:"Elite"}</div><h2>${title}</h2><p class="sub">Au feeling, c'est le même plateau.<br>Avec ta forme du jour, chaque séance t'en rapproche.</p>
+  ${S.obj.length?`<div class="mini">${S.obj.map(x=>{const tt=otById(x.id);return `<div class="pl"><span>🎯 ${tt.nm}</span><b>${goalTxt(x)}</b></div>`}).join("")}</div>`:""}
+  <div class="offer">${[["annual","Annuel","6,50 € par mois","78 € / an",true],["monthly","Mensuel","sans engagement","9 € / mois",false]].map(([k,l,s2,pr,best])=>`<button class="of ${S.billing===k?"on":""}" data-bill="${k}"><span class="ck">${S.billing===k?"✓":""}</span><span><b>${l}</b>${best?`<span class="tagb">Meilleur prix</span>`:""}<small>${s2}</small></span><span class="p">${pr}</span></button>`).join("")}</div>
+  <div class="frise"><span><b>Aujourd'hui</b>0 €</span><span><b>Jour 12</b>rappel</span><span><b>Jour 14</b>1er paiement</span></div></div>
+  <div class="foot"><button class="cta" data-act="pay">Commencer mon essai gratuit</button></div>`;
+}};
+
+K.cel1={g:"Après le paywall (payé ou non)",h:"Célébration d'arrivée",tag:"mod",p:"L'écran de célébration existant ; il rappelle ses objectifs et le rendez-vous de demain.",r:()=>`<div class="bgdark"></div><div class="cel"><div class="badge">${I.flag}</div><h2>C'est parti, ${S.name}.</h2><p>Demain, ton point forme ajuste ta séance.</p>
+  ${S.obj.map(x=>{const t=otById(x.id);return `<div class="capmini"><div class="nm">🎯 ${t.nm}</div><div class="mt">${goalTxt(x)} · d'ici le ${fmtDate(addW(x.w))}</div></div>`}).join("")}</div><div class="foot"><button class="cta" data-go="next">Ouvrir l'app</button></div>`};
+
+K.objtab={g:"Dans l'app",h:"Onglet Objectifs (prod)",tag:"prod",p:"L'onglet Objectifs déployé le 24/11 : ses objectifs en cartes récompense (J-x, barre, cible). Record inconnu : la carte attend sa 1re valeur. Rien de nouveau à coder ici, l'onboarding ne fait qu'écrire dans la table objectives.",r:()=>`<div class="bgdark"></div><div class="perf"><h2>Objectifs</h2>
+  <div class="rail" style="margin:12px -18px 0;padding:4px 18px 8px">${S.obj.map(x=>{const t=otById(x.id);return `<div class="rcard"><img src="${t.img}" alt=""><span class="rtop"><i>J-${x.w*7}</i></span><span class="rbot"><small>${t.nm}</small>${x.rec!=null?`<b>${fmtV(x.rec,t.u)}</b><span class="rbar"><i></i></span><span class="rfoot"><span>d'ici le ${fmtDate(addW(x.w))}</span><em>🎯 ${fmtV(tgt(t,x.rec),t.u)}</em></span>`:`<b style="font-size:17px;line-height:1.25">Ajoute ta 1re valeur : la barre démarre là.</b><span class="rfoot"><span>d'ici le ${fmtDate(addW(x.w))}</span></span>`}</span></div>`}).join("")}${S.obj.length<OBJ_MAX?`<div class="rcard add">+<br>Choisis un objectif</div>`:""}</div>
+  <h3 style="font-size:19px;font-weight:900;margin:18px 0 0">Choisis tes objectifs</h3><div class="ggrid" style="margin-top:10px">${orderedTests().slice(0,2).map(t=>`<div class="gcard ${S.obj.some(o=>o.id===t.id)?"on":""}"><img src="${t.img}" alt=""><span class="gtx"><b>${t.nm}</b></span><span class="gplus">${S.obj.some(o=>o.id===t.id)?"✓":"+"}</span></div>`).join("")}</div></div>
+  <div class="bnav"><span><i></i>Accueil</span><span><i></i>Planning</span><span class="on"><i></i>Objectifs</span><span><i></i>Prog.</span></div>`};
+
+K.pf1={g:"Solution vécue",h:"Point forme (prod)",tag:"prod",p:"Lot 1 : le point forme de la prod, sans la question « Ta séance du jour » (elle arrive au lot 2, avec « Ton programme aujourd'hui »). Le déclic joue sur la séance du programme ThePerfClub, comme aujourd'hui.",r:()=>pointForme("onb")};
 /* ── Parcours A et B ── */
 const ORDERS={
+  L1:["trame","compte","sport","goal","weak","days","stag","hours","pf1","dec","rules","obj","pay1","notif","cel1","objtab","today0"],
   A:["trame","compte","sport","goal","weak","prog","days","stag","hours","pf","dec","rules","cap","pay","notif","cel","today0","perf","j1notif","j1pf","j1today"],
   P:["link","fus"],
   B:["trame","compte","sport","goal","weak","prog","days","stag","hours","demo","rules","cap","pay","notif","cel","empty","apppf","today0","perf","j1notif","j1pf","j1today"],
 };
 const seq=()=>ORDERS[S.order].map(k=>({k,...K[k]}));
 let SCR=seq();
-const PF_RESET=k=>{if(k==="pf"||k==="apppf")S.pf=0;if(k==="j1pf")S.pf=(S.hasProg==="none"||S.photoKind==="prog")?2:0};
+const PF_RESET=k=>{if(k==="pf1"){S.pf=2;S.seance="tpc"}if(k==="pf"||k==="apppf")S.pf=0;if(k==="j1pf")S.pf=(S.hasProg==="none"||S.photoKind==="prog")?2:0};
 
 /* ── Rendu ── */
 function render(still){
   SCR=seq();
-  document.getElementById("ctl").innerHTML=`<span class="mono">Ordre</span>${[["A","A · vécu avant le paywall"],["B","B · vraie app après"],["P","Piste · objectifs et programmes"]].map(([k,l])=>`<button class="${S.order===k?"on":""}" data-order="${k}">${l}</button>`).join("")}<span class="mono" style="margin-left:6px">Sport</span>${Object.entries(SPORTS).map(([k,v])=>`<button class="${S.sport===k?"on":""}" data-sport="${k}">${v.label}</button>`).join("")}`;
+  document.getElementById("ctl").innerHTML=`<span class="mono">Ordre</span>${[["L1","Lot 1 · à livrer d'abord"],["A","Lot 2 · A vécu avant le paywall"],["B","Lot 2 · B vraie app après"],["P","Piste · objectifs et programmes"]].map(([k,l])=>`<button class="${S.order===k?"on":""}" data-order="${k}">${l}</button>`).join("")}<span class="mono" style="margin-left:6px">Sport</span>${Object.entries(SPORTS).map(([k,v])=>`<button class="${S.sport===k?"on":""}" data-sport="${k}">${v.label}</button>`).join("")}`;
   phone.innerHTML=`<div class="scr ${still?"still":S.dir<0?"back":""}">${SCR[S.i].r()}</div>${frame()}`;
   let g=null;
   log.innerHTML=SCR.map((st,i)=>{const head=st.g!==g?`<div class="grp-h">${st.g}</div>`:"";g=st.g;return head+`<button class="step ${i===S.i?"on":""}" data-jump="${i}"><span class="n">${String(i+1).padStart(2,"0")}</span><span><div class="h">${st.h}<span class="tag ${st.tag}">${{new:"nouveau",prod:"prod",mod:"modifié"}[st.tag]}</span></div><div class="p">${st.p}</div></span></button>`}).join("");
@@ -718,12 +815,15 @@ function prev(){go(Math.max(S.i-1,0))}
 const idx=k=>SCR.findIndex(s=>s.k===k);
 
 document.addEventListener("click",e=>{
-  const t=e.target.closest("[data-hasprog],[data-capstate],[data-go],[data-act],[data-sport],[data-sport-q],[data-goal],[data-weak],[data-day],[data-stag],[data-seance],[data-pf],[data-pfdone],[data-photo],[data-cap],[data-weeks],[data-weakcap],[data-capid],[data-bill],[data-tier],[data-order],[data-jump]");if(!t)return;
+  const t=e.target.closest("[data-objpick],[data-objstep],[data-objw],[data-hasprog],[data-capstate],[data-go],[data-act],[data-sport],[data-sport-q],[data-goal],[data-weak],[data-day],[data-stag],[data-seance],[data-pf],[data-pfdone],[data-photo],[data-cap],[data-weeks],[data-weakcap],[data-capid],[data-bill],[data-tier],[data-order],[data-jump]");if(!t)return;
   const d=t.dataset;
   if(d.go==="next")return next(); if(d.go==="prev")return prev();
+  if(d.objpick){const k=S.obj.findIndex(o=>o.id===d.objpick);if(k>=0){S.obj.splice(k,1);return render(true)}if(S.obj.length>=OBJ_MAX)return;const t=otById(d.objpick);S.objSheet=t.id;S.objVal=t.ex;S.objW=t.w;return render(true)}
+  if(d.objstep){const t=otById(S.objSheet);S.objVal=Math.max(t.step,+(S.objVal+(+d.objstep)*t.step).toFixed(3));return render(true)}
+  if(d.objw){S.objW=+d.objw;return render(true)}
   if(d.order){const k=SCR[S.i].k;S.order=d.order;const n=ORDERS[S.order].indexOf(k);S.i=n>=0?n:0;return render(true)}
-  if(d.sport){S.sport=d.sport;S.weak=null;S.caps=["main"];S.weeks=null;return render(true)}
-  if(d.sportQ){S.sport=d.sportQ;S.weak=null;S.caps=["main"];S.weeks=null;return next()}
+  if(d.sport){S.sport=d.sport;S.obj=[];S.weak=null;S.caps=["main"];S.weeks=null;return render(true)}
+  if(d.sportQ){S.sport=d.sportQ;S.obj=[];S.weak=null;S.caps=["main"];S.weeks=null;return next()}
   if(d.goal){S.goal=d.goal;S.weeks=null;if(d.goal==="competition")return render(true);return next()}
   if(d.weak){S.weak=d.weak;if(d.weak==="__custom")S.custom="Front squat";S.customOpen=false;S.weeks=null;return next()}
   if(d.day!==undefined){const i=+d.day,k=S.days.indexOf(i);if(k>=0)S.days.splice(k,1);else S.days.push(i);S.days.sort();return render(true)}
@@ -742,6 +842,9 @@ document.addEventListener("click",e=>{
   if(d.jump!==undefined){go(+d.jump);return}
   switch(d.act){
     case "custom": S.customOpen=true; render(true); break;
+    case "objclose": S.objSheet=null; render(true); break;
+    case "objok": S.obj.push({id:S.objSheet,rec:S.objVal,w:S.objW}); S.objSheet=null; render(true); break;
+    case "objidk": S.obj.push({id:S.objSheet,rec:null,w:S.objW}); S.objSheet=null; render(true); break;
     case "fact": if(S.fact<FACTS.length-1){S.fact++;render(true)}else next(); break;
     case "date": e.stopPropagation(); S.dateSheet=true; render(true); break;
     case "nodate": S.dateSheet=false; render(true); break;
@@ -753,7 +856,7 @@ document.addEventListener("click",e=>{
     case "perf": go(idx("perf")); break;
   }
 });
-{const h=location.hash.match(/^#([ABP])?s(\d+)$/);if(h){if(h[1])S.order=h[1];S.i=Math.min(+h[2]-1,ORDERS[S.order].length-1);S.goal=S.goal||"intensite";S.seance=S.seance||"mine";S.hasProg=S.hasProg||"has"}}
+{const h=location.hash.match(/^#(L1|[ABP])?s(\d+)$/);if(h){if(h[1])S.order=h[1];S.i=Math.min(+h[2]-1,ORDERS[S.order].length-1);S.goal=S.goal||"intensite";S.seance=S.seance||"mine";S.hasProg=S.hasProg||"has";PF_RESET(ORDERS[S.order][S.i])}}
 render();
 })();
 </script>

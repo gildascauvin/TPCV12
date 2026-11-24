@@ -1,0 +1,616 @@
+<title>Tests et objectifs</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,900&family=IBM+Plex+Mono:wght@500;700&display=swap">
+<style>
+/* v6 (24/11) : fusion Objectifs + Programmes. On parcourt par objectif ; le programme est un moyen parmi d'autres. Base = onglet Objectifs en prod. */
+:root{
+  color-scheme:dark;
+  --ground:#0b0e10; --panel:#141a1e; --line:rgba(255,255,255,.10); --ink:#f3f5f6; --muted:rgba(255,255,255,.64); --faint:rgba(255,255,255,.42);
+  --accent:#d44000; --accent-hi:#f04a08; --soft:#ff8a55; --cool:#8cc3d4; --gold:#ffc861; --good:#7ee2a0; --bad:#ff7a6a;
+  --app:#070a0d; --tink:#171b1f; --tmuted:#6b7177;
+  --sans:"DM Sans",system-ui,-apple-system,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --ease:cubic-bezier(.23,1,.32,1); --drawer:cubic-bezier(.32,.72,0,1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px}
+button{font-family:inherit;color:inherit}
+.wrap{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);gap:40px;align-items:start}
+@media (max-width:860px){.wrap{grid-template-columns:minmax(0,1fr)}.phone-col{justify-self:center;width:100%;max-width:400px;position:static!important}}
+.kicker{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--soft)}
+h1{font-size:28px;line-height:1.1;letter-spacing:-.02em;margin:6px 0 10px;text-wrap:balance}
+.lead{color:var(--muted);font-size:15px;line-height:1.5;max-width:62ch;margin:0 0 22px}
+.lead b{color:var(--ink)}
+.phone-col{position:sticky;top:20px}
+.ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 auto 14px;max-width:400px}
+.ctl .mono{color:var(--faint);margin-right:4px}
+.ctl button{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 11px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--muted)}
+.ctl button.on{background:#fff;color:var(--tink);border-color:#fff}
+.device{width:100%;max-width:400px;aspect-ratio:400/846;border-radius:56px;padding:9px;background:linear-gradient(145deg,#3a3f44,#15181b 40%,#2a2e32);box-shadow:0 50px 120px rgba(0,0,0,.6),inset 0 0 0 1px rgba(255,255,255,.08)}
+.phone{position:relative;width:100%;height:100%;border-radius:47px;overflow:hidden;background:var(--app);color:#fff;isolation:isolate}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:31%;height:30px;border-radius:20px;background:#000;z-index:60}
+.sb{position:absolute;top:0;left:0;right:0;height:50px;padding:16px 28px 0 32px;display:flex;justify-content:space-between;z-index:59;font-weight:700;font-size:15px;pointer-events:none}
+.homebar{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:36%;height:5px;border-radius:5px;background:rgba(255,255,255,.85);z-index:59;pointer-events:none}
+.scr{position:absolute;inset:0;display:flex;flex-direction:column;animation:scrIn .38s var(--ease)}
+@keyframes scrIn{from{opacity:0;transform:translateX(14px)}}
+.scr.still{animation:none}
+@media (prefers-reduced-motion:reduce){.scr,.sheet{animation:none!important}}
+.bg{position:absolute;inset:0;z-index:0;background:radial-gradient(ellipse 105% 55% at 50% -10%,rgba(56,189,248,.18) 0%,transparent 62%),#070a0d}
+.page{position:relative;z-index:2;flex:1;overflow:auto;padding:54px 16px 18px;min-height:0;scrollbar-width:none}
+.page::-webkit-scrollbar{display:none}
+.hd{display:flex;justify-content:space-between;align-items:center}
+.hd h2{font-size:25px;font-weight:900;letter-spacing:-.02em;margin:0}
+.av{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.1);display:grid;place-items:center;font-size:13px;font-weight:700}
+.mono{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.sec{display:flex;justify-content:space-between;align-items:baseline;margin:20px 0 10px}
+.sec b{font-size:18px;font-weight:900;letter-spacing:-.01em}
+.sec small{font-size:12.5px;color:var(--muted)}
+.sec .lk{font-size:13px;font-weight:700;color:var(--soft);cursor:pointer;background:none;border:0;padding:0}
+.rail{display:flex;gap:10px;overflow-x:auto;margin:0 -16px;padding:2px 16px 8px;scroll-snap-type:x mandatory;scrollbar-width:none}
+.rail::-webkit-scrollbar{display:none}
+.rc{flex:0 0 74%;scroll-snap-align:start;position:relative;height:228px;border-radius:24px;overflow:hidden;border:1px solid rgba(255,255,255,.16);background:#0d1114;box-shadow:0 16px 36px rgba(0,0,0,.45);cursor:pointer;padding:0;text-align:left;color:#fff}
+.rc img,.oc img,.pg img,.hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.15) brightness(.45)}
+.rc::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,10,13,.2),rgba(7,10,13,.15) 30%,rgba(7,10,13,.93) 72%)}
+.rc>span{position:absolute;z-index:2}
+.pills{top:11px;left:11px;right:11px;display:flex;justify-content:space-between}
+.pl{font-style:normal;font-size:11px;font-weight:800;padding:4px 8px;border-radius:999px;background:rgba(0,0,0,.5)}
+.rb{left:14px;right:14px;bottom:13px;display:flex;flex-direction:column}
+.rb small{font-size:12.5px;font-weight:700;color:rgba(255,255,255,.7)}
+.rb .v{display:flex;align-items:baseline;gap:8px}
+.rb .v b{font-size:29px;font-weight:900;letter-spacing:-.03em;line-height:1.05}
+.gain{font-size:12px;font-weight:800;color:var(--good);padding:2px 6px;border-radius:7px;background:rgba(126,226,160,.14)}
+.bar{display:block;position:relative;height:8px;margin-top:11px;border-radius:4px;background:rgba(255,255,255,.14)}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:linear-gradient(90deg,#d44000,#ff8a55)}
+.bar em{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(240,74,8,.6)}
+.rf{display:flex;justify-content:space-between;margin-top:7px;font-size:11.5px;color:rgba(255,255,255,.62)}
+.rf em{font-style:normal;font-weight:800;color:var(--soft)}
+.rc.add{flex-basis:30%;border:2px dashed rgba(255,255,255,.2);background:rgba(255,255,255,.03);box-shadow:none;display:grid;place-items:center;text-align:center;color:rgba(255,255,255,.7);font-weight:700;font-size:12.5px}
+.rc.add::after{display:none}
+.veh{display:grid;grid-template-columns:52px 1fr auto;gap:12px;align-items:center;border-radius:18px;padding:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);cursor:pointer;width:100%;text-align:left;color:#fff}
+.veh .th{position:relative;width:52px;height:52px;border-radius:13px;overflow:hidden}
+.veh .th img{width:100%;height:100%;object-fit:cover;filter:grayscale(1) brightness(.7)}
+.veh b{display:block;font-size:14.5px}
+.veh small{display:block;font-size:12px;color:var(--muted);margin-top:2px;line-height:1.35}
+.veh .go{color:var(--faint)}
+.wk{display:flex;gap:3px;margin-top:6px}.wk i{flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.12)}.wk i.d{background:rgba(255,255,255,.55)}.wk i.c{background:var(--accent-hi)}
+.search{display:flex;align-items:center;gap:8px;margin-top:18px;border-radius:14px;padding:11px 13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);font-size:14px;color:var(--faint)}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(255,255,255,.07);border-radius:12px;padding:3px;margin-top:10px}
+.seg button{border:0;background:none;border-radius:9px;padding:8px;font-size:13.5px;font-weight:700;color:var(--muted);cursor:pointer}
+.seg button.on{background:#fff;color:var(--tink)}
+.chips{display:flex;gap:6px;overflow-x:auto;margin:10px -16px 0;padding:0 16px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chips span{flex-shrink:0;font-size:12.5px;font-weight:700;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,255,255,.12);color:var(--muted)}
+.chips span.on{background:#fff;color:var(--tink);border-color:#fff}
+.oc{flex:0 0 46%;scroll-snap-align:start;position:relative;height:168px;border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:#11161a;padding:0;text-align:left;color:#fff;cursor:pointer}
+.oc.mine{border:2px solid #fff}
+.oc::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,10,13,.05),rgba(7,10,13,.35) 45%,rgba(7,10,13,.95))}
+.oc>span{position:absolute;z-index:2}
+.st{top:9px;left:9px;font-size:10.5px;font-weight:800;padding:3px 7px;border-radius:999px;background:rgba(0,0,0,.6)}
+.st.w{color:var(--bad)}.st.g{color:var(--good)}.st.m{background:#fff;color:#111}
+.ot{left:11px;right:11px;bottom:10px;display:flex;flex-direction:column;gap:2px}
+.ot b{font-size:14.5px;line-height:1.15}
+.ot small{font-size:11.5px;color:rgba(255,255,255,.65)}
+.ot .via{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--soft);margin-top:3px}
+.pg{flex:0 0 62%;scroll-snap-align:start;position:relative;height:150px;border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:#11161a;padding:0;text-align:left;color:#fff;cursor:pointer}
+.pg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,10,13,.05),rgba(7,10,13,.4) 45%,rgba(7,10,13,.95))}
+.pg>span{position:absolute;z-index:2}
+.pg .ot b{font-size:15px}
+.serve{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.serve i{font-style:normal;font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:999px;background:rgba(255,138,85,.18);color:var(--soft)}
+.serve i.me{background:var(--accent);color:#fff}
+.hero{position:relative;margin:-54px -16px 0;height:200px;overflow:hidden}
+.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,10,13,.25),#070a0d 96%)}
+.back{position:absolute;top:56px;left:14px;z-index:3;width:34px;height:34px;border-radius:50%;border:0;background:rgba(0,0,0,.45);font-size:18px;cursor:pointer}
+.ttl{font-size:25px;font-weight:900;letter-spacing:-.02em;margin:-34px 0 0;position:relative;z-index:2}
+.big{display:flex;align-items:baseline;gap:9px;margin-top:8px;font-variant-numeric:tabular-nums}
+.big b{font-size:36px;font-weight:900;letter-spacing:-.03em}
+.big .to{color:var(--soft)}
+.line{font-size:13.5px;color:rgba(255,255,255,.75);margin-top:8px}
+.cta{width:100%;border:0;border-radius:16px;padding:14px;font-size:15.5px;font-weight:700;color:#fff;background:linear-gradient(180deg,#f04a08,#d44000);cursor:pointer;margin-top:14px}
+.cta2{width:100%;border:1px solid rgba(255,255,255,.18);border-radius:16px;padding:13px;font-size:15px;font-weight:700;background:rgba(255,255,255,.06);cursor:pointer;margin-top:12px}
+.h3{font-size:17px;font-weight:900;margin:22px 0 4px}
+.sub{font-size:13px;color:var(--muted);margin:0 0 10px;line-height:1.4}
+.way{display:grid;grid-template-columns:40px 1fr auto;gap:11px;align-items:center;width:100%;text-align:left;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.04);border-radius:16px;padding:11px 12px;margin-top:8px;cursor:pointer;color:#fff}
+.way .n{width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.08);display:grid;place-items:center;font-size:18px;overflow:hidden;position:relative}
+.way .n img{width:100%;height:100%;object-fit:cover;filter:grayscale(1) brightness(.7)}
+.way b{display:block;font-size:14.5px}
+.way small{display:block;font-size:12px;color:var(--muted);margin-top:2px;line-height:1.35}
+.way .r{color:var(--faint);font-size:12.5px;font-weight:700}
+.way.on{border-color:rgba(255,138,85,.5);background:rgba(212,64,0,.12)}
+/* Trajectoire (v7) */
+.bar .est{position:absolute;top:0;bottom:0;border-radius:0 4px 4px 0;background:repeating-linear-gradient(90deg,rgba(255,138,85,.85) 0 4px,transparent 4px 7px)}
+.bar .em2{position:absolute;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#070a0d;border:2.5px solid var(--soft)}
+.estl{font-size:11.5px;color:var(--soft);font-weight:700;margin-top:6px}
+.traj{margin-top:16px;border-radius:20px;padding:12px 12px 10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)}
+.traj .k{display:flex;justify-content:space-between;align-items:baseline}
+.traj .k b{font-size:16px;font-weight:900}
+.traj .k small{font-size:11.5px;color:var(--soft);font-weight:700}
+.wks{display:grid;gap:4px;margin-top:10px}
+.wks span{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:var(--faint);font-family:var(--mono)}
+.wks i{font-style:normal;width:100%;height:24px;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:900;background:rgba(255,255,255,.06);color:var(--faint)}
+.wks i.f{background:rgba(255,138,85,.22);color:#fff}
+.wks i.h{background:repeating-linear-gradient(135deg,rgba(255,138,85,.22) 0 5px,rgba(255,255,255,.05) 5px 10px);color:#fff}
+.wks i.c{outline:2px solid #fff;outline-offset:-2px;background:rgba(255,255,255,.08);color:#fff}
+.vy{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;padding:10px 2px;border-top:1px solid rgba(255,255,255,.07)}
+.vy:first-of-type{border-top:0}
+.vy .ic{font-size:17px;text-align:center}
+.vy b{display:block;font-size:14px}
+.vy small{display:block;font-size:12px;color:var(--muted);margin-top:1px;line-height:1.35}
+.vy .s{font-size:12px;font-weight:800;padding:3px 8px;border-radius:999px;white-space:nowrap}
+.vy .s.ok{background:rgba(126,226,160,.14);color:var(--good)}
+.vy .s.mid{background:rgba(255,200,97,.14);color:var(--gold)}
+.vy .s.lo{background:rgba(255,122,106,.14);color:var(--bad)}
+/* v9 : jauge du jour + série de jours + récompenses */
+.hdr{display:flex;align-items:center;gap:8px}
+.puce{display:flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:4px 10px 4px 4px;background:rgba(255,255,255,.08);color:#fff;font-weight:800;font-size:13.5px;cursor:pointer}
+.puce{padding:6px 11px!important}.puce .nx{margin-left:4px;padding-left:8px;border-left:1px solid rgba(255,255,255,.2);font-size:12.5px;font-weight:700;color:#ff8a55}.puce .ok{margin-left:4px;color:#7ee2a0}.puce .dots{display:flex;gap:3px;margin-left:2px}.puce .dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.25)}.puce .dots i.on{background:#ff8a55}
+.datesel{flex:1;text-align:center;font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.8)}
+.sw{text-align:center}
+.sw .fl{font-size:54px;line-height:1}
+.sw h3{font-size:26px!important;margin-top:6px!important}
+.sw .w7 i{height:30px;font-size:13px;background:#f1f0ee;color:#9aa0a5}
+.sw .w7 i.f{background:#ffe2d3;color:#d44000}.sw .w7 i.s{background:#dcecf2;color:#2d6a7c}.sw .w7 i.c{outline-color:#171b1f;color:#171b1f}
+.sw .w7 span{color:#8a8f94}.sw .w7 i{line-height:0;box-sizing:border-box}.sw .w7 i svg{display:block}.sw .w7 i.x{background:#fff;border:1.5px dashed #d6d3cf}
+.lg{display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;font-size:11.5px;color:#8a8f94;margin-top:8px}.lg i{color:#8a8f94}
+.sw .meta{font-size:13px;color:var(--tmuted);margin-top:10px}
+.linkb{display:block;margin:12px auto 0;border:0;background:none;color:var(--accent);font-weight:700;font-size:14px;cursor:pointer}
+.bgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.bgrid>div{border-radius:18px;padding:14px 6px 12px;background:#fff;border:1px solid rgba(0,0,0,.06);text-align:center}
+.bgrid .md{width:52px;height:52px;margin:0 auto;border-radius:50%;display:grid;place-items:center;color:#fff;background:linear-gradient(160deg,#ff8a55,#d44000);box-shadow:0 6px 14px rgba(212,64,0,.28),inset 0 0 0 3px rgba(255,255,255,.35)}
+.bgrid .lock .md{background:#f1f0ee;color:#b5b9bd;box-shadow:inset 0 0 0 1.5px #e3e1dd}
+.bgrid .lock b{color:#9aa0a5}
+.bgrid b{display:block;font-size:11.5px;line-height:1.2;margin-top:4px;color:var(--tink)}.bgrid small{display:block;font-size:10px;color:#8a8f94;margin-top:2px}
+
+.pager{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8a8f94;margin-bottom:6px}
+.pager .pd{display:flex;gap:5px}.pager .pd i{width:6px;height:6px;border-radius:50%;background:rgba(0,0,0,.15)}.pager .pd i.on{width:16px;border-radius:3px;background:#171b1f}
+.nextr{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;width:100%;text-align:left;margin-top:14px;border:1px solid rgba(0,0,0,.08);background:#f7f6f4;border-radius:14px;padding:10px 12px;cursor:pointer;color:var(--tink);font-size:18px}
+.nextr b{display:block;font-size:14px}.nextr small{display:block;font-size:12px;color:var(--tmuted)}
+.bsec{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8a8f94;margin-top:14px}
+.chk{margin-top:14px}.chk .tg{cursor:default}
+.today-top{display:flex;justify-content:space-between;align-items:center}
+.daypill{display:flex;align-items:center;gap:10px;margin-top:12px;border-radius:18px;padding:10px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);width:100%;text-align:left;color:#fff;cursor:pointer}
+.daypill .fl{font-size:22px}
+.daypill b{font-size:14.5px;display:block}
+.daypill small{font-size:12px;color:var(--muted)}
+.dg{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:6px;width:100%}
+.dg i{height:7px;border-radius:4px;background:rgba(255,255,255,.14)}
+.dg i.on{background:linear-gradient(90deg,#f04a08,#ff8a55)}
+.ringph{width:190px;height:190px;margin:18px auto 0;border-radius:50%;border:14px solid rgba(255,255,255,.08);border-top-color:#f28a00;border-right-color:#f28a00;display:grid;place-items:center;text-align:center}
+.ringph b{font-size:24px;font-weight:900;display:block}.ringph small{font-size:12px;color:var(--muted)}
+.sess{margin-top:16px;border-radius:20px;background:#fff;color:var(--tink);padding:14px 16px}
+.sess .mono{color:#8a8f94}.sess b{display:block;font-size:16px;margin-top:2px}.sess small{font-size:12.5px;color:var(--tmuted)}
+.hero2{display:grid;grid-template-columns:56px 1fr;gap:12px;align-items:center;margin-top:14px;border-radius:20px;padding:12px 14px;background:linear-gradient(160deg,rgba(212,64,0,.25),rgba(212,64,0,.06));border:1px solid rgba(255,138,85,.3)}
+.hero2 .fl{width:56px;height:56px;border-radius:18px;display:grid;place-items:center;font-size:30px;background:radial-gradient(circle at 50% 70%,rgba(240,74,8,.5),rgba(240,74,8,.1))}
+.hero2 b{display:block;font-size:20px;font-weight:900;letter-spacing:-.01em}
+.hero2 small{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.w7{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:8px}
+.w7 span{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:var(--faint);font-family:var(--mono)}
+.w7 i{font-style:normal;width:100%;height:22px;border-radius:7px;display:grid;place-items:center;font-size:11px;font-weight:900;background:rgba(255,255,255,.07);color:var(--faint)}
+.w7 i.f{background:rgba(255,138,85,.25);color:#fff}.w7 i.s{background:rgba(140,195,212,.22);color:#fff}.w7 i.c{outline:2px solid #fff;outline-offset:-2px;color:#fff}
+.badges{display:flex;gap:8px;overflow-x:auto;margin:0 -16px;padding:2px 16px 6px;scrollbar-width:none}
+.badges::-webkit-scrollbar{display:none}
+.bd{flex:0 0 92px;border-radius:16px;padding:10px 8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);text-align:center;cursor:pointer;color:#fff}
+.bd .e{font-size:26px}.bd b{display:block;font-size:11.5px;line-height:1.2;margin-top:4px}.bd small{display:block;font-size:10px;color:var(--faint);margin-top:2px}
+.bd.lock{opacity:.4}
+.celeb{text-align:center;padding-top:6px}
+.celeb .e{font-size:46px}
+.crans{display:flex;gap:3px;margin-top:8px}.crans i{flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.14)}.crans i.f{background:var(--soft)}.crans i.h{background:repeating-linear-gradient(90deg,var(--soft) 0 3px,rgba(255,255,255,.14) 3px 6px)}.crans i.c{background:rgba(255,255,255,.4)}
+.streak{display:grid;grid-template-columns:52px 1fr;gap:12px;align-items:center}
+.streak .fl{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;font-size:28px;background:radial-gradient(circle at 50% 70%,rgba(240,74,8,.45),rgba(240,74,8,.08))}
+.streak b{display:block;font-size:19px;font-weight:900;letter-spacing:-.01em}
+.streak small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.shield{margin-top:10px;font-size:13px;line-height:1.4;padding:10px 12px;border-radius:14px;background:rgba(140,195,212,.1);color:#cfe7ef}
+.fine{font-size:12px;color:var(--faint);margin-top:8px;line-height:1.4}
+.fit{display:flex;gap:3px;margin-top:6px}.fit i{width:14px;height:5px;border-radius:3px;background:rgba(255,255,255,.14)}.fit i.y{background:var(--soft)}
+.dim{position:absolute;inset:0;z-index:20;background:rgba(7,10,13,.6)}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:21;max-height:86%;display:flex;flex-direction:column;background:#fff;color:var(--tink);border-radius:26px 26px 0 0;animation:sheetUp .42s var(--drawer)}
+@keyframes sheetUp{from{transform:translateY(100%)}}
+.sheet .sc{overflow:auto;padding:10px 20px 26px}
+.grab{width:36px;height:4px;border-radius:9px;background:rgba(0,0,0,.14);margin:0 auto 12px}
+.sheet h3{font-size:21px;font-weight:900;letter-spacing:-.02em;margin:0;line-height:1.15}
+.sheet .s{font-size:13.5px;color:var(--tmuted);margin:4px 0 8px;line-height:1.4}
+.row{display:flex;justify-content:space-between;gap:10px;padding:11px 0;border-top:1px solid rgba(0,0,0,.07);font-size:14.5px}
+.row span{color:var(--tmuted)}
+.row b{text-align:right}
+.tg{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:center;padding:10px 0;border-top:1px solid rgba(0,0,0,.07);font-size:14.5px;cursor:pointer}
+.tg .ck{width:22px;height:22px;border-radius:7px;border:2px solid rgba(0,0,0,.2);display:grid;place-items:center;font-size:12px;font-weight:900}
+.tg .ck.on{background:var(--tink);border-color:var(--tink);color:#fff}
+.tg small{display:block;color:var(--tmuted);font-size:12.5px}
+.bnav{position:relative;z-index:6;display:grid;background:#0d1114;color:rgba(255,255,255,.5);border-top:1px solid rgba(255,255,255,.07);padding:8px 6px 26px;font-size:10px;font-weight:700;text-align:center;letter-spacing:.04em;text-transform:uppercase}
+.bnav span{display:flex;flex-direction:column;align-items:center;gap:4px}
+.bnav span i{width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,.14)}
+.bnav .on{color:#fff}.bnav .on i{background:var(--accent-hi)}
+.coachbar{display:flex;gap:6px;margin-bottom:12px;overflow:auto;scrollbar-width:none}
+.coachbar span{flex-shrink:0;display:flex;align-items:center;gap:6px;padding:6px 10px 6px 6px;border-radius:999px;background:rgba(255,255,255,.08);font-size:13px;font-weight:700}
+.coachbar span.on{background:var(--accent-hi)}
+.coachbar i{font-style:normal;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.2);display:grid;place-items:center;font-size:10px}
+.log{display:flex;flex-direction:column;gap:8px}
+.step{display:grid;grid-template-columns:30px minmax(0,1fr);gap:12px;padding:14px 16px;border-radius:16px;border:1px solid var(--line);background:var(--panel);cursor:pointer;text-align:left;width:100%;color:var(--ink)}
+.step:hover{border-color:rgba(255,255,255,.2)}
+.step.on{border-color:rgba(255,138,85,.55);background:#1a1512}
+.step .n{font-family:var(--mono);font-size:12px;color:var(--faint);padding-top:2px}
+.step .h{font-size:15px;font-weight:700}
+.step .p{font-size:13.5px;color:var(--muted);line-height:1.5;margin-top:4px}
+.plan{margin:0 0 22px;padding:16px 18px;border-radius:18px;border:1px solid rgba(255,138,85,.35);background:#16110e}
+.plan .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--soft)}
+.plan h2{font-size:19px;margin:4px 0 4px;letter-spacing:-.01em}
+.plan .why{font-size:13.5px;color:var(--muted);line-height:1.5;margin:0 0 6px}
+.lot{display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.lot .id{font-family:var(--mono);font-weight:700;font-size:13px;color:#fff;background:rgba(255,255,255,.08);border-radius:10px;height:30px;display:grid;place-items:center}
+.lot.o .id{background:rgba(140,195,212,.18);color:var(--cool)}
+.lot b{font-size:15px}
+.lot .sz{font-family:var(--mono);font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:6px;background:rgba(255,255,255,.08);color:var(--muted);margin-left:6px;vertical-align:2px}
+.lot p{margin:4px 0 0;font-size:13.5px;color:var(--muted);line-height:1.5}
+.lot p em{font-style:normal;color:var(--ink)}
+.lot .go{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.lot .go button{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer}
+.lot .go button:hover{color:#fff;border-color:rgba(255,255,255,.3)}
+.grp{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:14px 0 2px}
+.box{margin-top:22px;padding:16px 18px;border-radius:16px;border:1px solid var(--line)}
+.box .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--soft);margin-bottom:8px}
+.box ul{margin:0;padding-left:18px;color:var(--muted);font-size:13.5px;line-height:1.55}
+.box li+li{margin-top:6px}
+.box b{color:var(--ink)}
+</style>
+
+<div class="wrap">
+  <div class="phone-col"><div class="ctl" id="ctl"></div><div class="device"><div class="phone" id="phone"></div></div></div>
+  <div>
+    <div class="kicker">POC · objectifs et programmes · v11 (découpage du chantier)</div>
+    <h1>On parcourt par objectif. Le programme n'est qu'un moyen.</h1>
+    <p class="lead">Base : l'onglet Objectifs déjà en prod. L'onglet Programmes disparaît, ses programmes vivent sous les objectifs qu'ils servent. <b>Trois moyens pour chaque objectif</b> : tes séances (elles comptent déjà), un programme fait pour lui, un programme de la bibliothèque. La bibliothèque reste entière pour ceux qui cherchent un programme (bascule « Tous les programmes »). Le lien « sert » est calculé depuis le contenu des séances, comme les « séances avec du squat » en prod. Clique les écrans à droite, ou dans le téléphone.</p>
+    <div class="plan"><div class="k">Découpage du chantier</div><h2>D'abord le produit, ensuite l'onboarding</h2>
+      <p class="why">Chaque lot se livre seul et améliore l'app tout de suite. L'onboarding vient en dernier pour montrer le vrai produit : il réutilise la série, les objectifs et les programmes reliés, au lieu de les simuler. Taille : S quelques jours, M une semaine, L plus.</p>
+      <div class="grp">Produit</div>
+      <div class="lot"><span class="id">P1</span><span><b>La boucle du jour</b><span class="sz">M</span>
+        <p>Journée validée (point forme + séance ou repos), jour sauvé (repos conseillé suivi), série dans la puce du header, fenêtre une fois par jour, récompenses. <em>La checklist d'onboarding disparaît</em> : ses 4 étapes deviennent les premières récompenses de la grille, avec la prochaine affichée dans la fenêtre. <em>Calculé depuis l'existant</em> (points forme, séances faites, décision de l'anneau) : pas de nouvelle saisie. Mesure : retour à J1 et J7, jours validés par semaine.</p>
+        <div class="go"><button data-step="1">Puce · écran 2</button><button data-step="3">Journée validée · écran 4</button><button data-step="4">Récompenses · écran 5</button><button data-step="6">Jour sauvé · écran 7</button></div></span></div>
+      <div class="lot"><span class="id">P2</span><span><b>Programmes reliés aux objectifs</b><span class="sz">S</span>
+        <p>« Il sert » calculé sur chaque programme (carte et fiche), « Suivre ses objectifs » au démarrage d'un programme, même chose après un import. <em>Sans toucher à la navigation.</em> Touche directement les pages /p/ (60 % des inscrits).</p>
+        <div class="go"><button data-step="14">Fiche programme · écran 15</button><button data-step="15">Démarrage /p/ · écran 16</button><button data-step="12">Après import · écran 13</button></div></span></div>
+      <div class="lot"><span class="id">P3</span><span><b>« Pour y arriver » et générateur par objectif</b><span class="sz">L</span>
+        <p>Page objectif : tes séances, un programme fait pour lui, les programmes qui le servent. Le générateur reçoit objectif et échéance (durée, blocs, tests début et fin). Plus « Teste-le cette semaine » pour un objectif sans valeur, et changer d'objectif sans rien perdre.</p>
+        <div class="go"><button data-step="9">Page objectif · écran 10</button><button data-step="10">Générateur · écran 11</button><button data-step="7">Changer d'objectif · écran 8</button></div></span></div>
+      <div class="lot"><span class="id">P4</span><span><b>Fusion de la navigation</b><span class="sz">L</span>
+        <p>Bibliothèque rangée par objectif, bascule « Tous les programmes », « Ton programme » en haut de l'onglet, menu de création au même endroit, onglet Programmes retiré. Catalogue élargi (blessure, concours, 10 km). <em>Après P2 et P3</em> : les liens existent déjà, on ne fait que déplacer.</p>
+        <div class="go"><button data-step="0">Onglet Objectifs · écran 1</button><button data-step="8">Par objectif · écran 9</button><button data-step="13">Tous les programmes · écran 14</button><button data-step="11">Créer · écran 12</button></div></span></div>
+      <div class="lot"><span class="id">P5</span><span><b>Côté coach</b><span class="sz">S</span>
+        <p>Même page par sportif (déjà en prod pour les objectifs), « Lui assigner ce programme » depuis un objectif, sa série visible dans sa fiche.</p>
+        <div class="go"><button data-step="16">Coach · écran 17</button></div></span></div>
+      <div class="grp">Onboarding</div>
+      <div class="lot o"><span class="id">O1</span><span><b>Objectif, record et paywall titré</b><span class="sz">M</span>
+        <p>Lot 1 du POC « Ta stratégie » : écran objectifs avec les vraies cartes, « Ton record ? », paywall titré avec l'objectif, arrivée dans l'onglet Objectifs. Arrivée dans l'app avec la série et ses premiers pas. <em>Réutilise P1 et les objectifs en prod.</em> Ordre A ou B tranché avec les funnels.</p>
+        </span></div>
+      <div class="lot o"><span class="id">O2</span><span><b>Le programme dans l'onboarding</b><span class="sz">M</span>
+        <p>Lot 2 : « Ton programme aujourd'hui », import en photo qui propose les objectifs servis (<em>réutilise P2</em>), « Ta séance du jour » en 1re question du point forme.</p></span></div>
+    </div>
+    <div class="log" id="log"></div>
+    <div class="box">
+      <div class="k">Ce qui est nouveau, et pourquoi</div>
+      <ul>
+        <li><b>Parcourir par objectif</b> : les ~80 modèles de la bibliothèque se rangent sous des objectifs. Beaucoup en sont déjà (Spécialisation squat, 10 km, Marathon, Genou, Concours police). Différenciant : on choisit une destination, l'app propose les chemins.</li>
+        <li><b>« Sert »</b> = part des séances du programme qui travaillent l'objectif (même détection que « 8 séances avec du squat »), dite en mots : « 4 séances sur 5 avec du front squat ». Rien à étiqueter à la main.</li>
+        <li><b>Un programme fait pour cet objectif</b> : le générateur reçoit l'objectif et l'échéance (durée calée sur la date, test au début et à la fin, autres objectifs en entretien).</li>
+        <li><b>Arriver par un programme</b> (pages /p/, 60 % des inscrits) : au démarrage, l'app propose de suivre les objectifs qu'il sert. Le programme mène à l'objectif.</li>
+        <li><b>Coach</b> : même page par sportif ; depuis un objectif, « Lui assigner ce programme ».</li>
+      </ul>
+    </div>
+    <div class="box">
+      <div class="k">La boucle du jour : rien d'ajouté à l'écran</div>
+      <ul>
+        <li><b>Une seule place</b> : la puce du header (aujourd'hui la checklist d'onboarding). Pendant l'onboarding elle montre les étapes, ensuite 🔥 la série et un cercle des 2 étapes du jour.</li>
+        <li><b>Journée validée</b> = point forme + séance du jour faite (allégée ou pas) ou repos. La fenêtre de série s'ouvre seule une fois par jour à la validation, se ferme d'un tap, se rouvre via la puce. Les récompenses ne sont que là.</li>
+        <li><b>Jour sauvé 🛡</b> : l'anneau conseille le repos et tu le suis. La série tient. C'est le cœur du produit : écouter ton corps ne casse jamais la série.</li>
+        <li><b>Récompenses</b> liées au produit, pas gratuites : nuit courte bien gérée, écouté ton corps, 7 / 30 jours, semaine parfaite, objectif atteint.</li>
+        <li><b>Série et récompenses sont à toi</b>, pas à un objectif : changer d'objectif ne fait rien perdre. Par objectif : séances qui le travaillent, tests, voyants de la semaine.</li>
+        <li><b>Trois sortes de jours</b> : jour de séance (point forme + séance, allégée ou pas), jour de repos prévu (le point forme suffit), repos conseillé par l'anneau et suivi (jour sauvé). Une semaine type compte donc plusieurs jours de repos, tous validables.</li>
+        <li><b>La puce dit l'action suivante</b> en clair : « 🔥 12 · Point forme › », puis « Ta séance › », puis « ✓ ». Pas de code à apprendre.</li>
+        <li><b>Point forme d'abord</b> (validé 24/11) : sans point forme, une séance faite ne remplit que la moitié de la jauge.</li>
+        <li><b>Journée oubliée</b> (validé 24/11, au plus simple) : la série repart à zéro, sans joker. Le record reste affiché. Seul le repos conseillé suivi sauve un jour.</li>
+        <li><b>Design émotionnel</b> : un seul moment fort par jour (dernière page du mini bilan), la flamme comme seul symbole, icônes sobres au trait pour les récompenses, jamais « perdu » ni reproche.</li>
+        <li><b>Retirés</b> : estimation chiffrée (dangereuse), trajectoire (trop lourde), série de semaines (trop lente : on revient chaque jour).</li>
+      </ul>
+    </div>
+    <div class="box">
+      <div class="k">À trancher</div>
+      <ul>
+        <li><b>Barre du bas</b> : 3 onglets (Accueil · Planning · Objectifs), ou 4 en gardant « Programmes » (bascule au-dessus du téléphone). Usage sur 30 jours : /programmes 24 utilisateurs, /conseils 16.</li>
+        <li><b>Catalogue d'objectifs élargi</b> au-delà des tests : « Revenir d'une blessure au genou », « Réussir un concours », « Courir un 10 km » (repère = une course, un test, ou la régularité).</li>
+        <li><b>Mes programmes</b> (créés, importés, coach) : sous « Ton programme » en haut, et en tête de « Tous les programmes ».</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/lucide@0.454.0/dist/umd/lucide.min.js"></script>
+<script>
+(()=>{
+const MONTHS=["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+const TODAY=new Date(2026,10,24);
+const fd=n=>{const d=new Date(TODAY.getTime()+n*864e5);return `${d.getDate()===1?"1er":d.getDate()} ${MONTHS[d.getMonth()]}`};
+const IMG=n=>`img/${n}.jpg`;
+
+const OBJ={
+  sq:{nm:"Back squat",fam:"Force",img:"powerlifting",cur:"120 kg",tgt:"125 kg",gain:"+5 kg",pct:62,days:35,st:"w",gap:"−19,1 kg",word:"avec du squat",n:5},
+  fs:{nm:"Front squat",fam:"Force",img:"halterophilie",cur:"132,5 kg",tgt:"138 kg",gain:null,pct:8,days:55,st:"w",gap:"−8,5 kg",word:"avec du front squat",n:8},
+  cmj:{nm:"Saut vertical (CMJ)",fam:"Puissance",img:"pliometrie",cur:"51,6 cm",tgt:"54,7 cm",gain:"+1,2 cm",pct:30,days:41,st:"w",gap:"−11,1 cm",word:"avec des sauts",n:9},
+  dl:{nm:"Soulevé de terre",fam:"Force",img:"gym",cur:"170 kg",st:"g",word:"avec du soulevé de terre"},
+  s10:{nm:"Sprint 10 m",fam:"Vitesse",img:"sprint",cur:"1,78 s",st:"g",word:"avec des sprints"},
+  k10:{nm:"Courir un 10 km",fam:"Endurance",img:"course",cur:"Pas encore testé",word:"de course"},
+  genou:{nm:"Revenir d'une blessure au genou",fam:"Revenir de blessure",img:"etirements",cur:"Repère : régularité et douleur",word:"pour le genou"},
+  conc:{nm:"Réussir le concours police",fam:"Concours et échéances",img:"rugby",cur:"Jour J à fixer",word:"d'épreuves"},
+  reg:{nm:"Tenir 4 séances par semaine",fam:"Forme",img:"groupe",cur:"3,2 par semaine"},
+  rec:{nm:"Mieux récupérer",fam:"Forme",img:"recuperation",cur:"Mesuré par l'app"},
+};
+/* Trajectoire : semaines depuis le dernier test (f = 1 validée, .5 à moitié, 0 manquée, c = en cours) ; est = estimation affichée */
+const TRAJ={
+  sq:{streak:3,best:5,done:3,est:"≈ 121,5 kg",estPct:72,test:fd(18),wk:[1,1,.5,"c"],total:5,pts:[[0,115],[2,117.5],[4,120]],start:115,tgt:125},
+  fs:{streak:4,best:4,done:2.5,est:"≈ 134 kg",estPct:30,test:fd(19),wk:[1,1,.5,"c",0,0,0,0],total:8,pts:[[0,132.5]],start:132.5,tgt:138},
+  cmj:{streak:2,best:6,done:2.5,est:"≈ 52,4 cm",estPct:52,test:fd(12),wk:[1,.5,1,"c",0,0],total:6,pts:[[0,50.4],[3,51.6]],start:50.4,tgt:54.7},
+};
+/* Jours de la semaine : f = validé, s = sauvé (repos conseillé suivi), c = aujourd'hui, 0 = à venir */
+/* Jours : f séance faite, r repos prévu validé (point forme), s repos conseillé suivi (sauvé), c aujourd'hui, R repos prévu à venir, 0 séance à venir */
+const WEEK=[["L","f"],["M","r"],["M","s"],["J","r"],["V","c"],["S","R"],["D",0]];
+const DAYI={f:"dumbbell",r:"moon",s:"shield-check",c:"dumbbell",R:"moon",0:"dumbbell"};
+/* Icônes sobres (trait), une seule couleur : la flamme reste le seul symbole de la série */
+const LI=(n,sz=24,cls="")=>`<i data-lucide="${n}" class="${cls}" style="width:${sz}px;height:${sz}px"></i>`;
+const IC=(d,sz=26)=>`<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICO={
+  pf:'<path d="M5 4h14v16H5z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
+  prog:'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+  dec:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>',
+  elite:'<path d="m12 3 2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>',
+  moon:'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+  body:'<path d="M12 21s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.6-7 10-7 10z"/>',
+  d7:'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16"/><text x="12" y="18" text-anchor="middle" font-size="7" stroke="none" fill="currentColor" font-weight="700">7</text>',
+  week:'<path d="M4 12l3 3 6-7"/><path d="M13 15l2 2 5-6"/>',
+  medal:'<circle cx="12" cy="15" r="5"/><path d="M8.5 3h7L13 10h-2z"/>',
+  d30:'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16"/><text x="12" y="18" text-anchor="middle" font-size="7" stroke="none" fill="currentColor" font-weight="700">30</text>',
+  pin:'<path d="M12 21s6-5.6 6-11a6 6 0 0 0-12 0c0 5.4 6 11 6 11z"/><circle cx="12" cy="10" r="2.2"/>',
+  w4:'<path d="M4 7h16M4 12h16M4 17h16"/>',
+  compass:'<circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/>',
+  shield:'<path d="M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z"/><path d="m9 12 2 2 4-4"/>',
+};
+const BADGES=[["moon","Nuit courte bien gérée","il y a 2 jours"],["heart-pulse","Écouté ton corps","repos conseillé suivi"],["flame","7 jours d'affilée","8 nov."],["calendar-check","1re semaine parfaite","3 nov."],["trophy","Objectif atteint","à venir",1],["medal","30 jours d'affilée","à venir",1]];
+const PROGS={
+  spsq:{nm:"Powerlifting · Spécialisation squat",img:"powerlifting",w:6,s:4,serve:["sq","fs"],fit:{sq:5,fs:3}},
+  halt:{nm:"Haltérophilie",img:"halterophilie",w:4,s:4,serve:["fs","cmj"],fit:{fs:4,cmj:2},cur:true},
+  pe:{nm:"Musculation · Puissance explosivité",img:"pliometrie",w:6,s:3,serve:["cmj","sq"],fit:{cmj:4,sq:3}},
+  plio:{nm:"Pliométrie",img:"crossfit",w:8,s:3,serve:["cmj","s10"],fit:{cmj:5,s10:2}},
+  pl:{nm:"Powerlifting",img:"gym",w:8,s:4,serve:["sq","dl"],fit:{sq:4,dl:4}},
+  sprint:{nm:"Sprint / Athlétisme",img:"sprint",w:8,s:4,serve:["s10","cmj"],fit:{s10:5,cmj:3}},
+  k10:{nm:"Course à pied · 10 km",img:"course",w:10,s:4,serve:["k10"],fit:{k10:5}},
+  genou:{nm:"Prévention · Genou",img:"etirements",w:6,s:3,serve:["genou"],fit:{genou:5}},
+  police:{nm:"Police nationale",img:"rugby",w:8,s:4,serve:["conc","k10"],fit:{conc:5,k10:2}},
+};
+const S={onb:false,day:0,mode:"streak",made:[],i:0,v:"home",tabs:3,seg:"obj",role:"athlete",mine:["sq","fs","cmj"],open:"fs",prog:"spsq",sheet:null,follow:{}};
+const forObj=id=>Object.entries(PROGS).filter(([,p])=>p.serve.includes(id)).sort((a,b)=>(b[1].fit[id]||0)-(a[1].fit[id]||0));
+const fitBar=n=>`<span class="fit">${[0,1,2,3,4].map(i=>`<i class="${i<n?"y":""}"></i>`).join("")}</span>`;
+const fitTxt=(n,o)=>`${n} séance${n>1?"s":""} sur 5 ${o.word||"qui le travaillent"}`;
+const coach=()=>S.role==="coach";
+
+const nav=(on)=>`<div class="bnav" style="grid-template-columns:repeat(${S.tabs},1fr)"><span class="${on==="Accueil"?"on":""}"><i></i>Accueil</span><span><i></i>Planning</span><span class="${on==="Accueil"?"":"on"}"><i></i>${coach()?"Sportifs":"Objectifs"}</span>${S.tabs===4?`<span><i></i>Prog.</span>`:""}</div>`;
+const reward=id=>{const o=OBJ[id];return `<button class="rc" data-obj="${id}"><img src="${IMG(o.img)}" alt=""><span class="pills"><i class="pl">J-${o.days}</i><i class="pl">${o.n} séances ${o.word.replace(/^avec /,"")}</i></span><span class="rb"><small>${o.nm}</small><span class="v"><b>${o.cur}</b>${o.gain?`<span class="gain">▲ ${o.gain}</span>`:""}</span>${false?``:`<span class="bar"><i style="width:${o.pct}%"></i><em style="left:${o.pct}%"></em></span>`}<span class="rf"><span>d'ici le ${fd(o.days)}</span><em>🎯 ${o.tgt}</em></span></span></button>`};
+const ocard=id=>{const o=OBJ[id],m=S.mine.includes(id),n=forObj(id).length;return `<button class="oc ${m?"mine":""}" data-obj="${id}"><img src="${IMG(o.img)}" alt="">${m?`<span class="st m">✓ ${coach()?"Son":"Ton"} objectif</span>`:o.st==="w"?`<span class="st w">▼ Point faible</span>`:o.st==="g"?`<span class="st g">✓ Point fort</span>`:""}<span class="ot"><b>${o.nm}</b><small>${o.cur}</small>${n?`<span class="via">${n} programme${n>1?"s":""}</span>`:""}</span></button>`};
+const pcard=id=>{const p=PROGS[id];return `<button class="pg" data-prog="${id}"><img src="${IMG(p.img)}" alt=""><span class="ot"><b>${p.nm}</b><small>${p.w} semaines · ${p.s} séances par semaine</small><span class="serve">${p.serve.map(o=>`<i class="${S.mine.includes(o)?"me":""}">${S.mine.includes(o)?"🎯 ":""}${OBJ[o].nm}</i>`).join("")}</span></span></button>`};
+const mcard=k=>`<button class="pg" data-act="importdone"><img src="${IMG("crossfit")}" alt=""><span class="st" style="background:#fff;color:#111">Importé</span><span class="ot"><b>Mon programme (photo)</b><small>6 semaines · 4 séances par semaine</small><span class="serve"><i class="me">🎯 Back squat</i><i>Soulevé de terre</i></span></span></button>`;
+const curProg=()=>Object.entries(PROGS).find(([,p])=>p.cur);
+
+const puce=(d)=>{const n=S.sheet==="reset"?1:d>=2?13:12;const nxt=d===0?"Point forme":d===1?(S.rest?"":"Ta séance"):"";return `<button class="puce" data-act="streak" aria-label="Ta série : ${n} jours"><span style="font-size:15px">🔥</span>${n}${nxt?`<span class="nx">${nxt} ›</span>`:`<span class="ok">✓</span>`}</button>`};
+function todayView(){
+  const d=S.day,onb=S.onb;
+  return `<div class="bg"></div><div class="page"><div class="hdr">${puce(d)}<span class="datesel">‹ Aujourd'hui ›</span><span class="av">G</span></div>
+    <div class="ringph"><span><b>${d===0?"?":"Allège"}</b><small>${d===0?"fais ton point forme":"forme 48 · nuit courte"}</small></span></div>
+    <p class="sub" style="text-align:center;margin-top:8px">L'anneau de décision de la prod, inchangé. Seule la puce du header change (pas d'anneau).</p>
+    <div class="sess"><div class="mono">Aujourd'hui · Force jambes</div><b>Front squat 5 × 3 · 92,5 kg</b><small>${d===0?"Ton point forme règle cette séance.":"Allégée après ta nuit courte."}</small>
+      ${d===0?`<button class="cta" data-act="pf">Faire mon point forme · 10 s</button>`:d===1?`<button class="cta" data-act="done">J'ai fait ma séance</button>`:`<button class="cta" style="background:#2f9e44" data-act="streak">✓ Séance faite</button>`}</div>
+  </div>${nav("Accueil")}${sheet()}`;
+}
+function home(){
+  const [cid,cp]=curProg();
+  const fams=["Force","Puissance","Vitesse","Endurance","Revenir de blessure","Concours et échéances","Forme"];
+  const byFam=f=>Object.keys(OBJ).filter(k=>OBJ[k].fam===f);
+  const browse=S.seg==="obj"
+    ? `<div class="chips"><span class="on">Pour toi</span>${fams.slice(0,5).map(f=>`<span>${f}</span>`).join("")}</div>
+       ${fams.map(f=>{const ids=byFam(f);if(!ids.length)return "";return `<div class="sec"><b>${f}</b><small>${ids.length} objectif${ids.length>1?"s":""}</small></div><div class="rail">${ids.map(ocard).join("")}</div>`}).join("")}`
+    : `<div class="chips"><span class="on">Tous</span><span>Pour mes objectifs</span><span>Force</span><span>Course</span><span>Prévention</span></div>
+       <div class="sec"><b>${coach()?"Programmes du groupe":"Mes programmes"}</b><small>${1+S.made.length}</small></div><div class="rail"><button class="pg" data-act="create" style="flex-basis:34%;border:2px dashed rgba(255,255,255,.22);background:rgba(255,255,255,.03);display:grid;place-items:center;text-align:center;font-weight:700;font-size:13px;color:rgba(255,255,255,.75)">+<br>Nouveau programme</button>${S.made.map(mcard).join("")}${pcard(cid)}</div>
+       <div class="sec"><b>Pour ${coach()?"ses":"tes"} objectifs</b><small>triés par ce qu'ils servent</small></div><div class="rail">${["spsq","pe","plio","pl"].map(pcard).join("")}</div>
+       <div class="sec"><b>Tous les modèles</b><small>80 programmes</small></div><div class="rail">${["sprint","k10","genou","police"].map(pcard).join("")}</div>
+       <button class="cta2" data-act="gen">✨ Créer un programme pour ${coach()?"ses":"mes"} objectifs</button>`;
+  return `<div class="bg"></div><div class="page">
+    ${coach()?`<div class="coachbar"><span>👥 Groupe</span><span class="on"><i>LG</i>Léa</span><span><i>KH</i>Karim</span><span><i>SR</i>Sofia</span></div>`:""}
+    <div class="hd"><h2>${coach()?"Objectifs de Léa":"Objectifs"}</h2><span class="av">${coach()?"LG":"G"}</span></div>
+    <div class="rail" style="margin-top:12px">${S.mine.map(reward).join("")}${S.mine.length<3?`<div class="rc add">+<br>${coach()?"Fixe-lui un objectif":"Choisis un objectif"}</div>`:""}</div>
+    <div class="sec" style="margin-top:12px"><b>${coach()?"Son programme":"Ton programme"}</b><span style="display:flex;gap:14px"><button class="lk" data-act="create">+ Nouveau</button><button class="lk" data-seg="prog">Changer</button></span></div>
+    <button class="veh" data-prog="${cid}"><span class="th"><img src="${IMG(cp.img)}" alt=""></span><span><b>${cp.nm}</b><small>Semaine 3 sur ${cp.w} · sert 🎯 ${cp.serve.filter(o=>S.mine.includes(o)).map(o=>OBJ[o].nm).join(", ")}</small><span class="wk">${Array.from({length:cp.w},(_,i)=>`<i class="${i<2?"d":i===2?"c":""}"></i>`).join("")}</span></span><span class="go">›</span></button>
+    <div class="search">🔍 Un objectif, un test, un programme…</div>
+    <div class="seg"><button class="${S.seg==="obj"?"on":""}" data-seg="obj">Par objectif</button><button class="${S.seg==="prog"?"on":""}" data-seg="prog">Tous les programmes</button></div>
+    ${browse}
+  </div>${nav()}${sheet()}`;
+}
+
+/* Semaines : 1 validée, .5 à moitié, 0 manquée, "c" en cours */
+const wkCell=(v,i,big)=>v==="c"?`<span><i class="c">…</i>${big?`S${i+1}`:""}</span>`:`<span><i class="${v===1?"f":v===.5?"h":""}">${v===1?"✓":v===.5?"½":"·"}</i>${big?`S${i+1}`:""}</span>`;
+function weekDots(id){const t=TRAJ[id];
+  if(S.mode==="streak")return "";
+  return `<span class="crans">${Array.from({length:t.total},(_,i)=>{const v=t.wk[i];return `<i class="${v===1?"f":v===.5?"h":v==="c"?"c":""}"></i>`}).join("")}</span>`;}
+const doneTxt=t=>{const f=t.wk.filter(v=>v===1).length,h=t.wk.filter(v=>v===.5).length;return `${f} semaine${f>1?"s":""} validée${f>1?"s":""}${h?`, ${h} à moitié`:""}`};
+function trajChart(t,o){
+  const W=320,H=120,pl=8,pr=62,pt=12,pb=18,n=t.total, x=w=>pl+w/n*(W-pl-pr);
+  const lo=Math.min(t.start,...t.pts.map(q=>q[1]))-1, hi=t.tgt+0.6, y=v=>pt+(1-(v-lo)/(hi-lo))*(H-pt-pb);
+  const wkNow=t.wk.indexOf("c")+.5, solid=t.pts.map(q=>`${x(q[0])},${y(q[1])}`).join(" "), tx=x(Math.min(n,wkNow+2));
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;margin-top:8px" role="img" aria-label="Tests réels et tracé vers la cible">
+    <line x1="${x(0)}" y1="${y(t.start)}" x2="${x(n)}" y2="${y(t.tgt)}" stroke="rgba(255,138,85,.55)" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <polyline points="${solid}" fill="none" stroke="#fff" stroke-width="2.5"/>
+    ${t.pts.map(q=>`<circle cx="${x(q[0])}" cy="${y(q[1])}" r="4" fill="#fff"/>`).join("")}
+    <line x1="${x(wkNow)}" y1="${pt}" x2="${x(wkNow)}" y2="${H-pb}" stroke="#fff" stroke-width="1.5"/>
+    <text x="${x(wkNow)}" y="${H-4}" text-anchor="middle" fill="#fff" font-size="9.5" font-weight="700" font-family="DM Sans">aujourd'hui</text>
+    <line x1="${tx}" y1="${pt}" x2="${tx}" y2="${H-pb}" stroke="rgba(255,255,255,.25)" stroke-dasharray="2 3"/>
+    <text x="${tx}" y="${pt-2}" text-anchor="middle" fill="rgba(255,255,255,.55)" font-size="9.5" font-family="DM Sans">test</text>
+    <text x="${x(n)+4}" y="${y(t.tgt)+4}" fill="#ff8a55" font-size="10.5" font-weight="800" font-family="DM Sans">🎯 ${o.tgt}</text>
+  </svg>`;
+}
+function voyants(o){return `
+    <div class="vy"><span class="ic">🏋️</span><span><b>Séances ${o.word}</b><small>Encore une d'ici dimanche.</small></span><span class="s mid">1 sur 2</span></div>
+    <div class="vy"><span class="ic">⚖️</span><span><b>Charge</b><small>Assez pour progresser, pas trop pour encaisser.</small></span><span class="s ok">Dans la zone</span></div>
+    <div class="vy"><span class="ic">🌙</span><span><b>Récupération</b><small>Sous ta norme depuis mardi. Ta séance de jeudi s'allège : la semaine compte quand même.</small></span><span class="s lo">▼ Sous ta norme</span></div>
+    <div class="shield">🛡 2 séances ajustées ce mois-ci ont sauvé ta semaine 3. Sans ajustement, elle aurait été manquée.</div>`;}
+function trajBlock(id){
+  const t=TRAJ[id],o=OBJ[id],cells=t.wk.concat(Array(Math.max(0,t.total-t.wk.length)).fill(0));
+  if(S.mode==="streak")return `<div class="traj"><div class="streak"><span class="fl">🔥</span><span><b>${t.streak} semaines validées d'affilée</b><small>Record : ${t.best} · une semaine à moitié ne casse pas la série</small></span></div>
+    <div class="wks" style="grid-template-columns:repeat(${t.total},1fr)">${cells.map((v,i)=>wkCell(v,i,true)).join("")}</div>
+    <div class="fine">✓ validée · ½ à moitié (la série tient) · une semaine manquée la remet à zéro.</div>
+    ${voyants(o)}</div>`;
+  return `<div class="traj"><div class="k"><b>Ta trajectoire</b><small>${doneTxt(t)}</small></div>
+    ${trajChart(t,o)}
+    <div class="wks" style="grid-template-columns:repeat(${t.total},1fr)">${cells.map((v,i)=>wkCell(v,i,true)).join("")}</div>
+    <div class="fine">Tes vrais tests (trait plein) et le tracé jusqu'à ta cible (pointillés). Aucune valeur estimée : ton prochain test dit où tu en es par rapport au tracé.</div>
+    ${voyants(o)}</div>`;
+}
+function objPage(){
+  const id=S.open,o=OBJ[id],m=S.mine.includes(id),ps=forObj(id),c=coach();
+  return `<div class="bg"></div><div class="page"><div class="hero"><img src="${IMG(o.img)}" alt=""></div><button class="back" data-home="1" aria-label="Retour">‹</button>
+    <h2 class="ttl">${o.nm}</h2>
+    ${o.tgt?`<div class="big"><b>${o.cur}</b><span style="color:var(--faint);font-size:22px">→</span><b class="to">${o.tgt}</b></div>`:`<div class="line" style="font-size:15px">${o.cur}</div>`}
+    ${m&&o.tgt?`<span class="bar" style="margin-top:12px"><i style="width:${o.pct}%"></i><em style="left:${o.pct}%"></em></span><div class="line">d'ici le ${fd(o.days)} · ${o.n} séances ${o.word}</div>`:o.st==="w"?`<div class="line">▼ Point faible · ${o.gap}</div>`:""}
+    ${m?`<button class="cta" data-act="change">Modifier ou changer l'objectif</button>`:`<button class="cta" data-act="follow">🎯 ${c?"En faire son objectif":"En faire un objectif"}</button>`}
+    ${S.mode!=="off"&&m&&TRAJ[id]?`<div class="traj"><div class="k"><b>Cette semaine pour cet objectif</b><small>2 séances sur 3 prévues</small></div>${voyants(o)}</div>`:""}
+    <div class="h3">Pour y arriver</div><p class="sub">Trois moyens. Tu peux en combiner deux.</p>
+    <div class="way on"><span class="n">📅</span><span><b>${c?"Ses":"Tes"} séances comptent déjà</b><small>${o.n?`${o.n} séances ${o.word} depuis le 27 octobre, avec ou sans programme.`:"Chaque séance qui le travaille comptera ici."}</small></span><span class="r">✓</span></div>
+    <button class="way" data-act="gen"><span class="n">✨</span><span><b>Un programme fait pour cet objectif</b><small>${o.days?`${Math.round(o.days/7)} semaines, jusqu'au ${fd(o.days)} · test au début et à la fin`:"Durée calée sur ton échéance"}</small></span><span class="r">›</span></button>
+    ${ps.length?`<div class="h3">Programmes qui le servent</div><p class="sub">Triés par la part de séances qui le travaillent.</p>
+    ${ps.map(([pid,p])=>`<button class="way" data-prog="${pid}"><span class="n"><img src="${IMG(p.img)}" alt=""></span><span><b>${p.nm}</b><small>${fitTxt(p.fit[id],o)} · ${p.w} sem.</small>${fitBar(p.fit[id])}</span><span class="r">${p.cur?"En cours":"›"}</span></button>`).join("")}`:""}
+    <p class="sub" style="margin-top:16px">Plus bas, comme aujourd'hui : badge et analyse, courbe, historique, saisie d'une valeur.</p>
+  </div>${nav()}${sheet()}`;
+}
+
+function progPage(){
+  const id=S.prog,p=PROGS[id],c=coach();
+  return `<div class="bg"></div><div class="page"><div class="hero"><img src="${IMG(p.img)}" alt=""></div><button class="back" data-home="1" aria-label="Retour">‹</button>
+    <h2 class="ttl">${p.nm}</h2><div class="line">${p.w} semaines · ${p.s} séances par semaine</div>
+    <div class="h3">Il sert</div>
+    ${p.serve.map(o=>`<button class="way ${S.mine.includes(o)?"on":""}" data-obj="${o}"><span class="n"><img src="${IMG(OBJ[o].img)}" alt=""></span><span><b>${S.mine.includes(o)?"🎯 ":""}${OBJ[o].nm}</b><small>${fitTxt(p.fit[o],OBJ[o])}</small>${fitBar(p.fit[o])}</span><span class="r">›</span></button>`).join("")}
+    <button class="cta" data-act="start">${p.cur?"En cours · semaine 3":c?"Lui assigner ce programme":"Commencer ce programme"}</button>
+    <p class="sub" style="margin-top:10px">Dessous : la fiche programme d'aujourd'hui (séances, semaines, partage), inchangée.</p>
+  </div>${nav()}${sheet()}`;
+}
+
+function sheet(){
+  if(S.sheet==="start"){const p=PROGS[S.prog];return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Suivre aussi ses objectifs ?</h3><p class="s">Ce programme les travaille. Tes séances les feront avancer, tu verras où tu en es.</p>
+    ${p.serve.map(o=>{const on=S.follow[o]!==false;return `<div class="tg" data-tog="${o}"><span class="ck ${on?"on":""}">${on?"✓":""}</span><span><b>${OBJ[o].nm}</b><small>${OBJ[o].tgt?`${OBJ[o].cur} → ${OBJ[o].tgt}, d'ici le ${fd(p.w*7)}`:`d'ici le ${fd(p.w*7)}`}</small></span></div>`}).join("")}
+    <button class="cta" data-act="close">Commencer</button></div></div>`}
+  if(S.sheet==="gen"){const o=OBJ[S.open];return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Un programme pour ${o.nm.toLowerCase().startsWith("courir")||o.nm.toLowerCase().startsWith("revenir")||o.nm.toLowerCase().startsWith("réussir")?o.nm.toLowerCase():`ton ${o.nm.toLowerCase()}`}.</h3><p class="s">Le générateur part de ton objectif. Tu ajustes si besoin.</p>
+    <div class="row"><span>Objectif</span><b>${o.tgt?`${o.cur} → ${o.tgt}`:o.nm}</b></div>
+    <div class="row"><span>Durée</span><b>${o.days?`${Math.round(o.days/7)} semaines, fin le ${fd(o.days)}`:"8 semaines"}</b></div>
+    <div class="row"><span>Tes jours</span><b>Lun · Mer · Ven · Sam</b></div>
+    <div class="row"><span>Blocs</span><b>Accumulation, intensification, affûtage</b></div>
+    <div class="row"><span>Tests</span><b>Semaine 1 et dernière semaine</b></div>
+    <div class="row"><span>Tes autres objectifs</span><b>Gardés en entretien</b></div>
+    <button class="cta" data-act="close">Créer mon programme</button></div></div>`}
+  if(S.sheet==="create")return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Nouveau programme</h3><p class="s">Le menu de création de la prod, inchangé. « Générer » part de ${coach()?"ses":"tes"} objectifs.</p>
+    ${[["✨","Générer pour mes objectifs","Objectifs, échéance et jours déjà remplis","gen"],["📷","Importer un programme","Photo, PDF ou texte collé","import"],["📚","Utiliser un modèle","La bibliothèque, rangée par objectif","lib"],["📄","Programme vierge","Une semaine vide à remplir","blank"]].map(([i,l,sub,a])=>`<div class="tg" data-act="${a}" style="grid-template-columns:40px 1fr"><span style="width:40px;height:40px;border-radius:12px;background:#f1f0ee;display:grid;place-items:center;font-size:18px">${i}</span><span><b>${l}</b><small>${sub}</small></span></div>`).join("")}</div></div>`;
+  if(S.sheet==="imported")return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Programme importé.</h3><p class="s">6 semaines, 24 séances, rangées dans ton planning à partir de lundi. Tu le retrouves dans « Ton programme » et dans « Mes programmes ».</p>
+    <div class="row"><span>Il sert</span><b>Back squat · 5 séances sur 5<br>Soulevé de terre · 3 sur 5</b></div>
+    <div class="tg" data-tog="dl"><span class="ck ${S.follow.dl!==false?"on":""}">${S.follow.dl!==false?"✓":""}</span><span><b>Suivre aussi le soulevé de terre</b><small>170 kg → 177 kg, d'ici le ${fd(42)}</small></span></div>
+    <button class="cta" data-act="importok">Voir mon planning</button></div></div>`;
+  if(S.sheet==="blank")return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Programme vierge.</h3><p class="s">L'éditeur de la prod s'ouvre sur une semaine vide. Dès que tes séances contiennent un mouvement de tes objectifs, le programme affiche « Il sert » tout seul.</p><button class="cta" data-act="close">Ouvrir l'éditeur</button></div></div>`;
+  if(S.sheet==="streak"||S.sheet==="saved"||S.sheet==="reset"){const sv=S.sheet==="saved",rs=S.sheet==="reset";
+    const wk=rs?[["L","f"],["M","r"],["M","x"],["J","c"],["V",0],["S","R"],["D",0]]:WEEK;
+    return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc sw"><div class="grab"></div>
+    ${!sv&&!rs?`<div class="pager"><span>Fin de séance</span><span class="pd"><i></i><i></i><i class="on"></i></span></div>`:""}
+    <div class="fl">${sv?`<span style="color:#2d6a7c">${LI("shield-check",48)}</span>`:"🔥"}</div><h3>${rs?"Nouvelle série":"13 jours d'affilée"}</h3>
+    <p class="s">${rs?"Hier sans point forme. Aujourd'hui compte déjà : 1 jour.":sv?"Repos conseillé suivi : ta journée est sauvée.":"Ta séance allégée compte autant qu'une pleine."}</p>
+    <div class="w7">${wk.map(([l,v])=>`<span><i class="${v==="f"||v==="r"?"f":v==="s"?"s":v==="c"?"c":v==="x"?"x":""}">${v==="x"?"":LI(DAYI[v]||"dumbbell",15)}</i>${l}</span>`).join("")}</div>
+    <div class="lg">${LI("dumbbell",12)} séance ${LI("moon",12)} repos prévu ${LI("shield-check",12)} repos conseillé</div>
+    <div class="meta">${rs?"Ton record reste 21 jours.":"Record 21 · 1 jour sauvé par un repos conseillé"}</div>
+    ${sv?`<div class="meta" style="color:var(--accent);font-weight:700">Nouvelle récompense : Écouté ton corps</div>`:""}
+    ${!sv&&!rs?`<button class="nextr" data-act="rewards"><span style="color:#d44000">${LI("crosshair",22)}</span><span><b>Prochaine récompense : ta 1re décision</b><small>Fais ta séance du jour réglée par ton point forme</small></span><span>›</span></button>`:""}
+    <button class="cta" data-act="close">${!sv&&!rs?"Terminer":"Continuer"}</button><button class="linkb" data-act="rewards">Mes récompenses · 6</button></div></div>`}
+  if(S.sheet==="rewards"){const card=([e,n,w,l])=>`<div class="${l?"lock":""}"><div class="md">${LI(e,22)}</div><b>${n}</b><small>${w}</small></div>`;
+    const first=[["clipboard-check","1er point forme","20 nov."],["calendar-days","Ton programme","20 nov."],["crosshair","Ta 1re décision","à faire aujourd'hui",1],["star","Elite débloqué","14 jours offerts",1]];
+    return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Mes récompenses</h3><p class="s">6 sur 16. Chacune vient de ta façon de t'entraîner.</p>
+    <div class="bgrid">${first.concat(BADGES,[["map-pin","1er repère posé","à venir",1],["calendar-range","4 semaines parfaites","à venir",1],["flag","Échéance tenue","à venir",1]]).slice(0,12).map(card).join("")}</div>
+    <button class="cta" data-act="streak">Retour</button></div></div>`}
+  if(S.sheet==="onbpanel")return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Bien démarrer · 2 sur 4</h3><p class="s">La checklist de la prod, dans la même puce. Une fois finie, la puce devient ta série.</p>
+    <div class="chk">${[["Ton 1er point forme",1],["Ton programme",1],["Ta 1re décision",0],["Débloquer Elite",0]].map(([l,on])=>`<div class="tg"><span class="ck ${on?"on":""}">${on?"✓":""}</span><span><b>${l}</b></span></div>`).join("")}
+    <div class="tg"><span class="ck" style="border-style:dashed">🔥</span><span><b>Ensuite : ta série du jour</b><small>Point forme + séance (ou repos) = journée validée</small></span></div></div>
+    <button class="cta" data-act="close">OK</button></div></div>`;
+  if(S.sheet==="change")return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Changer d'objectif ?</h3><p class="s">Ta série et tes récompenses sont à toi, pas à l'objectif : elles restent.</p>
+    <div class="row"><span>🔥 Série</span><b>Gardée · 13 jours</b></div><div class="row"><span>Récompenses</span><b>Gardées · 4</b></div><div class="row"><span>Front squat</span><b>Retiré · son historique reste dans la fiche</b></div><div class="row"><span>Nouvel objectif</span><b>Part de ta dernière valeur, ses séances des 4 dernières semaines comptent déjà</b></div>
+    <button class="cta" data-act="close">Choisir un autre objectif</button></div></div>`;
+  if(S.sheet==="after"){const o=OBJ[S.open],t=TRAJ[S.open],st=S.mode==="streak";return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><div class="mono" style="color:#8a8f94">Fin de séance</div><h3>${st?`Semaine validée. 🔥 ${t.streak+1} d'affilée.`:"Semaine 4 validée."}</h3><p class="s">2 séances sur 2 ${o.word}, charge dans la zone, séance ajustée à ta récup.</p>
+    ${st?`<div class="row"><span>Série</span><b>🔥 ${t.streak} → ${t.streak+1} semaines</b></div><div class="row"><span>Record</span><b>${t.streak+1>t.best?`Nouveau record : ${t.streak+1}`:t.best}</b></div>`:`<div class="row"><span>Trajectoire</span><b>Semaine 4 validée · ${doneTxt(t).replace(/^\d+/,m=>+m+1)}</b></div>`}
+    <div class="row"><span>Prochain test</span><b>${t.test}</b></div>
+    <button class="cta" data-act="close">OK</button></div></div>`}
+  if(S.sheet==="test"){const st=S.mode==="streak";return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><div class="mono" style="color:#8a8f94">Jour du test</div><h3>136 kg. ${st?"Tes 5 semaines ont payé.":"Au-dessus du tracé."}</h3><p class="s">${st?"5 semaines validées depuis ton dernier test, +3,5 kg mesurés.":"Le tracé prévoyait 135 kg à cette date. Tu es devant."} Ta suite repart de ce vrai chiffre.</p>
+    <div class="row"><span>Depuis le départ</span><b>▲ +3,5 kg</b></div><div class="row"><span>Il te reste</span><b>2 kg d'ici le 18 janvier</b></div><div class="row"><span>Semaines validées</span><b>5 sur 6</b></div>
+    <p class="s" style="margin-top:10px">Sous le tracé : « 132,5 kg. Ta trajectoire repart de là. » Jamais de reproche.</p>
+    <button class="cta" data-act="close">Continuer</button></div></div>`}
+  if(S.sheet==="edit")return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Modifier l'objectif</h3><p class="s">Comme en prod : échéance, date précise, retirer.</p><button class="cta" data-act="close">OK</button></div></div>`;
+  return "";
+}
+
+const STEPS=[
+  {h:"Onglet Objectifs : tes objectifs et ton programme",p:"En haut, les cartes récompense de la prod. Juste dessous, le programme en cours, présenté comme le moyen : « sert 🎯 Front squat, Saut vertical ». « Changer » ouvre la bibliothèque de programmes.",go:()=>{S.v="home";S.seg="obj";S.sheet=null}},
+  {h:"La puce du header porte la série, dès le 1er jour",p:"Plus de checklist à part : la puce affiche 🔥 12 et l'action suivante en clair, « Point forme › ». Un tap y mène. Pas d'anneau : il reste réservé à la décision du jour. Les étapes de la checklist deviennent les premières récompenses. Rien d'autre ne change sur l'Accueil.",go:()=>{S.v="today";S.onb=false;S.day=0;S.sheet=null}},
+  {h:"Point forme fait : « Ta séance › »",p:"La puce passe à l'étape suivante, « Ta séance › ». Un jour de repos prévu, le point forme suffit : la puce passe directement à ✓.",go:()=>{S.v="today";S.onb=false;S.day=1;S.sheet=null}},
+  {h:"Journée validée : dernière page du mini bilan",p:"Pas de fenêtre en plus : la série est la dernière page du mini bilan de fin de séance (séance, objectifs, série). Un seul moment de récompense par jour. Les jours sans séance, elle s'ouvre seule après le point forme. Rouvrable via la puce.",go:()=>{S.v="today";S.onb=false;S.day=2;S.sheet="streak"}},
+  {h:"Mes récompenses : les premiers pas d'abord",p:"Seulement depuis la fenêtre de série. Une seule grille : les étapes de l'ancienne checklist (1er point forme, ton programme, ta 1re décision, Elite) en premier, sans section à part, puis les récompenses d'entraînement. Débloquées en couleur, à venir en grisé.",go:()=>{S.v="today";S.onb=false;S.day=2;S.sheet="rewards"}},
+  {h:"Série perdue : sans reproche",p:"Un jour oublié remet la série à zéro (règle la plus simple). L'écran ne dit jamais « perdu » : « Nouvelle série. Hier sans point forme. Aujourd'hui compte déjà : 1 jour. Ton record reste 21 jours. »",go:()=>{S.v="today";S.onb=false;S.day=1;S.sheet="reset"}},
+  {h:"Jour sauvé : la même fenêtre",p:"Repos conseillé par l'anneau et suivi : même fenêtre, avec 🛡 et la récompense « Écouté ton corps ».",go:()=>{S.v="today";S.onb=false;S.day=1;S.sheet="saved"}},
+  {h:"Changer d'objectif en cours de route",p:"Série et récompenses gardées. L'ancien objectif garde son historique dans sa fiche. Le nouveau part de ta dernière valeur, et ses séances des 4 dernières semaines comptent déjà (comme en prod).",go:()=>{S.v="obj";S.open="fs";S.sheet="change"}},
+  {h:"Parcourir par objectif (par défaut)",p:"Sous la recherche, la bibliothèque est rangée par objectif et par famille (Force, Puissance, Vitesse, Endurance, Revenir de blessure, Concours, Forme). Chaque carte dit combien de programmes la servent. Les tests y sont : c'est la grille actuelle, regroupée par famille.",go:()=>{S.v="home";S.seg="obj";S.sheet=null},scroll:420},
+  {h:"Page d'un objectif : trois moyens",p:"Actuel → cible, puis « Pour y arriver » : tes séances (elles comptent déjà, programme ou pas), un programme fait pour cet objectif, et les programmes de la bibliothèque qui le servent, triés par la part de séances qui le travaillent.",go:()=>{S.v="obj";S.open="fs";S.sheet=null}},
+  {h:"Un programme fait pour cet objectif",p:"Le générateur reçoit l'objectif et l'échéance : durée calée sur la date, blocs, test au début et à la fin, autres objectifs gardés en entretien. Rien de plus à remplir.",go:()=>{S.v="obj";S.open="fs";S.sheet="gen"}},
+  {h:"Créer : générer, importer, modèle, vierge",p:"« + Nouveau » à côté de « Ton programme », et 1re carte de « Mes programmes ». Le menu de création de la prod, inchangé (4 choix). Seule différence : « Générer » part des objectifs, déjà remplis.",go:()=>{S.v="home";S.seg="obj";S.sheet="create"}},
+  {h:"Après un import : où il est, ce qu'il sert",p:"Le programme importé va dans le planning (comme aujourd'hui), devient « Ton programme » et apparaît dans « Mes programmes ». L'app lit ce qu'il sert et propose de suivre l'objectif qu'il travaille et que tu ne suis pas encore.",go:()=>{S.v="home";S.seg="prog";S.sheet="imported";if(!S.made.length)S.made.push("imp")},scroll:420},
+  {h:"Tous les programmes (bascule)",p:"Pour ceux qui cherchent un programme : la boutique d'aujourd'hui, mais chaque programme affiche les objectifs qu'il sert (🎯 = les tiens). « Pour tes objectifs » remplace « Pour toi ».",go:()=>{S.v="home";S.seg="prog";S.sheet=null},scroll:420},
+  {h:"Page programme : il sert…",p:"La fiche programme commence par ce qu'il sert, avec la part de séances. Le reste de la fiche (séances, semaines, partage) ne change pas.",go:()=>{S.v="prog";S.prog="spsq";S.sheet=null}},
+  {h:"Arriver par un programme (pages /p/)",p:"Au démarrage d'un programme, l'app propose de suivre les objectifs qu'il sert, cibles calculées, tout coché et décochable. 60 % des inscrits arrivent par un programme : c'est le pont du programme vers l'objectif.",go:()=>{S.v="prog";S.prog="spsq";S.sheet="start"}},
+  {h:"Coach : la même page pour chaque sportif",p:"Objectifs de Léa en haut, son programme dessous, même bibliothèque. Depuis un objectif : « Lui assigner ce programme ». L'onglet coach garde son nom.",go:()=>{S.v="home";S.seg="obj";S.sheet=null;S.role="coach"}},
+];
+
+const phone=document.getElementById("phone"),log=document.getElementById("log");
+const frame=()=>`<div class="island"></div><div class="sb"><span>9:41</span><span>●●● 4G</span></div><div class="homebar"></div>`;
+const V={home,obj:objPage,prog:progPage,today:todayView};
+function render(still,scroll){
+  document.getElementById("ctl").innerHTML=`<span class="mono">Barre</span>${[[3,"3 onglets"],[4,"4 onglets (Programmes gardé)"]].map(([k,l])=>`<button class="${S.tabs===k?"on":""}" data-tabs="${k}">${l}</button>`).join("")}<span class="mono" style="margin-left:6px">Vue</span>${[["athlete","Sportif"],["coach","Coach"]].map(([k,l])=>`<button class="${S.role===k?"on":""}" data-role="${k}">${l}</button>`).join("")}`;
+  phone.innerHTML=`<div class="scr ${still?"still":""}">${V[S.v]()}</div>${frame()}`;
+  if(scroll){const pg=phone.querySelector(".page");if(pg)pg.scrollTop=scroll}
+  if(window.lucide)window.lucide.createIcons();
+  log.innerHTML=STEPS.map((s,i)=>`<button class="step ${i===S.i?"on":""}" data-step="${i}"><span class="n">${String(i+1).padStart(2,"0")}</span><span><div class="h">${s.h}</div><div class="p">${s.p}</div></span></button>`).join("");
+}
+function goStep(i){S.role="athlete";S.i=i;STEPS[i].go();render(false,STEPS[i].scroll)}
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-mode],[data-step],[data-home],[data-obj],[data-prog],[data-seg],[data-act],[data-tabs],[data-role],[data-tog]");if(!t)return;const d=t.dataset;
+  if(d.step!==undefined)return goStep(+d.step);
+  if(d.tabs){S.tabs=+d.tabs;return render(true)}
+  if(d.mode){S.mode=d.mode;return render(true)}
+  if(d.role){S.role=d.role;return render(true)}
+  if(d.home){S.v="home";S.sheet=null;return render()}
+  if(d.seg){S.v="home";S.seg=d.seg;S.sheet=null;return render(true,420)}
+  if(d.obj){S.v="obj";S.open=d.obj;S.sheet=null;return render()}
+  if(d.prog){S.v="prog";S.prog=d.prog;S.sheet=null;return render()}
+  if(d.tog){S.follow[d.tog]=S.follow[d.tog]===false;return render(true)}
+  if(d.act==="gen"){if(S.v!=="obj"){S.v="obj";S.open="fs"}S.sheet="gen";return render(true)}
+  if(d.act==="start"){if(!PROGS[S.prog].cur){S.sheet="start"}return render(true)}
+  if(d.act==="edit"){S.sheet="edit";return render(true)}
+  if(d.act==="pf"){S.day=1;return render(true)}
+  if(d.act==="done"){S.day=2;S.sheet="streak";return render(true)}
+  if(d.act==="streak"){S.sheet="streak";return render(true)}
+  if(d.act==="rewards"){S.sheet="rewards";return render(true)}
+  if(d.act==="onbpanel"){S.sheet="onbpanel";return render(true)}
+  if(d.act==="change"){S.sheet="change";return render(true)}
+  if(d.act==="create"){S.sheet="create";return render(true)}
+  if(d.act==="import"){S.sheet="imported";if(!S.made.length)S.made.push("imp");return render(true)}
+  if(d.act==="importok"){S.sheet=null;S.v="home";S.seg="prog";return render(true,420)}
+  if(d.act==="importdone"){S.sheet="imported";return render(true)}
+  if(d.act==="blank"){S.sheet="blank";return render(true)}
+  if(d.act==="lib"){S.sheet=null;S.v="home";S.seg="obj";return render(true,420)}
+  if(d.act==="follow"){if(S.mine.length<3&&!S.mine.includes(S.open))S.mine.push(S.open);return render(true)}
+  if(d.act==="close"){S.sheet=null;return render(true)}
+});
+STEPS[0].go();render();
+})();
+</script>

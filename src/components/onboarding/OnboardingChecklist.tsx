@@ -55,7 +55,7 @@ export default function OnboardingChecklist() {
 
   // Ouverture auto : à l'arrivée (1re page de la session) et quand une étape vient d'être cochée.
   useEffect(() => {
-    if (!progress || progress.complete || !total) return;
+    if (!progress || progress.complete || !total || progress.role === "athlete") return;
     let seen = -1;
     try { seen = Number(localStorage.getItem(SEEN_KEY) ?? "-1"); } catch { /* stockage indisponible */ }
     let openedThisSession = false;
@@ -83,7 +83,9 @@ export default function OnboardingChecklist() {
     if (open && installMode) posthog.capture("pwa_install_cta_viewed", { surface: "checklist", mode: installMode });
   }, [open, installMode]);
 
-  if (!progress || progress.complete || !total) return null;
+  /* Sportif : la checklist vit désormais dans la puce de série (StreakPill, 24/11/2026), ses étapes sont
+     les premières récompenses. Elle reste pour le coach. */
+  if (!progress || progress.complete || !total || progress.role === "athlete") return null;
   const role = progress.role;
   const nextStep = progress.steps.find(s => !s.done);
 

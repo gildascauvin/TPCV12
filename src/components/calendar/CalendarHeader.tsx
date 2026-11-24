@@ -16,6 +16,7 @@ import { DARK_CARD_BG } from "@/lib/theme";
 import ActivityPill from "@/components/layout/ActivityPill";
 import { setDisplayedPeriod, refreshActivitySoon } from "@/lib/activityStatus";
 import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
+import StreakPill from "@/components/streak/StreakPill";
 
 export type HeaderMode = "day" | "period" | "title";
 
@@ -483,6 +484,7 @@ export default function CalendarHeader({
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, maxWidth: sideRoom ?? undefined }}>
             {leftControls}
             <OnboardingChecklist />
+            <StreakPill />
           </div>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, minWidth: 0, maxWidth: sideRoom ?? undefined }}>
             {extraControls}

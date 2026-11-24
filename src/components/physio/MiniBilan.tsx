@@ -20,6 +20,8 @@ export type MiniSlide = {
   heroNode?: React.ReactNode;
   sub?: React.ReactNode;
   body?: React.ReactNode;
+  /* Fond dessiné à la place de la photo (page « TA SÉRIE », 24/11). */
+  backdrop?: React.ReactNode;
 };
 
 export const miniCard: React.CSSProperties = { background: "rgba(255,255,255,0.06)", borderRadius: 18, padding: 16, display: "flex", flexDirection: "column", gap: 10 };
@@ -75,7 +77,7 @@ export default function MiniBilan({ slides, title, alt, onClose, exitClass, nav,
       style={{ position: "fixed", inset: 0, zIndex: 2147483150, background: "#070a0d", color: "#fff", fontFamily: "var(--font-dm-sans), 'Helvetica Neue', sans-serif", display: "flex", justifyContent: "center" }}
     >
       <div style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 560, height: "min(48vh, 420px)" }}>
-        <PhotoBanner key={slide.key} photo={slide.photo} height="100%" sportPhoto={slide.sportPhoto} alt={alt} />
+        {slide.backdrop ?? <PhotoBanner key={slide.key} photo={slide.photo} height="100%" sportPhoto={slide.sportPhoto} alt={alt} />}
       </div>
       <div style={{ position: "relative", width: "100%", maxWidth: 440, boxSizing: "border-box", padding: "calc(env(safe-area-inset-top, 0px) + 14px) 20px calc(env(safe-area-inset-bottom, 0px) + 20px)", display: "flex", flexDirection: "column", gap: 18, height: "100%" }}>
         <div style={{ display: "flex", gap: 4 }}>

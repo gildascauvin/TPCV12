@@ -3,279 +3,249 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,900&family=IBM+Plex+Mono:wght@500;700&display=swap">
 <style>
-/* Layout : téléphone à gauche (onglet Performance), carnet de bord à droite. Monde sombre de l'app. */
+/* v6 (24/11) : fusion Objectifs + Programmes. On parcourt par objectif ; le programme est un moyen parmi d'autres. Base = onglet Objectifs en prod. */
 :root{
   color-scheme:dark;
   --ground:#0b0e10; --panel:#141a1e; --line:rgba(255,255,255,.10); --ink:#f3f5f6; --muted:rgba(255,255,255,.64); --faint:rgba(255,255,255,.42);
-  --accent:#d44000; --accent-hi:#f04a08; --soft:#ff8a55; --cool:#8cc3d4; --gold:#ffc24a; --good:#7fdb8f; --bad:#ff6b5a;
-  --tink:#171b1f; --tmuted:#6b7177;
+  --accent:#d44000; --accent-hi:#f04a08; --soft:#ff8a55; --cool:#8cc3d4; --gold:#ffc861; --good:#7ee2a0; --bad:#ff7a6a;
+  --app:#070a0d; --tink:#171b1f; --tmuted:#6b7177;
   --sans:"DM Sans",system-ui,-apple-system,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --ease:cubic-bezier(.23,1,.32,1); --drawer:cubic-bezier(.32,.72,0,1);
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px}
-button,input{font-family:inherit;color:inherit}
+button{font-family:inherit;color:inherit}
 .wrap{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);gap:40px;align-items:start}
 @media (max-width:860px){.wrap{grid-template-columns:minmax(0,1fr)}.phone-col{justify-self:center;width:100%;max-width:400px;position:static!important}}
 .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--soft)}
 h1{font-size:28px;line-height:1.1;letter-spacing:-.02em;margin:6px 0 10px;text-wrap:balance}
-.lead{color:var(--muted);font-size:15px;line-height:1.5;max-width:62ch;margin:0 0 18px}
+.lead{color:var(--muted);font-size:15px;line-height:1.5;max-width:62ch;margin:0 0 22px}
+.lead b{color:var(--ink)}
+.phone-col{position:sticky;top:20px}
 .ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 auto 14px;max-width:400px}
-.ctl .mono{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-right:4px}
+.ctl .mono{color:var(--faint);margin-right:4px}
 .ctl button{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 11px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--muted)}
 .ctl button.on{background:#fff;color:var(--tink);border-color:#fff}
-.phone-col{position:sticky;top:20px}
 .device{width:100%;max-width:400px;aspect-ratio:400/846;border-radius:56px;padding:9px;background:linear-gradient(145deg,#3a3f44,#15181b 40%,#2a2e32);box-shadow:0 50px 120px rgba(0,0,0,.6),inset 0 0 0 1px rgba(255,255,255,.08)}
-.phone{position:relative;width:100%;height:100%;border-radius:47px;overflow:hidden;background:radial-gradient(ellipse 105% 65% at 50% -10%,rgba(56,189,248,.22) 0%,rgba(125,211,252,.08) 40%,transparent 65%),#070a0d;color:#fff;isolation:isolate}
+.phone{position:relative;width:100%;height:100%;border-radius:47px;overflow:hidden;background:var(--app);color:#fff;isolation:isolate}
 .island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:31%;height:30px;border-radius:20px;background:#000;z-index:60}
 .sb{position:absolute;top:0;left:0;right:0;height:50px;padding:16px 28px 0 32px;display:flex;justify-content:space-between;z-index:59;font-weight:700;font-size:15px;pointer-events:none}
-.homebar{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:36%;height:5px;border-radius:5px;background:rgba(255,255,255,.85);z-index:59}
+.homebar{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:36%;height:5px;border-radius:5px;background:rgba(255,255,255,.85);z-index:59;pointer-events:none}
 .scr{position:absolute;inset:0;display:flex;flex-direction:column;animation:scrIn .38s var(--ease)}
-.scr.still{animation:none}
 @keyframes scrIn{from{opacity:0;transform:translateX(14px)}}
+.scr.still{animation:none}
 @media (prefers-reduced-motion:reduce){.scr,.sheet{animation:none!important}}
-.content{flex:1;overflow-y:auto;padding:54px 16px 96px;scrollbar-width:none}
-.content::-webkit-scrollbar{display:none}
+.bg{position:absolute;inset:0;z-index:0;background:radial-gradient(ellipse 105% 55% at 50% -10%,rgba(56,189,248,.18) 0%,transparent 62%),#070a0d}
+.page{position:relative;z-index:2;flex:1;overflow:auto;padding:54px 16px 18px;min-height:0;scrollbar-width:none}
+.page::-webkit-scrollbar{display:none}
+.hd{display:flex;justify-content:space-between;align-items:center}
+.hd h2{font-size:25px;font-weight:900;letter-spacing:-.02em;margin:0}
+.av{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.1);display:grid;place-items:center;font-size:13px;font-weight:700}
 .mono{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
-.pagetitle{text-align:center;font-weight:900;font-size:17px;margin:4px 0 14px}
-.sec{display:flex;justify-content:space-between;align-items:baseline;margin:18px 2px 8px}
-.sec .mono{color:var(--soft)}
-.sec small{font-size:12px;color:var(--faint)}
-/* Ligne de test (format de prod) */
-.tc{display:grid;grid-template-columns:32px 1fr 92px;gap:10px;align-items:center;width:100%;text-align:left;border:0;border-top:1px solid rgba(255,255,255,.07);background:none;padding:12px 2px;cursor:pointer;transition:background .15s}
-.tc:hover{background:rgba(255,255,255,.03)}
-.tc .ic{width:32px;height:32px;border-radius:9px;background:rgba(255,255,255,.07);display:grid;place-items:center;font-size:16px}
-.tc .nm{font-size:14.5px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.tc .val{font-size:19px;font-weight:900;margin-top:1px;font-variant-numeric:tabular-nums}
-.tc .sub{font-size:11.5px;color:var(--faint);margin-top:1px}
-.chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap}
-.chip.red{background:rgba(255,107,90,.14);color:var(--bad)}
-.chip.amber{background:rgba(255,194,74,.14);color:var(--gold)}
-.chip.green{background:rgba(127,219,143,.14);color:var(--good)}
-.chip.obj{background:var(--accent);color:#fff}
-/* Objectifs épinglés : même ligne, encadrée */
-.objbox{border-radius:20px;background:rgba(255,255,255,.04);border:1px solid rgba(255,138,85,.28);padding:2px 12px}
-.objbox .tc:first-child{border-top:0}
-.objline{font-size:11.5px;color:var(--soft);font-weight:700;margin-top:2px}
-.addrow{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;border:1.5px dashed rgba(255,255,255,.18);background:none;border-radius:14px;padding:11px;margin-top:10px;font-size:13.5px;font-weight:700;color:var(--muted);cursor:pointer}
-.reco{border-radius:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:12px 14px}
-.reco p{margin:4px 0 0;font-size:13.5px;line-height:1.45;color:rgba(255,255,255,.85)}
-/* Détail (façon /o/) */
-.back{position:absolute;top:52px;left:14px;z-index:5;width:34px;height:34px;border-radius:50%;border:0;background:rgba(255,255,255,.1);font-size:17px;cursor:pointer}
-.dhead{text-align:center;margin-top:6px}
-.dhead .nm{font-size:15px;font-weight:700;color:var(--muted)}
-.dhead .big{font-size:46px;font-weight:900;letter-spacing:-.03em;line-height:1.05;margin-top:2px;font-variant-numeric:tabular-nums}
-.dhead .sub{font-size:13px;color:var(--faint);margin-top:2px}
-.chart{margin-top:12px;border-radius:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:10px 10px 6px}
-.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin:6px 4px 2px}
-.legend i{display:inline-block;width:16px;height:0;border-top:2.5px solid #fff;vertical-align:middle;margin-right:5px}
-.legend i.d{border-top:2px dashed rgba(255,255,255,.6)}
-.legend i.z{height:9px;border:0;border-radius:3px;background:rgba(255,138,85,.25)}
-.legend i.r{border-top:2px dotted var(--cool)}
-.ana{margin-top:12px;border-radius:18px;padding:13px 14px;background:linear-gradient(160deg,rgba(212,64,0,.2),rgba(212,64,0,.05));border:1px solid rgba(255,138,85,.28)}
-.ana .mono{color:var(--soft)}
-.ana h3{margin:5px 0 0;font-size:17px;font-weight:900;line-height:1.2}
-.ana p{margin:6px 0 0;font-size:13.5px;line-height:1.45;color:rgba(255,255,255,.85)}
-.bar{position:relative;height:10px;border-radius:5px;background:rgba(255,255,255,.1);margin:12px 0 4px}
-.bar b{position:absolute;top:-3px;width:3px;height:16px;border-radius:2px;background:#fff}
-.bar i{position:absolute;top:0;height:100%;border-radius:5px}
-.barx{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
-.inrow{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:12px}
-.inrow .in{border-radius:14px;background:#fff;color:var(--tink);padding:12px 14px;font-size:16px;font-weight:700;display:flex;justify-content:space-between}
-.inrow .in span{color:var(--tmuted);font-weight:500}
-.btn{border:0;border-radius:14px;padding:12px 16px;font-size:15px;font-weight:700;color:#fff;background:linear-gradient(180deg,#f04a08,#d44000);cursor:pointer;transition:transform .12s,filter .12s}
-.btn:active{transform:scale(.98)}
-.btn.ghost{background:rgba(255,255,255,.1)}
-.btn.wide{width:100%;margin-top:10px}
-.hist{margin-top:12px}
-.hist .h{display:flex;justify-content:space-between;font-size:13px;padding:8px 2px;border-top:1px solid rgba(255,255,255,.06);color:var(--muted)}
-.hist .h b{color:#fff;font-variant-numeric:tabular-nums}
-/* Feuille */
-.dim{position:absolute;inset:0;z-index:20;background:rgba(7,10,13,.6)}
-.sheet{position:absolute;left:0;right:0;bottom:0;z-index:21;max-height:84%;display:flex;flex-direction:column;background:#fff;color:var(--tink);border-radius:26px 26px 0 0;animation:sheetUp .42s var(--drawer)}
-@keyframes sheetUp{from{transform:translateY(100%)}}
-.sheet .sh{padding:10px 20px 6px;flex-shrink:0}
-.sheet .sc{overflow:auto;padding:0 20px 26px}
-.grab{width:36px;height:4px;border-radius:9px;background:rgba(0,0,0,.14);margin:0 auto 12px}
-.sheet h3{font-size:21px;font-weight:900;letter-spacing:-.02em;margin:0;line-height:1.15}
-.sheet .sub{font-size:13.5px;color:var(--tmuted);margin:4px 0 0;line-height:1.4}
-.k2{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8a8f94;margin:14px 0 8px}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
-.chips button{border:1.5px solid rgba(0,0,0,.12);background:#fff;color:var(--tink);border-radius:10px;padding:8px 11px;font-size:13px;font-weight:700;cursor:pointer}
-.chips button.on{background:var(--tink);color:#fff;border-color:var(--tink)}
-.chips button small{display:block;font-weight:500;font-size:11px;color:inherit;opacity:.7}
-.why2{font-size:12.5px;color:var(--tmuted);margin-top:8px;line-height:1.4}
-.li{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;width:100%;text-align:left;border:0;border-top:1px solid rgba(0,0,0,.07);background:none;padding:11px 0;cursor:pointer;color:var(--tink)}
-.li b{font-size:15px;display:block}
-.li small{display:block;font-size:12.5px;color:var(--tmuted);margin-top:2px}
-/* Nav */
-.bnav{position:absolute;left:0;right:0;bottom:0;z-index:6;display:grid;background:#fff;color:#8a8f94;border-top:1px solid rgba(0,0,0,.06);padding:8px 6px 26px;font-size:10.5px;font-weight:700;text-align:center}
-.bnav span{display:flex;flex-direction:column;align-items:center;gap:4px}
-.bnav span i{width:20px;height:20px;border-radius:6px;background:rgba(0,0,0,.1)}
-.bnav .on{color:var(--accent)}
-.bnav .on i{background:var(--accent)}
-/* Fusion */
-.servi{margin-top:4px;border-radius:18px;padding:13px 14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}
-.servi .nm{font-size:16px;font-weight:900;margin-top:3px}
-.servi .sub{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.35}
-.blk{display:flex;gap:4px;margin-top:10px}
-.blk span{display:flex;flex-direction:column;gap:4px}
-.blk i{height:8px;border-radius:4px;background:rgba(255,255,255,.12);display:block}
-.blk .done i{background:rgba(255,255,255,.55)}
-.blk .cur i{background:linear-gradient(90deg,#f04a08,#d44000)}
-.blk small{font-size:10px;color:var(--muted)}
-.prep{margin-top:6px}
-.prep .bar2{position:relative;height:8px;border-radius:4px;background:rgba(255,255,255,.1);overflow:hidden;display:flex;gap:2px}
-.prep .bar2 i{flex:1;border-radius:2px;background:rgba(255,255,255,.1)}
-.prep .bar2 i.f{background:linear-gradient(90deg,#f04a08,#ff8a55)}
-.prep .bar2 i.m{background:rgba(255,107,90,.55)}
-.prep .bar2 i.now{outline:1.5px solid #fff;outline-offset:-1.5px}
-.prep .pl{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:4px}
-.prep .pl b{color:#fff}
-.bigprep{margin-top:12px;border-radius:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:13px 14px}
-.bigprep .v{font-size:34px;font-weight:900;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
-.bigprep .bar2{height:12px}
-.counts{margin-top:10px}
-.counts .c{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.06);font-size:13px}
-.counts .c .s{font-weight:900;text-align:center}
-.counts .c small{color:var(--faint)}
-.proj{margin-top:10px;font-size:13.5px;color:rgba(255,255,255,.85);line-height:1.45}
-.proj b{color:#fff}
-.done-scr{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 24px}
-.done-scr .ring{font-size:13px;color:var(--muted)}
-.gain{margin-top:18px;width:100%;border-radius:20px;padding:14px 16px;background:linear-gradient(160deg,rgba(212,64,0,.24),rgba(212,64,0,.06));border:1px solid rgba(255,138,85,.35);text-align:left}
-.gain .plus{font-size:28px;font-weight:900;color:#fff;letter-spacing:-.02em}
-.tag3{display:inline-block;font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:6px;background:rgba(140,195,212,.16);color:var(--cool);margin-left:6px;vertical-align:2px}
-
-/* v3 : cartes Opal, deux bibliothèques liées, coach */
-.orail{display:flex;gap:10px;overflow-x:auto;margin:0 -16px;padding:2px 16px 6px;scrollbar-width:none;scroll-snap-type:x mandatory}
-.orail::-webkit-scrollbar{display:none}
-.oc{flex:0 0 210px;scroll-snap-align:start;border-radius:22px;padding:4px;border:2px solid #fff;background:none;cursor:pointer;text-align:left;color:#fff}
-.oc.add{border:2px dashed rgba(255,255,255,.22);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--muted);font-weight:700;font-size:13.5px;flex-basis:120px;min-height:214px}
-.oc-in{position:relative;border-radius:18px;overflow:hidden;height:202px;display:flex;flex-direction:column;justify-content:space-between}
-.oc-in img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.1) brightness(.55)}
-.oc-in::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,10,13,.15),rgba(7,10,13,.2) 35%,rgba(7,10,13,.92))}
-.oc-in>*{position:relative;z-index:2}
-.oc .chain{display:flex;align-items:center;gap:6px;padding:10px}
-.oc .chip2{width:30px;height:30px;border-radius:9px;background:#fff;color:#111;display:grid;place-items:center;font-size:15px}
-.oc .chip2.acc{background:var(--accent);color:#fff}
-.oc .arr{color:rgba(255,255,255,.7);font-size:14px}
-.oc .txt{padding:0 12px 12px}
-.oc .w{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.7)}
-.oc .h{font-size:16px;font-weight:900;line-height:1.15;margin-top:3px}
-.oc .prep{margin-top:6px}
-.segs{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(255,255,255,.07);border-radius:12px;padding:3px;margin:18px 0 10px}
-.segs button{border:0;background:none;border-radius:9px;padding:8px;font-size:13.5px;font-weight:700;color:var(--muted);cursor:pointer}
-.segs button.on{background:#fff;color:var(--tink)}
-.libgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.lc{position:relative;border-radius:16px;overflow:hidden;min-height:128px;display:flex;flex-direction:column;justify-content:flex-end;padding:10px;border:0;cursor:pointer;text-align:left;color:#fff;background:#11161a}
-.lc img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.1) brightness(.5)}
-.lc::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 15%,rgba(7,10,13,.92) 80%)}
-.lc>*:not(img){position:relative;z-index:2}
-.lc .t1{font-size:14px;font-weight:900;line-height:1.15}
-.lc .t2{font-size:11px;color:rgba(255,255,255,.7);margin-top:3px}
-.lc .on{position:absolute;top:8px;left:8px;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:6px;background:var(--accent)}
-.lc .for{position:absolute;top:8px;left:8px;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:6px;background:rgba(0,0,0,.5)}
-.pc{display:grid;grid-template-columns:56px 1fr auto;gap:12px;align-items:center;width:100%;border:0;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:9px;margin-top:8px;cursor:pointer;text-align:left;color:#fff}
-.pc img{width:56px;height:56px;border-radius:12px;object-fit:cover;filter:grayscale(1) brightness(.75)}
-.pc b{display:block;font-size:14.5px}
-.pc small{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
-.serves{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
-.serves span{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(255,138,85,.14);color:var(--soft)}
-.serves span.mine{background:var(--accent);color:#fff}
-.hero{position:relative;margin:-54px -16px 0;height:210px;overflow:hidden}
-.hero img{width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.1) brightness(.55)}
-.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,10,13,.2),#070a0d 96%)}
-.hero .ht{position:absolute;left:16px;right:16px;bottom:12px;z-index:2}
-.hero .ht .mono{color:var(--soft)}
-.hero .ht h2{margin:4px 0 0;font-size:25px;font-weight:900;letter-spacing:-.02em;line-height:1.1}
-.way{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;width:100%;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);border-radius:14px;padding:11px 12px;margin-top:8px;cursor:pointer;text-align:left;color:#fff}
-.way .n{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.08);display:grid;place-items:center;font-size:16px}
+.sec{display:flex;justify-content:space-between;align-items:baseline;margin:20px 0 10px}
+.sec b{font-size:18px;font-weight:900;letter-spacing:-.01em}
+.sec small{font-size:12.5px;color:var(--muted)}
+.sec .lk{font-size:13px;font-weight:700;color:var(--soft);cursor:pointer;background:none;border:0;padding:0}
+.rail{display:flex;gap:10px;overflow-x:auto;margin:0 -16px;padding:2px 16px 8px;scroll-snap-type:x mandatory;scrollbar-width:none}
+.rail::-webkit-scrollbar{display:none}
+.rc{flex:0 0 74%;scroll-snap-align:start;position:relative;height:228px;border-radius:24px;overflow:hidden;border:1px solid rgba(255,255,255,.16);background:#0d1114;box-shadow:0 16px 36px rgba(0,0,0,.45);cursor:pointer;padding:0;text-align:left;color:#fff}
+.rc img,.oc img,.pg img,.hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.15) brightness(.45)}
+.rc::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,10,13,.2),rgba(7,10,13,.15) 30%,rgba(7,10,13,.93) 72%)}
+.rc>span{position:absolute;z-index:2}
+.pills{top:11px;left:11px;right:11px;display:flex;justify-content:space-between}
+.pl{font-style:normal;font-size:11px;font-weight:800;padding:4px 8px;border-radius:999px;background:rgba(0,0,0,.5)}
+.rb{left:14px;right:14px;bottom:13px;display:flex;flex-direction:column}
+.rb small{font-size:12.5px;font-weight:700;color:rgba(255,255,255,.7)}
+.rb .v{display:flex;align-items:baseline;gap:8px}
+.rb .v b{font-size:29px;font-weight:900;letter-spacing:-.03em;line-height:1.05}
+.gain{font-size:12px;font-weight:800;color:var(--good);padding:2px 6px;border-radius:7px;background:rgba(126,226,160,.14)}
+.bar{display:block;position:relative;height:8px;margin-top:11px;border-radius:4px;background:rgba(255,255,255,.14)}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:linear-gradient(90deg,#d44000,#ff8a55)}
+.bar em{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(240,74,8,.6)}
+.rf{display:flex;justify-content:space-between;margin-top:7px;font-size:11.5px;color:rgba(255,255,255,.62)}
+.rf em{font-style:normal;font-weight:800;color:var(--soft)}
+.rc.add{flex-basis:30%;border:2px dashed rgba(255,255,255,.2);background:rgba(255,255,255,.03);box-shadow:none;display:grid;place-items:center;text-align:center;color:rgba(255,255,255,.7);font-weight:700;font-size:12.5px}
+.rc.add::after{display:none}
+.veh{display:grid;grid-template-columns:52px 1fr auto;gap:12px;align-items:center;border-radius:18px;padding:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);cursor:pointer;width:100%;text-align:left;color:#fff}
+.veh .th{position:relative;width:52px;height:52px;border-radius:13px;overflow:hidden}
+.veh .th img{width:100%;height:100%;object-fit:cover;filter:grayscale(1) brightness(.7)}
+.veh b{display:block;font-size:14.5px}
+.veh small{display:block;font-size:12px;color:var(--muted);margin-top:2px;line-height:1.35}
+.veh .go{color:var(--faint)}
+.wk{display:flex;gap:3px;margin-top:6px}.wk i{flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.12)}.wk i.d{background:rgba(255,255,255,.55)}.wk i.c{background:var(--accent-hi)}
+.search{display:flex;align-items:center;gap:8px;margin-top:18px;border-radius:14px;padding:11px 13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);font-size:14px;color:var(--faint)}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(255,255,255,.07);border-radius:12px;padding:3px;margin-top:10px}
+.seg button{border:0;background:none;border-radius:9px;padding:8px;font-size:13.5px;font-weight:700;color:var(--muted);cursor:pointer}
+.seg button.on{background:#fff;color:var(--tink)}
+.chips{display:flex;gap:6px;overflow-x:auto;margin:10px -16px 0;padding:0 16px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chips span{flex-shrink:0;font-size:12.5px;font-weight:700;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,255,255,.12);color:var(--muted)}
+.chips span.on{background:#fff;color:var(--tink);border-color:#fff}
+.oc{flex:0 0 46%;scroll-snap-align:start;position:relative;height:168px;border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:#11161a;padding:0;text-align:left;color:#fff;cursor:pointer}
+.oc.mine{border:2px solid #fff}
+.oc::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,10,13,.05),rgba(7,10,13,.35) 45%,rgba(7,10,13,.95))}
+.oc>span{position:absolute;z-index:2}
+.st{top:9px;left:9px;font-size:10.5px;font-weight:800;padding:3px 7px;border-radius:999px;background:rgba(0,0,0,.6)}
+.st.w{color:var(--bad)}.st.g{color:var(--good)}.st.m{background:#fff;color:#111}
+.ot{left:11px;right:11px;bottom:10px;display:flex;flex-direction:column;gap:2px}
+.ot b{font-size:14.5px;line-height:1.15}
+.ot small{font-size:11.5px;color:rgba(255,255,255,.65)}
+.ot .via{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--soft);margin-top:3px}
+.pg{flex:0 0 62%;scroll-snap-align:start;position:relative;height:150px;border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:#11161a;padding:0;text-align:left;color:#fff;cursor:pointer}
+.pg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,10,13,.05),rgba(7,10,13,.4) 45%,rgba(7,10,13,.95))}
+.pg>span{position:absolute;z-index:2}
+.pg .ot b{font-size:15px}
+.serve{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.serve i{font-style:normal;font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:999px;background:rgba(255,138,85,.18);color:var(--soft)}
+.serve i.me{background:var(--accent);color:#fff}
+.hero{position:relative;margin:-54px -16px 0;height:200px;overflow:hidden}
+.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,10,13,.25),#070a0d 96%)}
+.back{position:absolute;top:56px;left:14px;z-index:3;width:34px;height:34px;border-radius:50%;border:0;background:rgba(0,0,0,.45);font-size:18px;cursor:pointer}
+.ttl{font-size:25px;font-weight:900;letter-spacing:-.02em;margin:-34px 0 0;position:relative;z-index:2}
+.big{display:flex;align-items:baseline;gap:9px;margin-top:8px;font-variant-numeric:tabular-nums}
+.big b{font-size:36px;font-weight:900;letter-spacing:-.03em}
+.big .to{color:var(--soft)}
+.line{font-size:13.5px;color:rgba(255,255,255,.75);margin-top:8px}
+.cta{width:100%;border:0;border-radius:16px;padding:14px;font-size:15.5px;font-weight:700;color:#fff;background:linear-gradient(180deg,#f04a08,#d44000);cursor:pointer;margin-top:14px}
+.cta2{width:100%;border:1px solid rgba(255,255,255,.18);border-radius:16px;padding:13px;font-size:15px;font-weight:700;background:rgba(255,255,255,.06);cursor:pointer;margin-top:12px}
+.h3{font-size:17px;font-weight:900;margin:22px 0 4px}
+.sub{font-size:13px;color:var(--muted);margin:0 0 10px;line-height:1.4}
+.way{display:grid;grid-template-columns:40px 1fr auto;gap:11px;align-items:center;width:100%;text-align:left;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.04);border-radius:16px;padding:11px 12px;margin-top:8px;cursor:pointer;color:#fff}
+.way .n{width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.08);display:grid;place-items:center;font-size:18px;overflow:hidden;position:relative}
+.way .n img{width:100%;height:100%;object-fit:cover;filter:grayscale(1) brightness(.7)}
 .way b{display:block;font-size:14.5px}
 .way small{display:block;font-size:12px;color:var(--muted);margin-top:2px;line-height:1.35}
+.way .r{color:var(--faint);font-size:12.5px;font-weight:700}
 .way.on{border-color:rgba(255,138,85,.5);background:rgba(212,64,0,.12)}
-.served{display:grid;grid-template-columns:1fr auto;gap:8px;padding:9px 0;border-top:1px solid rgba(255,255,255,.06);font-size:13px}
-.served small{color:var(--faint)}
-.served .pl{font-family:var(--mono);font-weight:700;color:var(--soft)}
-.ath{display:grid;grid-template-columns:40px 1fr;gap:10px;align-items:center;margin:6px 0 10px}
-.ath .av{width:40px;height:40px;border-radius:50%;background:#2a3238;display:grid;place-items:center;font-weight:900}
-/* v4 : simplifié */
-.g{margin-top:8px}
-.gb{height:6px;border-radius:3px;background:rgba(255,255,255,.14);overflow:hidden}
-.gb i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,#f04a08,#ff8a55)}
-.gl{display:flex;justify-content:space-between;font-size:11.5px;color:rgba(255,255,255,.7);margin-top:4px}
-.gl b{color:#fff}
-.g.big{margin-top:16px}
-.g.big .gb{height:10px;border-radius:5px}
-.g.big .gl{font-size:13px}
-.kv{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:10px;margin-top:12px}
-.kv small{display:block;font-size:12px;color:var(--faint)}
-.kv b{display:block;font-size:30px;font-weight:900;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
-.kv>div:last-child{text-align:right}
-.kv .to{font-size:20px;color:var(--faint);padding-bottom:4px}
-.one{font-size:14px;color:rgba(255,255,255,.78);line-height:1.45;margin:10px 0 0}
-.link{display:block;border:0;background:none;color:var(--soft);font-size:13.5px;font-weight:700;padding:10px 0 0;cursor:pointer}
-.srv{display:grid;grid-template-columns:44px 1fr;gap:12px;align-items:center;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);padding:9px}
-.srv img,.srv .ico{width:44px;height:44px;border-radius:11px;object-fit:cover;filter:grayscale(1) brightness(.75);display:grid;place-items:center;background:rgba(255,255,255,.08);font-size:20px}
-.srv b{display:block;font-size:14px}
-.srv small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
-.more{position:absolute;top:52px;right:14px;z-index:5;width:34px;height:34px;border-radius:50%;border:0;background:rgba(255,255,255,.1);font-size:17px;cursor:pointer}
-.week2{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.week2 div{border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);padding:9px 8px}
-.week2 small{display:block;font-family:var(--mono);font-size:10px;color:var(--faint);text-transform:uppercase}
-.week2 b{display:block;font-size:12px;margin-top:3px;line-height:1.25}
-.gr{display:flex;justify-content:space-between;align-items:baseline;margin-top:12px;font-weight:700}
-.gr:first-child{margin-top:0}
-.gr b{font-size:22px;font-weight:900}
-.oc .h{margin-top:0}
-.oc .w{margin-top:3px}
-/* v5 : format « Règles » d'Opal */
-.topbar{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;margin-bottom:12px}
-.topbar .pagetitle{font-size:20px}
-.plusbtn{width:44px;height:44px;border-radius:50%;border:0;background:linear-gradient(180deg,#f04a08,#d44000);color:#fff;font-size:24px;font-weight:700;cursor:pointer}
-.agrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.ac{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-height:168px;border-radius:26px;padding:14px;border:1px solid rgba(255,255,255,.1);background:linear-gradient(180deg,#22272b,#141819);cursor:pointer;text-align:left;color:#fff}
-.ac .chain,.sc2 .chain{display:flex;align-items:center;gap:6px}
-.ci{width:30px;height:30px;border-radius:9px;background:#f3f5f6;color:#111;display:grid;place-items:center;font-size:15px}
-.ci.acc{background:var(--accent);color:#fff}
-.ac .arr,.sc2 .arr{color:rgba(255,255,255,.55)}
-.ac .pill{margin-top:auto;border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700}
-.ac .an,.sc2 .an{font-size:16px;font-weight:900;line-height:1.15}
-.ac .as,.sc2 .as{font-size:12px;color:rgba(255,255,255,.62)}
-.fchips{display:flex;gap:6px;overflow-x:auto;margin:0 -16px 6px;padding:0 16px;scrollbar-width:none}
-.fchips::-webkit-scrollbar{display:none}
-.fchips button{flex-shrink:0;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer}
-.fchips button.on{background:#fff;color:var(--tink);border-color:#fff}
-.reco2{margin-top:8px;border-radius:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:12px 14px}
-.reco2 p{margin:5px 0 0;font-size:13.5px;line-height:1.4;color:rgba(255,255,255,.85)}
-.tc2{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07);font-size:12.5px;color:var(--faint)}
-.tc2 b{color:#ff8a55;font-size:13.5px}
-.sh2{margin:22px 2px 10px}
-.sh2 h3{margin:0;font-size:19px;font-weight:900;letter-spacing:-.01em}
-.sh2 p{margin:3px 0 0;font-size:13px;color:var(--faint)}
-.srail{display:flex;gap:10px;overflow-x:auto;margin:0 -16px;padding:0 16px 4px;scrollbar-width:none;scroll-snap-type:x mandatory}
-.srail::-webkit-scrollbar{display:none}
-.sc2{position:relative;flex:0 0 200px;height:210px;scroll-snap-align:start;border-radius:26px;overflow:hidden;border:1px solid rgba(255,255,255,.12);display:flex;flex-direction:column;justify-content:space-between;padding:12px;cursor:pointer;text-align:left;color:#fff;background:#11161a}
-.sc2 img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.1) brightness(.55)}
-.sc2::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,10,13,.1),rgba(7,10,13,.25) 40%,rgba(7,10,13,.9))}
-.sc2>*:not(img){position:relative;z-index:2}
-.sc2 .st{display:flex;flex-direction:column;gap:4px;padding-right:38px}
-.sc2 .plus{position:absolute;right:10px;bottom:10px;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.18);display:grid;place-items:center;font-size:20px;font-weight:700}
-.chipx{align-self:flex-start;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(0,0,0,.45)}
-.chipx.red{color:#ff8a7a}.chipx.amber{color:var(--gold)}.chipx.green{color:var(--good)}.chipx.obj{background:var(--accent);color:#fff}
-.meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;font-size:12px;color:var(--faint)}
-.meta .chipx{background:rgba(255,255,255,.07)}
-.dates{display:flex;justify-content:space-between;font-size:12.5px;color:var(--faint);margin-top:8px}
-.dates b{color:#fff}
-.hrow{display:flex;justify-content:space-between;font-size:13px;padding:8px 2px;border-top:1px solid rgba(255,255,255,.06);color:var(--muted)}
-.hrow b{color:#fff;font-variant-numeric:tabular-nums}
-/* Carnet */
+/* Trajectoire (v7) */
+.bar .est{position:absolute;top:0;bottom:0;border-radius:0 4px 4px 0;background:repeating-linear-gradient(90deg,rgba(255,138,85,.85) 0 4px,transparent 4px 7px)}
+.bar .em2{position:absolute;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#070a0d;border:2.5px solid var(--soft)}
+.estl{font-size:11.5px;color:var(--soft);font-weight:700;margin-top:6px}
+.traj{margin-top:16px;border-radius:20px;padding:12px 12px 10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)}
+.traj .k{display:flex;justify-content:space-between;align-items:baseline}
+.traj .k b{font-size:16px;font-weight:900}
+.traj .k small{font-size:11.5px;color:var(--soft);font-weight:700}
+.wks{display:grid;gap:4px;margin-top:10px}
+.wks span{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:var(--faint);font-family:var(--mono)}
+.wks i{font-style:normal;width:100%;height:24px;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:900;background:rgba(255,255,255,.06);color:var(--faint)}
+.wks i.f{background:rgba(255,138,85,.22);color:#fff}
+.wks i.h{background:repeating-linear-gradient(135deg,rgba(255,138,85,.22) 0 5px,rgba(255,255,255,.05) 5px 10px);color:#fff}
+.wks i.c{outline:2px solid #fff;outline-offset:-2px;background:rgba(255,255,255,.08);color:#fff}
+.vy{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;padding:10px 2px;border-top:1px solid rgba(255,255,255,.07)}
+.vy:first-of-type{border-top:0}
+.vy .ic{font-size:17px;text-align:center}
+.vy b{display:block;font-size:14px}
+.vy small{display:block;font-size:12px;color:var(--muted);margin-top:1px;line-height:1.35}
+.vy .s{font-size:12px;font-weight:800;padding:3px 8px;border-radius:999px;white-space:nowrap}
+.vy .s.ok{background:rgba(126,226,160,.14);color:var(--good)}
+.vy .s.mid{background:rgba(255,200,97,.14);color:var(--gold)}
+.vy .s.lo{background:rgba(255,122,106,.14);color:var(--bad)}
+/* v9 : jauge du jour + série de jours + récompenses */
+.hdr{display:flex;align-items:center;gap:8px}
+.puce{display:flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:4px 10px 4px 4px;background:rgba(255,255,255,.08);color:#fff;font-weight:800;font-size:13.5px;cursor:pointer}
+.puce{padding:6px 11px!important}.puce .nx{margin-left:4px;padding-left:8px;border-left:1px solid rgba(255,255,255,.2);font-size:12.5px;font-weight:700;color:#ff8a55}.puce .ok{margin-left:4px;color:#7ee2a0}.puce .dots{display:flex;gap:3px;margin-left:2px}.puce .dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.25)}.puce .dots i.on{background:#ff8a55}
+.datesel{flex:1;text-align:center;font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.8)}
+.sw{text-align:center}
+.sw .fl{font-size:54px;line-height:1}
+.sw h3{font-size:26px!important;margin-top:6px!important}
+.sw .w7 i{height:30px;font-size:13px;background:#f1f0ee;color:#9aa0a5}
+.sw .w7 i.f{background:#ffe2d3;color:#d44000}.sw .w7 i.s{background:#dcecf2;color:#2d6a7c}.sw .w7 i.c{outline-color:#171b1f;color:#171b1f}
+.sw .w7 span{color:#8a8f94}.sw .w7 i{line-height:0;box-sizing:border-box}.sw .w7 i svg{display:block}.sw .w7 i.x{background:#fff;border:1.5px dashed #d6d3cf}
+.lg{display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;font-size:11.5px;color:#8a8f94;margin-top:8px}.lg i{color:#8a8f94}
+.sw .meta{font-size:13px;color:var(--tmuted);margin-top:10px}
+.linkb{display:block;margin:12px auto 0;border:0;background:none;color:var(--accent);font-weight:700;font-size:14px;cursor:pointer}
+.bgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.bgrid>div{border-radius:18px;padding:14px 6px 12px;background:#fff;border:1px solid rgba(0,0,0,.06);text-align:center}
+.bgrid .md{width:52px;height:52px;margin:0 auto;border-radius:50%;display:grid;place-items:center;color:#fff;background:linear-gradient(160deg,#ff8a55,#d44000);box-shadow:0 6px 14px rgba(212,64,0,.28),inset 0 0 0 3px rgba(255,255,255,.35)}
+.bgrid .lock .md{background:#f1f0ee;color:#b5b9bd;box-shadow:inset 0 0 0 1.5px #e3e1dd}
+.bgrid .lock b{color:#9aa0a5}
+.bgrid b{display:block;font-size:11.5px;line-height:1.2;margin-top:4px;color:var(--tink)}.bgrid small{display:block;font-size:10px;color:#8a8f94;margin-top:2px}
+
+.pager{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8a8f94;margin-bottom:6px}
+.pager .pd{display:flex;gap:5px}.pager .pd i{width:6px;height:6px;border-radius:50%;background:rgba(0,0,0,.15)}.pager .pd i.on{width:16px;border-radius:3px;background:#171b1f}
+.nextr{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;width:100%;text-align:left;margin-top:14px;border:1px solid rgba(0,0,0,.08);background:#f7f6f4;border-radius:14px;padding:10px 12px;cursor:pointer;color:var(--tink);font-size:18px}
+.nextr b{display:block;font-size:14px}.nextr small{display:block;font-size:12px;color:var(--tmuted)}
+.bsec{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8a8f94;margin-top:14px}
+.chk{margin-top:14px}.chk .tg{cursor:default}
+.today-top{display:flex;justify-content:space-between;align-items:center}
+.daypill{display:flex;align-items:center;gap:10px;margin-top:12px;border-radius:18px;padding:10px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);width:100%;text-align:left;color:#fff;cursor:pointer}
+.daypill .fl{font-size:22px}
+.daypill b{font-size:14.5px;display:block}
+.daypill small{font-size:12px;color:var(--muted)}
+.dg{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:6px;width:100%}
+.dg i{height:7px;border-radius:4px;background:rgba(255,255,255,.14)}
+.dg i.on{background:linear-gradient(90deg,#f04a08,#ff8a55)}
+.ringph{width:190px;height:190px;margin:18px auto 0;border-radius:50%;border:14px solid rgba(255,255,255,.08);border-top-color:#f28a00;border-right-color:#f28a00;display:grid;place-items:center;text-align:center}
+.ringph b{font-size:24px;font-weight:900;display:block}.ringph small{font-size:12px;color:var(--muted)}
+.sess{margin-top:16px;border-radius:20px;background:#fff;color:var(--tink);padding:14px 16px}
+.sess .mono{color:#8a8f94}.sess b{display:block;font-size:16px;margin-top:2px}.sess small{font-size:12.5px;color:var(--tmuted)}
+.hero2{display:grid;grid-template-columns:56px 1fr;gap:12px;align-items:center;margin-top:14px;border-radius:20px;padding:12px 14px;background:linear-gradient(160deg,rgba(212,64,0,.25),rgba(212,64,0,.06));border:1px solid rgba(255,138,85,.3)}
+.hero2 .fl{width:56px;height:56px;border-radius:18px;display:grid;place-items:center;font-size:30px;background:radial-gradient(circle at 50% 70%,rgba(240,74,8,.5),rgba(240,74,8,.1))}
+.hero2 b{display:block;font-size:20px;font-weight:900;letter-spacing:-.01em}
+.hero2 small{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.w7{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:8px}
+.w7 span{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:var(--faint);font-family:var(--mono)}
+.w7 i{font-style:normal;width:100%;height:22px;border-radius:7px;display:grid;place-items:center;font-size:11px;font-weight:900;background:rgba(255,255,255,.07);color:var(--faint)}
+.w7 i.f{background:rgba(255,138,85,.25);color:#fff}.w7 i.s{background:rgba(140,195,212,.22);color:#fff}.w7 i.c{outline:2px solid #fff;outline-offset:-2px;color:#fff}
+.badges{display:flex;gap:8px;overflow-x:auto;margin:0 -16px;padding:2px 16px 6px;scrollbar-width:none}
+.badges::-webkit-scrollbar{display:none}
+.bd{flex:0 0 92px;border-radius:16px;padding:10px 8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);text-align:center;cursor:pointer;color:#fff}
+.bd .e{font-size:26px}.bd b{display:block;font-size:11.5px;line-height:1.2;margin-top:4px}.bd small{display:block;font-size:10px;color:var(--faint);margin-top:2px}
+.bd.lock{opacity:.4}
+.celeb{text-align:center;padding-top:6px}
+.celeb .e{font-size:46px}
+.crans{display:flex;gap:3px;margin-top:8px}.crans i{flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.14)}.crans i.f{background:var(--soft)}.crans i.h{background:repeating-linear-gradient(90deg,var(--soft) 0 3px,rgba(255,255,255,.14) 3px 6px)}.crans i.c{background:rgba(255,255,255,.4)}
+.streak{display:grid;grid-template-columns:52px 1fr;gap:12px;align-items:center}
+.streak .fl{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;font-size:28px;background:radial-gradient(circle at 50% 70%,rgba(240,74,8,.45),rgba(240,74,8,.08))}
+.streak b{display:block;font-size:19px;font-weight:900;letter-spacing:-.01em}
+.streak small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.shield{margin-top:10px;font-size:13px;line-height:1.4;padding:10px 12px;border-radius:14px;background:rgba(140,195,212,.1);color:#cfe7ef}
+.fine{font-size:12px;color:var(--faint);margin-top:8px;line-height:1.4}
+.fit{display:flex;gap:3px;margin-top:6px}.fit i{width:14px;height:5px;border-radius:3px;background:rgba(255,255,255,.14)}.fit i.y{background:var(--soft)}
+.dim{position:absolute;inset:0;z-index:20;background:rgba(7,10,13,.6)}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:21;max-height:86%;display:flex;flex-direction:column;background:#fff;color:var(--tink);border-radius:26px 26px 0 0;animation:sheetUp .42s var(--drawer)}
+@keyframes sheetUp{from{transform:translateY(100%)}}
+.sheet .sc{overflow:auto;padding:10px 20px 26px}
+.grab{width:36px;height:4px;border-radius:9px;background:rgba(0,0,0,.14);margin:0 auto 12px}
+.sheet h3{font-size:21px;font-weight:900;letter-spacing:-.02em;margin:0;line-height:1.15}
+.sheet .s{font-size:13.5px;color:var(--tmuted);margin:4px 0 8px;line-height:1.4}
+.row{display:flex;justify-content:space-between;gap:10px;padding:11px 0;border-top:1px solid rgba(0,0,0,.07);font-size:14.5px}
+.row span{color:var(--tmuted)}
+.row b{text-align:right}
+.tg{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:center;padding:10px 0;border-top:1px solid rgba(0,0,0,.07);font-size:14.5px;cursor:pointer}
+.tg .ck{width:22px;height:22px;border-radius:7px;border:2px solid rgba(0,0,0,.2);display:grid;place-items:center;font-size:12px;font-weight:900}
+.tg .ck.on{background:var(--tink);border-color:var(--tink);color:#fff}
+.tg small{display:block;color:var(--tmuted);font-size:12.5px}
+.bnav{position:relative;z-index:6;display:grid;background:#0d1114;color:rgba(255,255,255,.5);border-top:1px solid rgba(255,255,255,.07);padding:8px 6px 26px;font-size:10px;font-weight:700;text-align:center;letter-spacing:.04em;text-transform:uppercase}
+.bnav span{display:flex;flex-direction:column;align-items:center;gap:4px}
+.bnav span i{width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,.14)}
+.bnav .on{color:#fff}.bnav .on i{background:var(--accent-hi)}
+.coachbar{display:flex;gap:6px;margin-bottom:12px;overflow:auto;scrollbar-width:none}
+.coachbar span{flex-shrink:0;display:flex;align-items:center;gap:6px;padding:6px 10px 6px 6px;border-radius:999px;background:rgba(255,255,255,.08);font-size:13px;font-weight:700}
+.coachbar span.on{background:var(--accent-hi)}
+.coachbar i{font-style:normal;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.2);display:grid;place-items:center;font-size:10px}
 .log{display:flex;flex-direction:column;gap:8px}
 .step{display:grid;grid-template-columns:30px minmax(0,1fr);gap:12px;padding:14px 16px;border-radius:16px;border:1px solid var(--line);background:var(--panel);cursor:pointer;text-align:left;width:100%;color:var(--ink)}
+.step:hover{border-color:rgba(255,255,255,.2)}
 .step.on{border-color:rgba(255,138,85,.55);background:#1a1512}
 .step .n{font-family:var(--mono);font-size:12px;color:var(--faint);padding-top:2px}
 .step .h{font-size:15px;font-weight:700}
 .step .p{font-size:13.5px;color:var(--muted);line-height:1.5;margin-top:4px}
+.plan{margin:0 0 22px;padding:16px 18px;border-radius:18px;border:1px solid rgba(255,138,85,.35);background:#16110e}
+.plan .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--soft)}
+.plan h2{font-size:19px;margin:4px 0 4px;letter-spacing:-.01em}
+.plan .why{font-size:13.5px;color:var(--muted);line-height:1.5;margin:0 0 6px}
+.lot{display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.lot .id{font-family:var(--mono);font-weight:700;font-size:13px;color:#fff;background:rgba(255,255,255,.08);border-radius:10px;height:30px;display:grid;place-items:center}
+.lot.o .id{background:rgba(140,195,212,.18);color:var(--cool)}
+.lot b{font-size:15px}
+.lot .sz{font-family:var(--mono);font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:6px;background:rgba(255,255,255,.08);color:var(--muted);margin-left:6px;vertical-align:2px}
+.lot p{margin:4px 0 0;font-size:13.5px;color:var(--muted);line-height:1.5}
+.lot p em{font-style:normal;color:var(--ink)}
+.lot .go{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.lot .go button{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer}
+.lot .go button:hover{color:#fff;border-color:rgba(255,255,255,.3)}
+.grp{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:14px 0 2px}
 .box{margin-top:22px;padding:16px 18px;border-radius:16px;border:1px solid var(--line)}
 .box .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--soft);margin-bottom:8px}
 .box ul{margin:0;padding-left:18px;color:var(--muted);font-size:13.5px;line-height:1.55}
@@ -284,161 +254,299 @@ h1{font-size:28px;line-height:1.1;letter-spacing:-.02em;margin:6px 0 10px;text-w
 </style>
 
 <div class="wrap">
-  <div class="phone-col"><div class="ctl" id="ctl"></div><div class="device"><div class="phone" id="phone"></div></div></div>
+  <div class="phone-col"><div class="device"><div class="phone" id="phone"></div></div></div>
   <div>
-    <div class="kicker">POC · objectifs et programmes · v5 (format Opal)</div>
-    <h1>Tes objectifs, et deux bibliothèques liées</h1>
-    <p class="lead">Même modèle, moins de choses à lire. Un objectif = aujourd'hui → cible à une date, une jauge de préparation, une phrase. Les séances comptent pareil qu'elles viennent d'un programme ou du planning. Les programmes restent une bibliothèque à part, reliée aux objectifs.</p>
-    <div class="log" id="log"></div>
-    <div class="box">
-      <div class="k">Règles</div>
-      <ul>
-        <li><b>Préparation</b> : la part des séances attendues que tu as faites dans la zone et qui travaillent cet objectif. Attendues = ton programme, sinon tes jours d'entraînement. Un seul chiffre, une seule jauge.</li>
-        <li><b>La phrase</b> remplace la projection chiffrée : « À ce rythme, tu y es le 18 janvier », ou la date probable et ce qui remet dans les temps.</li>
-        <li><b>Une séance compte</b> si ses exercices travaillent l'objectif (familles de mouvement du générateur), programme ou pas.</li>
-        <li><b>Supprimé</b> : le détail semaine par semaine, la liste « cette semaine », les trois chemins de « Pour y arriver », « Tous tes tests » en haut (les tests vivent dans les pages objectif et la bibliothèque).</li>
-      </ul>
+    <div class="kicker">POC · objectifs et programmes · v16</div>
+    <h1>On parcourt par objectif. Chaque jour compte.</h1>
+    <p class="lead">Le programme n'est qu'un moyen d'atteindre un objectif. Une journée est validée par le point forme et la séance (ou le repos). Une séance allégée ou un repos conseillé comptent : c'est l'autorégulation qui protège la série.</p>
+    <div class="plan"><div class="k">Découpage</div>
+      <div class="lot"><span class="id">P1</span><span><b>La série du jour</b><span class="sz">M</span><p>Puce 🔥 du header, série en dernière page du mini bilan, jour sauvé, récompenses (la checklist d'onboarding en fait partie).</p></span></div>
+      <div class="lot"><span class="id">P2</span><span><b>Programmes reliés aux objectifs</b><span class="sz">S</span><p>« Il sert » sur chaque programme, suivre ses objectifs au démarrage.</p></span></div>
+      <div class="lot"><span class="id">P3</span><span><b>Page objectif et générateur par objectif</b><span class="sz">L</span><p>« Pour y arriver », générateur qui reçoit objectif et échéance.</p></span></div>
+      <div class="lot"><span class="id">P4</span><span><b>Fusion de la navigation</b><span class="sz">L</span><p>Bibliothèque par objectif, onglet Programmes retiré.</p></span></div>
+      <div class="lot o"><span class="id">O1</span><span><b>Onboarding</b><span class="sz">M</span><p>Objectif, record, paywall titré, arrivée sur le vrai produit.</p></span></div>
     </div>
+    <div class="log" id="log"></div>
   </div>
 </div>
+</div>
 
+<script src="https://unpkg.com/lucide@0.454.0/dist/umd/lucide.min.js"></script>
 <script>
 (()=>{
 const MONTHS=["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
-const TODAY=new Date(2026,10,23);
+const TODAY=new Date(2026,10,24);
 const fd=n=>{const d=new Date(TODAY.getTime()+n*864e5);return `${d.getDate()===1?"1er":d.getDate()} ${MONTHS[d.getMonth()]}`};
-const num=(v,u)=>`${String(Math.round(v*10)/10).replace(".",",")} ${u}`;
+const IMG=n=>`img/${n}.jpg`;
 
-/* Bibliothèque d'objectifs (haltérophile) : repère = test, familles de mouvement qui le servent */
 const OBJ={
-  fs:{last:"9 novembre",next:"7 décembre",gap:"−7,5 kg",date:"18 janvier",nm:"Front squat plus lourd",q:"Force",img:"img/halterophilie.jpg",ic:["🏋️","⬆️"],unit:"kg",cur:105,target:112.5,ref:"cible vs back squat : 112,5 kg",status:"red",chip:"▼ Ton maillon faible",serves:"front squat (en plein), autres squats (à moitié)",desc:"Ton front squat est à 81 % de ton back squat (repère 85 à 90 %). C'est lui qui limite ton épaulé-jeté.",hist:[[-70,97.5],[-42,100],[-14,105]]},
-  cj:{last:"9 novembre",next:"7 décembre",gap:"−2 kg",date:"18 janvier",nm:"Épaulé-jeté plus lourd",q:"Puissance",img:"img/crossfit.jpg",ic:["🏋️","⬆️"],unit:"kg",cur:103,target:107.5,ref:"cible vs front squat : 105 kg",status:"amber",chip:"◆ Proche",serves:"épaulé, jeté, front squat",desc:"Ton épaulé-jeté suit ton front squat.",hist:[[-70,100],[-42,102],[-14,103]]},
-  cmj:{last:"26 octobre",next:"23 novembre",gap:"−1,5 cm",date:"dans 6 semaines",nm:"Sauter plus haut",q:"Puissance",img:"img/pliometrie.jpg",ic:["🦘","⬆️"],unit:"cm",cur:45.5,target:48,ref:"repère haltérophilie : 47 cm",status:"amber",chip:"◆ Proche",serves:"squats sautés, box jumps, pliométrie",desc:"Ta détente porte ton tirage.",hist:[[-56,44],[-28,45.5]]},
-  sn:{last:"9 novembre",next:"7 décembre",gap:"+2 kg",date:"dans 6 semaines",nm:"Arraché plus lourd",q:"Puissance",img:"img/halterophilie.jpg",ic:["🏋️","⬆️"],unit:"kg",cur:84,target:87,ref:"82 % de ton épaulé-jeté",status:"green",chip:"✓ Point fort",serves:"arraché, tirage arraché, squat bras tendus",desc:"Déjà au-dessus du repère.",hist:[[-70,80],[-42,82],[-14,84]]},
-  mob:{last:"24 octobre",next:"21 novembre",gap:"−1 cm",date:"dans 6 semaines",nm:"Chevilles plus mobiles",q:"Mobilité",img:"img/mobilite.jpg",ic:["🦶","↔️"],unit:"cm",cur:9,target:12,ref:"repère : 10 cm (knee-to-wall)",status:"amber",chip:"◆ Proche",serves:"mobilité chevilles, squat cosaque",desc:"Plus de profondeur en réception.",hist:[[-30,9]]},
-  reg:{last:"aujourd'hui",next:"",gap:"",date:"4 janvier",nm:"Tenir 4 séances par semaine",q:"Régularité",img:"img/groupe.jpg",ic:["📅","✓"],unit:"séances",cur:8,target:24,ref:"ton rythme : 4 par semaine",status:"green",chip:"✓ Dans le couloir",serves:"toutes tes séances",desc:"La base de tout le reste.",hist:[[-14,0],[0,8]]},
-  rec:{last:"aujourd'hui",next:"",gap:"−6",date:"dans 6 semaines",nm:"Mieux récupérer",q:"Récupération",img:"img/recuperation.jpg",ic:["🌙","⬆️"],unit:"",cur:58,target:63,ref:"ta récupération / ta norme",status:"amber",chip:"◆ Sous ta norme",serves:"tes points forme",desc:"Tes nuits courtes pèsent sur tes semaines chargées.",hist:[[-21,55],[-7,58]]},
+  sq:{nm:"Back squat",fam:"Force",img:"powerlifting",cur:"120 kg",tgt:"125 kg",gain:"+5 kg",pct:62,days:35,st:"w",gap:"−19,1 kg",word:"avec du squat",n:5},
+  fs:{nm:"Front squat",fam:"Force",img:"halterophilie",cur:"132,5 kg",tgt:"138 kg",gain:null,pct:8,days:55,st:"w",gap:"−8,5 kg",word:"avec du front squat",n:8},
+  cmj:{nm:"Saut vertical (CMJ)",fam:"Puissance",img:"pliometrie",cur:"51,6 cm",tgt:"54,7 cm",gain:"+1,2 cm",pct:30,days:41,st:"w",gap:"−11,1 cm",word:"avec des sauts",n:9},
+  dl:{nm:"Soulevé de terre",fam:"Force",img:"gym",cur:"170 kg",st:"g",word:"avec du soulevé de terre"},
+  s10:{nm:"Sprint 10 m",fam:"Vitesse",img:"sprint",cur:"1,78 s",st:"g",word:"avec des sprints"},
+  k10:{nm:"Courir un 10 km",fam:"Endurance",img:"course",cur:"Pas encore testé",word:"de course"},
+  genou:{nm:"Revenir d'une blessure au genou",fam:"Revenir de blessure",img:"etirements",cur:"Repère : régularité et douleur",word:"pour le genou"},
+  conc:{nm:"Réussir le concours police",fam:"Concours et échéances",img:"rugby",cur:"Jour J à fixer",word:"d'épreuves"},
+  reg:{nm:"Tenir 4 séances par semaine",fam:"Forme",img:"groupe",cur:"3,2 par semaine"},
+  rec:{nm:"Mieux récupérer",fam:"Forme",img:"recuperation",cur:"Mesuré par l'app"},
 };
-const PROGS=[
-  {id:"p1",nm:"Haltérophilie · force de jambes",img:"img/halterophilie.jpg",w:8,s:4,serves:["fs","cj"],mine:true},
-  {id:"p2",nm:"Détente et tirage",img:"img/pliometrie.jpg",w:6,s:3,serves:["cmj","sn"]},
-  {id:"p3",nm:"Technique arraché",img:"img/crossfit.jpg",w:8,s:4,serves:["sn"]},
-  {id:"p4",nm:"Force générale 5×5",img:"img/powerlifting.jpg",w:12,s:3,serves:["fs"]},
-  {id:"p5",nm:"Mobilité du squat",img:"img/mobilite.jpg",w:4,s:2,serves:["mob"]},
-];
-const PREP={fs:{pct:72,ok:true,arrive:"18 janvier"},cj:{pct:64,ok:false,arrive:"1er février"},reg:{pct:92,ok:true,arrive:"4 janvier"},cmj:{pct:0}};
-const S={fo:"Tous",fp:"Tous",i:0,lib:"obj",open:null,prog:null,mine:["fs","cj","reg"],way:"planning",role:"athlete"};
+/* Trajectoire : semaines depuis le dernier test (f = 1 validée, .5 à moitié, 0 manquée, c = en cours) ; est = estimation affichée */
+const TRAJ={
+  sq:{streak:3,best:5,done:3,est:"≈ 121,5 kg",estPct:72,test:fd(18),wk:[1,1,.5,"c"],total:5,pts:[[0,115],[2,117.5],[4,120]],start:115,tgt:125},
+  fs:{streak:4,best:4,done:2.5,est:"≈ 134 kg",estPct:30,test:fd(19),wk:[1,1,.5,"c",0,0,0,0],total:8,pts:[[0,132.5]],start:132.5,tgt:138},
+  cmj:{streak:2,best:6,done:2.5,est:"≈ 52,4 cm",estPct:52,test:fd(12),wk:[1,.5,1,"c",0,0],total:6,pts:[[0,50.4],[3,51.6]],start:50.4,tgt:54.7},
+};
+/* Jours de la semaine : f = validé, s = sauvé (repos conseillé suivi), c = aujourd'hui, 0 = à venir */
+/* Jours : f séance faite, r repos prévu validé (point forme), s repos conseillé suivi (sauvé), c aujourd'hui, R repos prévu à venir, 0 séance à venir */
+const WEEK=[["L","f"],["M","r"],["M","s"],["J","r"],["V","c"],["S","R"],["D",0]];
+const DAYI={f:"dumbbell",r:"moon",s:"shield-check",c:"dumbbell",R:"moon",0:"dumbbell"};
+/* Icônes sobres (trait), une seule couleur : la flamme reste le seul symbole de la série */
+const LI=(n,sz=24,cls="")=>`<i data-lucide="${n}" class="${cls}" style="width:${sz}px;height:${sz}px"></i>`;
+const IC=(d,sz=26)=>`<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICO={
+  pf:'<path d="M5 4h14v16H5z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
+  prog:'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+  dec:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>',
+  elite:'<path d="m12 3 2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>',
+  moon:'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+  body:'<path d="M12 21s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.6-7 10-7 10z"/>',
+  d7:'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16"/><text x="12" y="18" text-anchor="middle" font-size="7" stroke="none" fill="currentColor" font-weight="700">7</text>',
+  week:'<path d="M4 12l3 3 6-7"/><path d="M13 15l2 2 5-6"/>',
+  medal:'<circle cx="12" cy="15" r="5"/><path d="M8.5 3h7L13 10h-2z"/>',
+  d30:'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16"/><text x="12" y="18" text-anchor="middle" font-size="7" stroke="none" fill="currentColor" font-weight="700">30</text>',
+  pin:'<path d="M12 21s6-5.6 6-11a6 6 0 0 0-12 0c0 5.4 6 11 6 11z"/><circle cx="12" cy="10" r="2.2"/>',
+  w4:'<path d="M4 7h16M4 12h16M4 17h16"/>',
+  compass:'<circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/>',
+  shield:'<path d="M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z"/><path d="m9 12 2 2 4-4"/>',
+};
+const BADGES=[["moon","Nuit courte bien gérée","il y a 2 jours"],["heart-pulse","Écouté ton corps","repos conseillé suivi"],["flame","7 jours d'affilée","8 nov."],["calendar-check","1re semaine parfaite","3 nov."],["trophy","Objectif atteint","à venir",1],["medal","30 jours d'affilée","à venir",1]];
+const PROGS={
+  spsq:{nm:"Powerlifting · Spécialisation squat",img:"powerlifting",w:6,s:4,serve:["sq","fs"],fit:{sq:5,fs:3}},
+  halt:{nm:"Haltérophilie",img:"halterophilie",w:4,s:4,serve:["fs","cmj"],fit:{fs:4,cmj:2},cur:true},
+  pe:{nm:"Musculation · Puissance explosivité",img:"pliometrie",w:6,s:3,serve:["cmj","sq"],fit:{cmj:4,sq:3}},
+  plio:{nm:"Pliométrie",img:"crossfit",w:8,s:3,serve:["cmj","s10"],fit:{cmj:5,s10:2}},
+  pl:{nm:"Powerlifting",img:"gym",w:8,s:4,serve:["sq","dl"],fit:{sq:4,dl:4}},
+  sprint:{nm:"Sprint / Athlétisme",img:"sprint",w:8,s:4,serve:["s10","cmj"],fit:{s10:5,cmj:3}},
+  k10:{nm:"Course à pied · 10 km",img:"course",w:10,s:4,serve:["k10"],fit:{k10:5}},
+  genou:{nm:"Prévention · Genou",img:"etirements",w:6,s:3,serve:["genou"],fit:{genou:5}},
+  police:{nm:"Police nationale",img:"rugby",w:8,s:4,serve:["conc","k10"],fit:{conc:5,k10:2}},
+};
+const S={onb:false,day:0,mode:"streak",made:[],i:0,v:"home",tabs:3,seg:"obj",role:"athlete",mine:["sq","fs","cmj"],open:"fs",prog:"spsq",sheet:null,follow:{}};
+const forObj=id=>Object.entries(PROGS).filter(([,p])=>p.serve.includes(id)).sort((a,b)=>(b[1].fit[id]||0)-(a[1].fit[id]||0));
+const fitBar=n=>`<span class="fit">${[0,1,2,3,4].map(i=>`<i class="${i<n?"y":""}"></i>`).join("")}</span>`;
+const fitTxt=(n,o)=>`${n} séance${n>1?"s":""} sur 5 ${o.word||"qui le travaillent"}`;
+const coach=()=>S.role==="coach";
 
-/* Une seule jauge : la préparation. Pleine = tu fais ce qu'il faut pour y être à la date. */
-function gauge(id,big){const p=PREP[id]||{pct:0};return `<div class="g ${big?"big":""}"><div class="gb"><i style="width:${p.pct}%"></i></div><div class="gl"><span>Préparation</span><b>${p.pct} %</b></div></div>`}
-/* Objectif suivi : carte sombre façon Opal (règle active). */
-function card(id){const o=OBJ[id],p=PREP[id]||{pct:0};return `<button class="ac" data-obj="${id}"><span class="chain"><span class="ci">${o.ic[0]}</span><span class="arr">→</span><span class="ci acc">${o.ic[1]}</span></span><span class="pill">${p.ok===false?"▼ ":""}Préparation ${p.pct} %</span><span class="an">${o.nm}</span><span class="as">${o.unit==="séances"?"4 par semaine":`${o.unit?num(o.cur,o.unit):o.cur} → ${num(o.target,o.unit)}`} · ${o.date}</span></button>`}
-/* Proposition : carte photo avec « + » (comme « Fais-en plus » d'Opal). */
-function sug(id){const o=OBJ[id];return `<button class="sc2" data-obj="${id}"><img src="${o.img}" alt=""><span class="chain"><span class="ci">${o.ic[0]}</span><span class="arr">→</span><span class="ci acc">${o.ic[1]}</span></span><span class="st"><span class="chipx ${o.status}">${o.chip}${o.gap?` · ${o.gap}`:""}</span><span class="an">${o.nm}</span><span class="as">${o.unit?num(o.cur,o.unit):o.cur} aujourd'hui</span></span><span class="plus">+</span></button>`}
-function psug(p){const n=p.serves.filter(i=>S.mine.includes(i)).length;return `<button class="sc2" data-prog="${p.id}"><img src="${p.img}" alt=""><span class="st">${n?`<span class="chipx obj">Sert ${n>1?`${n} de tes objectifs`:"ton objectif"}</span>`:""}<span class="an">${p.nm}</span><span class="as">${p.w} semaines · ${p.s} séances par semaine</span></span><span class="plus">+</span></button>`}
-function chart(o){
-  const W=330,H=150,p={l:30,r:10,t:10,b:20}, xs=o.hist.map(q=>q[0]), x0=Math.min(...xs)-4, x1=56;
-  const ys=[...o.hist.map(q=>q[1]),o.target], lo=Math.min(...ys), hi=Math.max(...ys), sp=(hi-lo)||1, ml=lo-sp*.2, mh=hi+sp*.2;
-  const X=x=>p.l+(x-x0)/(x1-x0)*(W-p.l-p.r), Y=v=>p.t+(1-(v-ml)/(mh-ml))*(H-p.t-p.b), lp=o.hist[o.hist.length-1];
-  return `<svg width="100%" viewBox="0 0 ${W} ${H}" role="img" aria-label="Courbe">
-    ${[.25,.5,.75].map(f=>{const v=ml+(mh-ml)*f;return `<line x1="${p.l}" x2="${W-p.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="rgba(255,255,255,.07)"/><text x="${p.l-5}" y="${Y(v)+3}" font-size="9.5" text-anchor="end" fill="rgba(255,255,255,.45)" font-family="IBM Plex Mono">${Math.round(v*2)/2}</text>`}).join("")}
-    <polygon points="${X(lp[0])},${Y(lp[1]+sp*.08)} ${X(x1)},${Y(o.target+sp*.08)} ${X(x1)},${Y(o.target-sp*.08)} ${X(lp[0])},${Y(lp[1]-sp*.08)}" fill="rgba(255,138,85,.2)"/>
-    <line x1="${X(lp[0])}" y1="${Y(lp[1])}" x2="${X(x1)}" y2="${Y(o.target)}" stroke="rgba(255,255,255,.65)" stroke-width="2" stroke-dasharray="5 5"/><circle cx="${X(x1)}" cy="${Y(o.target)}" r="5" fill="none" stroke="#fff" stroke-width="2"/>
-    <polyline points="${o.hist.map(q=>`${X(q[0])},${Y(q[1])}`).join(" ")}" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>${o.hist.map(q=>`<circle cx="${X(q[0])}" cy="${Y(q[1])}" r="3" fill="#fff"/>`).join("")}
-    <circle cx="${X(lp[0])}" cy="${Y(lp[1])}" r="5.5" fill="#f04a08" stroke="#fff" stroke-width="2"/></svg>`;
+const nav=(on)=>`<div class="bnav" style="grid-template-columns:repeat(${S.tabs},1fr)"><span class="${on==="Accueil"?"on":""}"><i></i>Accueil</span><span><i></i>Planning</span><span class="${on==="Accueil"?"":"on"}"><i></i>${coach()?"Sportifs":"Objectifs"}</span>${S.tabs===4?`<span><i></i>Prog.</span>`:""}</div>`;
+const reward=id=>{const o=OBJ[id];return `<button class="rc" data-obj="${id}"><img src="${IMG(o.img)}" alt=""><span class="pills"><i class="pl">J-${o.days}</i><i class="pl">${o.n} séances ${o.word.replace(/^avec /,"")}</i></span><span class="rb"><small>${o.nm}</small><span class="v"><b>${o.cur}</b>${o.gain?`<span class="gain">▲ ${o.gain}</span>`:""}</span>${false?``:`<span class="bar"><i style="width:${o.pct}%"></i><em style="left:${o.pct}%"></em></span>`}<span class="rf"><span>d'ici le ${fd(o.days)}</span><em>🎯 ${o.tgt}</em></span></span></button>`};
+const ocard=id=>{const o=OBJ[id],m=S.mine.includes(id),n=forObj(id).length;return `<button class="oc ${m?"mine":""}" data-obj="${id}"><img src="${IMG(o.img)}" alt="">${m?`<span class="st m">✓ ${coach()?"Son":"Ton"} objectif</span>`:o.st==="w"?`<span class="st w">▼ Point faible</span>`:o.st==="g"?`<span class="st g">✓ Point fort</span>`:""}<span class="ot"><b>${o.nm}</b><small>${o.cur}</small>${n?`<span class="via">${n} programme${n>1?"s":""}</span>`:""}</span></button>`};
+const pcard=id=>{const p=PROGS[id];return `<button class="pg" data-prog="${id}"><img src="${IMG(p.img)}" alt=""><span class="ot"><b>${p.nm}</b><small>${p.w} semaines · ${p.s} séances par semaine</small><span class="serve">${p.serve.map(o=>`<i class="${S.mine.includes(o)?"me":""}">${S.mine.includes(o)?"🎯 ":""}${OBJ[o].nm}</i>`).join("")}</span></span></button>`};
+const mcard=k=>`<button class="pg" data-act="importdone"><img src="${IMG("crossfit")}" alt=""><span class="st" style="background:#fff;color:#111">Importé</span><span class="ot"><b>Mon programme (photo)</b><small>6 semaines · 4 séances par semaine</small><span class="serve"><i class="me">🎯 Back squat</i><i>Soulevé de terre</i></span></span></button>`;
+const curProg=()=>Object.entries(PROGS).find(([,p])=>p.cur);
+
+const puce=(d)=>{const n=S.sheet==="reset"?1:d>=2?13:12;return `<button class="puce" data-act="streak" aria-label="Ta série : ${n} jours"><span style="font-size:15px">🔥</span>${n}</button>`};
+function todayView(){
+  const d=S.day,onb=S.onb;
+  return `<div class="bg"></div><div class="page"><div class="hdr">${puce(d)}<span class="datesel">‹ Aujourd'hui ›</span><span class="av">G</span></div>
+    <div class="ringph"><span><b>${d===0?"?":"Allège"}</b><small>${d===0?"fais ton point forme":"forme 48 · nuit courte"}</small></span></div>
+    <div class="sess"><div class="mono">Aujourd'hui · Force jambes</div><b>Front squat 5 × 3 · 92,5 kg</b><small>${d===0?"Ton point forme règle cette séance.":"Allégée après ta nuit courte."}</small>
+      ${d===0?`<button class="cta" data-act="pf">Faire mon point forme · 10 s</button>`:d===1?`<button class="cta" data-act="done">J'ai fait ma séance</button>`:`<button class="cta" style="background:#2f9e44" data-act="streak">✓ Séance faite</button>`}</div>
+  </div>${nav("Accueil")}${sheet()}`;
 }
-const serves=ids=>`<div class="serves">${ids.map(i=>`<span class="${S.mine.includes(i)?"mine":""}">${S.mine.includes(i)?"🎯 ":""}${OBJ[i].nm}</span>`).join("")}</div>`;
-const nav=()=>`<div class="bnav" style="grid-template-columns:repeat(3,1fr)"><span><i></i>Accueil</span><span><i></i>Planning</span><span class="on"><i></i>${S.role==="coach"?"Groupe":"Objectifs"}</span></div>`;
-
-const QF=["Tous","Force","Puissance","Mobilité","Régularité","Récupération"], PF=["Tous","Pour mes objectifs","Force","Puissance","4 à 6 semaines"];
-const QSUB={Force:"Ton maillon faible est ici.",Puissance:"Ce qui fait décoller la barre.",Mobilité:"Plus de profondeur, moins de compensations.",Régularité:"La base de tout le reste.",Récupération:"Ce qui se joue hors séance."};
 function home(){
-  const libs={};Object.entries(OBJ).forEach(([id,o])=>{if(S.fo==="Tous"||o.q===S.fo)(libs[o.q]=libs[o.q]||[]).push(id)});
-  const chips=(list,cur,key)=>`<div class="fchips">${list.map(f=>`<button class="${cur===f?"on":""}" data-${key}="${f}">${f}</button>`).join("")}</div>`;
-  const progs=PROGS.filter(p=>S.fp==="Tous"||(S.fp==="Pour mes objectifs"?p.serves.some(i=>S.mine.includes(i)):S.fp==="4 à 6 semaines"?p.w<=6:p.serves.some(i=>OBJ[i].q===S.fp)));
-  return `<div class="content"><div class="topbar"><span></span><span class="pagetitle" style="margin:0">Objectifs</span><button class="plusbtn" data-lib="obj" aria-label="Nouvel objectif">+</button></div>
-    <div class="agrid">${S.mine.map(card).join("")}</div>
-    <div class="segs" role="tablist"><button class="${S.lib==="obj"?"on":""}" data-lib="obj">Objectifs</button><button class="${S.lib==="prog"?"on":""}" data-lib="prog">Programmes</button></div>
-    ${S.lib==="obj"?`${chips(QF,S.fo,"fo")}
-      <div class="reco2"><div class="mono" style="color:var(--soft)">Recommandation · construire la force</div><p>Ton front squat freine ton épaulé-jeté. Point d'appui : ton arraché.</p><div class="tc2"><span>Test conseillé</span><b>Saut vertical (CMJ) ›</b></div></div>
-      ${Object.entries(libs).map(([q,ids])=>`<div class="sh2"><h3>${q}</h3><p>${QSUB[q]||""}</p></div><div class="srail">${ids.map(sug).join("")}</div>`).join("")}`
-    :`${chips(PF,S.fp,"fp")}${PROGS.filter(p=>p.mine).map(p=>`<div class="sh2"><h3>Ton programme</h3></div>${progRow(p)}`).join("")}
-      <div class="sh2"><h3>${S.fp==="Tous"?"Pour tes objectifs":S.fp}</h3><p>Chaque programme dit quels objectifs il sert.</p></div><div class="srail">${progs.filter(p=>!p.mine).map(psug).join("")||`<p class="one">Aucun programme pour ce filtre.</p>`}</div>`}
-  </div>${nav()}`;
+  const [cid,cp]=curProg();
+  const fams=["Force","Puissance","Vitesse","Endurance","Revenir de blessure","Concours et échéances","Forme"];
+  const byFam=f=>Object.keys(OBJ).filter(k=>OBJ[k].fam===f);
+  const browse=S.seg==="obj"
+    ? `<div class="chips"><span class="on">Pour toi</span>${fams.slice(0,5).map(f=>`<span>${f}</span>`).join("")}</div>
+       ${fams.map(f=>{const ids=byFam(f);if(!ids.length)return "";return `<div class="sec"><b>${f}</b><small>${ids.length} objectif${ids.length>1?"s":""}</small></div><div class="rail">${ids.map(ocard).join("")}</div>`}).join("")}`
+    : `<div class="chips"><span class="on">Tous</span><span>Pour mes objectifs</span><span>Force</span><span>Course</span><span>Prévention</span></div>
+       <div class="sec"><b>${coach()?"Programmes du groupe":"Mes programmes"}</b><small>${1+S.made.length}</small></div><div class="rail"><button class="pg" data-act="create" style="flex-basis:34%;border:2px dashed rgba(255,255,255,.22);background:rgba(255,255,255,.03);display:grid;place-items:center;text-align:center;font-weight:700;font-size:13px;color:rgba(255,255,255,.75)">+<br>Nouveau programme</button>${S.made.map(mcard).join("")}${pcard(cid)}</div>
+       <div class="sec"><b>Pour ${coach()?"ses":"tes"} objectifs</b><small>triés par ce qu'ils servent</small></div><div class="rail">${["spsq","pe","plio","pl"].map(pcard).join("")}</div>
+       <div class="sec"><b>Tous les modèles</b><small>80 programmes</small></div><div class="rail">${["sprint","k10","genou","police"].map(pcard).join("")}</div>
+       <button class="cta2" data-act="gen">✨ Créer un programme pour ${coach()?"ses":"mes"} objectifs</button>`;
+  return `<div class="bg"></div><div class="page">
+    ${coach()?`<div class="coachbar"><span>👥 Groupe</span><span class="on"><i>LG</i>Léa</span><span><i>KH</i>Karim</span><span><i>SR</i>Sofia</span></div>`:""}
+    <div class="hd"><h2>${coach()?"Objectifs de Léa":"Objectifs"}</h2><span class="av">${coach()?"LG":"G"}</span></div>
+    <div class="rail" style="margin-top:12px">${S.mine.map(reward).join("")}${S.mine.length<3?`<div class="rc add">+<br>${coach()?"Fixe-lui un objectif":"Choisis un objectif"}</div>`:""}</div>
+    <div class="sec" style="margin-top:12px"><b>${coach()?"Son programme":"Ton programme"}</b><span style="display:flex;gap:14px"><button class="lk" data-act="create">+ Nouveau</button><button class="lk" data-seg="prog">Changer</button></span></div>
+    <button class="veh" data-prog="${cid}"><span class="th"><img src="${IMG(cp.img)}" alt=""></span><span><b>${cp.nm}</b><small>Semaine 3 sur ${cp.w} · sert 🎯 ${cp.serve.filter(o=>S.mine.includes(o)).map(o=>OBJ[o].nm).join(", ")}</small><span class="wk">${Array.from({length:cp.w},(_,i)=>`<i class="${i<2?"d":i===2?"c":""}"></i>`).join("")}</span></span><span class="go">›</span></button>
+    <div class="search">🔍 Un objectif, un test, un programme…</div>
+    <div class="seg"><button class="${S.seg==="obj"?"on":""}" data-seg="obj">Par objectif</button><button class="${S.seg==="prog"?"on":""}" data-seg="prog">Tous les programmes</button></div>
+    ${browse}
+  </div>${nav()}${sheet()}`;
 }
-const progRow=p=>{const n=p.serves.filter(i=>S.mine.includes(i)).length;return `<button class="pc" data-prog="${p.id}"><img src="${p.img}" alt=""><span><b>${p.nm}</b><small>${p.mine?"En cours · semaine 3 sur 8":`${p.w} semaines · ${p.s} séances par semaine`}</small>${n?`<small style="color:var(--soft);font-weight:700">Sert ${n>1?`${n} de tes objectifs`:"ton objectif"}</small>`:""}</span><span style="color:var(--faint)">›</span></button>`};
+
+/* Semaines : 1 validée, .5 à moitié, 0 manquée, "c" en cours */
+const wkCell=(v,i,big)=>v==="c"?`<span><i class="c">…</i>${big?`S${i+1}`:""}</span>`:`<span><i class="${v===1?"f":v===.5?"h":""}">${v===1?"✓":v===.5?"½":"·"}</i>${big?`S${i+1}`:""}</span>`;
+function weekDots(id){const t=TRAJ[id];
+  if(S.mode==="streak")return "";
+  return `<span class="crans">${Array.from({length:t.total},(_,i)=>{const v=t.wk[i];return `<i class="${v===1?"f":v===.5?"h":v==="c"?"c":""}"></i>`}).join("")}</span>`;}
+const doneTxt=t=>{const f=t.wk.filter(v=>v===1).length,h=t.wk.filter(v=>v===.5).length;return `${f} semaine${f>1?"s":""} validée${f>1?"s":""}${h?`, ${h} à moitié`:""}`};
+function trajChart(t,o){
+  const W=320,H=120,pl=8,pr=62,pt=12,pb=18,n=t.total, x=w=>pl+w/n*(W-pl-pr);
+  const lo=Math.min(t.start,...t.pts.map(q=>q[1]))-1, hi=t.tgt+0.6, y=v=>pt+(1-(v-lo)/(hi-lo))*(H-pt-pb);
+  const wkNow=t.wk.indexOf("c")+.5, solid=t.pts.map(q=>`${x(q[0])},${y(q[1])}`).join(" "), tx=x(Math.min(n,wkNow+2));
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;margin-top:8px" role="img" aria-label="Tests réels et tracé vers la cible">
+    <line x1="${x(0)}" y1="${y(t.start)}" x2="${x(n)}" y2="${y(t.tgt)}" stroke="rgba(255,138,85,.55)" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <polyline points="${solid}" fill="none" stroke="#fff" stroke-width="2.5"/>
+    ${t.pts.map(q=>`<circle cx="${x(q[0])}" cy="${y(q[1])}" r="4" fill="#fff"/>`).join("")}
+    <line x1="${x(wkNow)}" y1="${pt}" x2="${x(wkNow)}" y2="${H-pb}" stroke="#fff" stroke-width="1.5"/>
+    <text x="${x(wkNow)}" y="${H-4}" text-anchor="middle" fill="#fff" font-size="9.5" font-weight="700" font-family="DM Sans">aujourd'hui</text>
+    <line x1="${tx}" y1="${pt}" x2="${tx}" y2="${H-pb}" stroke="rgba(255,255,255,.25)" stroke-dasharray="2 3"/>
+    <text x="${tx}" y="${pt-2}" text-anchor="middle" fill="rgba(255,255,255,.55)" font-size="9.5" font-family="DM Sans">test</text>
+    <text x="${x(n)+4}" y="${y(t.tgt)+4}" fill="#ff8a55" font-size="10.5" font-weight="800" font-family="DM Sans">🎯 ${o.tgt}</text>
+  </svg>`;
+}
+function voyants(o){return `
+    <div class="vy"><span class="ic">🏋️</span><span><b>Séances ${o.word}</b><small>Encore une d'ici dimanche.</small></span><span class="s mid">1 sur 2</span></div>
+    <div class="vy"><span class="ic">⚖️</span><span><b>Charge</b><small>Assez pour progresser, pas trop pour encaisser.</small></span><span class="s ok">Dans la zone</span></div>
+    <div class="vy"><span class="ic">🌙</span><span><b>Récupération</b><small>Sous ta norme depuis mardi. Ta séance de jeudi s'allège : la semaine compte quand même.</small></span><span class="s lo">▼ Sous ta norme</span></div>
+    <div class="shield">🛡 2 séances ajustées ce mois-ci ont sauvé ta semaine 3. Sans ajustement, elle aurait été manquée.</div>`;}
+function trajBlock(id){
+  const t=TRAJ[id],o=OBJ[id],cells=t.wk.concat(Array(Math.max(0,t.total-t.wk.length)).fill(0));
+  if(S.mode==="streak")return `<div class="traj"><div class="streak"><span class="fl">🔥</span><span><b>${t.streak} semaines validées d'affilée</b><small>Record : ${t.best} · une semaine à moitié ne casse pas la série</small></span></div>
+    <div class="wks" style="grid-template-columns:repeat(${t.total},1fr)">${cells.map((v,i)=>wkCell(v,i,true)).join("")}</div>
+    <div class="fine">✓ validée · ½ à moitié (la série tient) · une semaine manquée la remet à zéro.</div>
+    ${voyants(o)}</div>`;
+  return `<div class="traj"><div class="k"><b>Ta trajectoire</b><small>${doneTxt(t)}</small></div>
+    ${trajChart(t,o)}
+    <div class="wks" style="grid-template-columns:repeat(${t.total},1fr)">${cells.map((v,i)=>wkCell(v,i,true)).join("")}</div>
+    <div class="fine">Tes vrais tests (trait plein) et le tracé jusqu'à ta cible (pointillés). Aucune valeur estimée : ton prochain test dit où tu en es par rapport au tracé.</div>
+    ${voyants(o)}</div>`;
+}
 function objPage(){
-  const id=S.open,o=OBJ[id],mine=S.mine.includes(id),p=PREP[id],progs=PROGS.filter(x=>x.serves.includes(id)),cur=PROGS.find(x=>x.mine&&x.serves.includes(id));
-  const val=v=>o.unit==="séances"?`${v} séances`:o.unit?num(v,o.unit):v;
-  return `<button class="back" data-back="1" aria-label="Retour">‹</button>${mine?`<button class="more" aria-label="Modifier l'objectif">⋯</button>`:""}<div class="content"><div class="hero"><img src="${o.img}" alt=""><div class="ht"><div class="mono">${o.q}</div><h2>${o.nm}</h2></div></div>
-    <div class="kv"><div><small>Aujourd'hui</small><b>${val(o.cur)}</b></div><span class="to">→</span><div><small>${mine?`Le ${o.date}`:"Cible"}</small><b>${o.unit==="séances"?"4 / semaine":val(o.target)}</b></div></div>
-    <div class="meta"><span class="chipx ${o.status}">${o.chip}${o.gap?` · ${o.gap}`:""}</span><span>${o.ref}</span></div>
-    <p class="one">${o.desc}</p>
-    ${mine?`${gauge(id,true)}<p class="one" style="margin-top:6px">${p.ok?`À ce rythme, tu y es le ${p.arrive}.`:`À ce rythme, plutôt le ${p.arrive} : une séance de plus par semaine te remet dans les temps.`}</p>`:""}
-    <div class="chart">${chart(o)}</div>
-    <div class="dates"><span>Dernier test · <b>${o.last}</b></span>${o.next?`<span>Prochain · <b>${o.next}</b></span>`:""}</div>
-    ${o.unit&&o.unit!=="séances"?`<button class="link">+ Ajouter une valeur</button>`:""}
-    <div class="sec" style="margin-top:16px"><span class="mono">${mine?"Ce qui le sert":"Pour y arriver"}</span></div>
-    ${mine?`<div class="srv">${cur?`<img src="${cur.img}" alt=""><span><b>${cur.nm}</b><small>et toutes tes séances qui travaillent ${o.serves.split(" (")[0].split(",")[0]}</small></span>`:`<span class="ico">🗓</span><span><b>Tes séances du planning</b><small>Celles qui travaillent ${o.serves.split(" (")[0].split(",")[0]} comptent.</small></span>`}</div>`
-      :`<p class="one" style="margin-top:0">Tes séances comptent déjà quand elles le travaillent. Pour aller plus vite :</p>${progs.slice(0,2).map(progRow).join("")}${progs.length>2?`<button class="link">Voir les ${progs.length} programmes ›</button>`:""}`}
-    <div class="sec" style="margin-top:16px"><span class="mono">Historique</span></div>${[...o.hist].reverse().map(q=>`<div class="hrow"><span>${q[0]===0?"aujourd'hui":`il y a ${-q[0]} jours`}</span><b>${o.unit==="séances"?q[1]+" séances":o.unit?num(q[1],o.unit):q[1]}</b></div>`).join("")}
-    ${mine?"":`<button class="btn wide" style="margin-top:16px" data-add="${id}" ${S.mine.length>=3?"disabled":""}>${S.mine.length>=3?"Tu suis déjà 3 objectifs":"Suivre cet objectif"}</button>`}
-  </div>${nav()}`;
+  const id=S.open,o=OBJ[id],m=S.mine.includes(id),ps=forObj(id),c=coach();
+  return `<div class="bg"></div><div class="page"><div class="hero"><img src="${IMG(o.img)}" alt=""></div><button class="back" data-home="1" aria-label="Retour">‹</button>
+    <h2 class="ttl">${o.nm}</h2>
+    ${o.tgt?`<div class="big"><b>${o.cur}</b><span style="color:var(--faint);font-size:22px">→</span><b class="to">${o.tgt}</b></div>`:`<div class="line" style="font-size:15px">${o.cur}</div>`}
+    ${m&&o.tgt?`<span class="bar" style="margin-top:12px"><i style="width:${o.pct}%"></i><em style="left:${o.pct}%"></em></span><div class="line">d'ici le ${fd(o.days)} · ${o.n} séances ${o.word}</div>`:o.st==="w"?`<div class="line">▼ Point faible · ${o.gap}</div>`:""}
+    ${m?`<button class="cta" data-act="change">Modifier ou changer l'objectif</button>`:`<button class="cta" data-act="follow">🎯 ${c?"En faire son objectif":"En faire un objectif"}</button>`}
+    ${S.mode!=="off"&&m&&TRAJ[id]?`<div class="traj"><div class="k"><b>Cette semaine pour cet objectif</b><small>2 séances sur 3 prévues</small></div>${voyants(o)}</div>`:""}
+    <div class="h3">Pour y arriver</div>
+    <div class="way on"><span class="n">📅</span><span><b>${c?"Ses":"Tes"} séances comptent déjà</b><small>${o.n?`${o.n} séances ${o.word} depuis le 27 octobre, avec ou sans programme.`:"Chaque séance qui le travaille comptera ici."}</small></span><span class="r">✓</span></div>
+    <button class="way" data-act="gen"><span class="n">✨</span><span><b>Un programme fait pour cet objectif</b><small>${o.days?`${Math.round(o.days/7)} semaines, jusqu'au ${fd(o.days)} · test au début et à la fin`:"Durée calée sur ton échéance"}</small></span><span class="r">›</span></button>
+    ${ps.length?`<div class="h3">Programmes qui le servent</div>
+    ${ps.map(([pid,p])=>`<button class="way" data-prog="${pid}"><span class="n"><img src="${IMG(p.img)}" alt=""></span><span><b>${p.nm}</b><small>${fitTxt(p.fit[id],o)} · ${p.w} sem.</small>${fitBar(p.fit[id])}</span><span class="r">${p.cur?"En cours":"›"}</span></button>`).join("")}`:""}
+  </div>${nav()}${sheet()}`;
 }
+
 function progPage(){
-  const p=PROGS.find(x=>x.id===S.prog);
-  return `<button class="back" data-back="1" aria-label="Retour">‹</button><div class="content"><div class="hero"><img src="${p.img}" alt=""><div class="ht"><div class="mono">Programme · ${p.w} semaines · ${p.s} séances par semaine</div><h2>${p.nm}</h2></div></div>
-    <div class="sec"><span class="mono">Il sert</span></div>
-    <div class="orail">${p.serves.map(card).join("")}</div>
-    <div class="sec"><span class="mono">Une semaine type</span></div>
-    <div class="week2">${[["Lun","Force jambes"],["Mer","Épaulé-jeté technique"],["Ven","Force jambes lourde"],["Sam","Haut du corps"]].map(([d,n])=>`<div><small>${d}</small><b>${n}</b></div>`).join("")}</div>
-    <button class="btn wide" style="margin-top:16px">${p.mine?"En cours · semaine 3":"Activer ce programme"}</button>
-    ${p.mine?"":`<p class="one" style="text-align:center;font-size:12.5px">Ses objectifs s'ajoutent aux tiens.</p>`}
-  </div>${nav()}`;
+  const id=S.prog,p=PROGS[id],c=coach();
+  return `<div class="bg"></div><div class="page"><div class="hero"><img src="${IMG(p.img)}" alt=""></div><button class="back" data-home="1" aria-label="Retour">‹</button>
+    <h2 class="ttl">${p.nm}</h2><div class="line">${p.w} semaines · ${p.s} séances par semaine</div>
+    <div class="h3">Il sert</div>
+    ${p.serve.map(o=>`<button class="way ${S.mine.includes(o)?"on":""}" data-obj="${o}"><span class="n"><img src="${IMG(OBJ[o].img)}" alt=""></span><span><b>${S.mine.includes(o)?"🎯 ":""}${OBJ[o].nm}</b><small>${fitTxt(p.fit[o],OBJ[o])}</small>${fitBar(p.fit[o])}</span><span class="r">›</span></button>`).join("")}
+    <button class="cta" data-act="start">${p.cur?"En cours · semaine 3":c?"Lui assigner ce programme":"Commencer ce programme"}</button>
+  </div>${nav()}${sheet()}`;
 }
-function coach(){
-  return `<div class="content"><div class="pagetitle">Thomas</div>
-    <div class="ath"><span class="av">T</span><span><b>Thomas · haltérophilie</b><br><small style="color:var(--muted)">Point forme fait · séance allégée</small></span></div>
-    <div class="orail">${["fs","cj"].map(card).join("")}<button class="oc add"><span style="font-size:28px">+</span>Lui fixer un objectif</button></div>
-    <div class="sec"><span class="mono">Son programme</span></div>${progRow(PROGS[0])}
-    <p class="one">Les mêmes bibliothèques que le sportif. Assigne un programme : ses objectifs suivent.</p>
-  </div><div class="bnav" style="grid-template-columns:repeat(3,1fr)"><span><i></i>Accueil</span><span><i></i>Planning</span><span class="on"><i></i>Groupe</span></div>`;
+
+function sheet(){
+  if(S.sheet==="start"){const p=PROGS[S.prog];return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Suivre aussi ses objectifs ?</h3><p class="s">Ce programme les travaille. Tes séances les feront avancer, tu verras où tu en es.</p>
+    ${p.serve.map(o=>{const on=S.follow[o]!==false;return `<div class="tg" data-tog="${o}"><span class="ck ${on?"on":""}">${on?"✓":""}</span><span><b>${OBJ[o].nm}</b><small>${OBJ[o].tgt?`${OBJ[o].cur} → ${OBJ[o].tgt}, d'ici le ${fd(p.w*7)}`:`d'ici le ${fd(p.w*7)}`}</small></span></div>`}).join("")}
+    <button class="cta" data-act="close">Commencer</button></div></div>`}
+  if(S.sheet==="gen"){const o=OBJ[S.open];return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Un programme pour ${o.nm.toLowerCase().startsWith("courir")||o.nm.toLowerCase().startsWith("revenir")||o.nm.toLowerCase().startsWith("réussir")?o.nm.toLowerCase():`ton ${o.nm.toLowerCase()}`}.</h3>
+    <div class="row"><span>Objectif</span><b>${o.tgt?`${o.cur} → ${o.tgt}`:o.nm}</b></div>
+    <div class="row"><span>Durée</span><b>${o.days?`${Math.round(o.days/7)} semaines, fin le ${fd(o.days)}`:"8 semaines"}</b></div>
+    <div class="row"><span>Tes jours</span><b>Lun · Mer · Ven · Sam</b></div>
+    <div class="row"><span>Blocs</span><b>Accumulation, intensification, affûtage</b></div>
+    <div class="row"><span>Tests</span><b>Semaine 1 et dernière semaine</b></div>
+    <div class="row"><span>Tes autres objectifs</span><b>Gardés en entretien</b></div>
+    <button class="cta" data-act="close">Créer mon programme</button></div></div>`}
+  if(S.sheet==="create")return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Nouveau programme</h3><p class="s">Le menu de création de la prod, inchangé. « Générer » part de ${coach()?"ses":"tes"} objectifs.</p>
+    ${[["✨","Générer pour mes objectifs","Objectifs, échéance et jours déjà remplis","gen"],["📷","Importer un programme","Photo, PDF ou texte collé","import"],["📚","Utiliser un modèle","La bibliothèque, rangée par objectif","lib"],["📄","Programme vierge","Une semaine vide à remplir","blank"]].map(([i,l,sub,a])=>`<div class="tg" data-act="${a}" style="grid-template-columns:40px 1fr"><span style="width:40px;height:40px;border-radius:12px;background:#f1f0ee;display:grid;place-items:center;font-size:18px">${i}</span><span><b>${l}</b><small>${sub}</small></span></div>`).join("")}</div></div>`;
+  if(S.sheet==="imported")return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Programme importé.</h3><p class="s">6 semaines, 24 séances, rangées dans ton planning à partir de lundi. Tu le retrouves dans « Ton programme » et dans « Mes programmes ».</p>
+    <div class="row"><span>Il sert</span><b>Back squat · 5 séances sur 5<br>Soulevé de terre · 3 sur 5</b></div>
+    <div class="tg" data-tog="dl"><span class="ck ${S.follow.dl!==false?"on":""}">${S.follow.dl!==false?"✓":""}</span><span><b>Suivre aussi le soulevé de terre</b><small>170 kg → 177 kg, d'ici le ${fd(42)}</small></span></div>
+    <button class="cta" data-act="importok">Voir mon planning</button></div></div>`;
+  if(S.sheet==="blank")return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Programme vierge.</h3><p class="s">L'éditeur de la prod s'ouvre sur une semaine vide. Dès que tes séances contiennent un mouvement de tes objectifs, le programme affiche « Il sert » tout seul.</p><button class="cta" data-act="close">Ouvrir l'éditeur</button></div></div>`;
+  if(S.sheet==="streak"||S.sheet==="saved"||S.sheet==="reset"){const sv=S.sheet==="saved",rs=S.sheet==="reset";
+    const wk=rs?[["L","f"],["M","r"],["M","x"],["J","c"],["V",0],["S","R"],["D",0]]:WEEK;
+    return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc sw"><div class="grab"></div>
+    ${!sv&&!rs?`<div class="pager"><span>Fin de séance</span><span class="pd"><i></i><i></i><i class="on"></i></span></div>`:""}
+    <div class="fl">${sv?`<span style="color:#2d6a7c">${LI("shield-check",48)}</span>`:"🔥"}</div><h3>${rs?"Nouvelle série":"13 jours d'affilée"}</h3>
+    <p class="s">${rs?"Hier sans point forme. Aujourd'hui compte déjà : 1 jour.":sv?"Repos conseillé suivi : ta journée est sauvée.":"Ta séance allégée compte autant qu'une pleine."}</p>
+    <div class="w7">${wk.map(([l,v])=>`<span><i class="${v==="f"||v==="r"?"f":v==="s"?"s":v==="c"?"c":v==="x"?"x":""}">${v==="x"?"":LI(DAYI[v]||"dumbbell",15)}</i>${l}</span>`).join("")}</div>
+    
+    <div class="meta">${rs?"Ton record reste 21 jours.":"Record 21 · 1 jour sauvé par un repos conseillé"}</div>
+    ${sv?`<div class="meta" style="color:var(--accent);font-weight:700">Nouvelle récompense : Écouté ton corps</div>`:""}
+    ${!sv&&!rs?`<button class="nextr" data-act="rewards"><span style="color:#d44000">${LI("crosshair",22)}</span><span><b>Prochaine récompense : ta 1re décision</b><small>Fais ta séance du jour réglée par ton point forme</small></span><span>›</span></button>`:""}
+    <button class="cta" data-act="close">${!sv&&!rs?"Terminer":"Continuer"}</button><button class="linkb" data-act="rewards">Mes récompenses · 6</button></div></div>`}
+  if(S.sheet==="rewards"){const card=([e,n,w,l])=>`<div class="${l?"lock":""}"><div class="md">${LI(e,22)}</div><b>${n}</b><small>${w}</small></div>`;
+    const first=[["clipboard-check","1er point forme","20 nov."],["calendar-days","Ton programme","20 nov."],["crosshair","Ta 1re décision","à faire aujourd'hui",1],["star","Elite débloqué","14 jours offerts",1]];
+    return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Mes récompenses</h3><p class="s">6 sur 16</p>
+    <div class="bgrid">${first.concat(BADGES,[["map-pin","1er repère posé","à venir",1],["calendar-range","4 semaines parfaites","à venir",1],["flag","Échéance tenue","à venir",1]]).slice(0,12).map(card).join("")}</div>
+    <button class="cta" data-act="streak">Retour</button></div></div>`}
+  if(S.sheet==="onbpanel")return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Bien démarrer · 2 sur 4</h3><p class="s">La checklist de la prod, dans la même puce. Une fois finie, la puce devient ta série.</p>
+    <div class="chk">${[["Ton 1er point forme",1],["Ton programme",1],["Ta 1re décision",0],["Débloquer Elite",0]].map(([l,on])=>`<div class="tg"><span class="ck ${on?"on":""}">${on?"✓":""}</span><span><b>${l}</b></span></div>`).join("")}
+    <div class="tg"><span class="ck" style="border-style:dashed">🔥</span><span><b>Ensuite : ta série du jour</b><small>Point forme + séance (ou repos) = journée validée</small></span></div></div>
+    <button class="cta" data-act="close">OK</button></div></div>`;
+  if(S.sheet==="change")return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Changer d'objectif ?</h3><p class="s">Ta série et tes récompenses sont à toi, pas à l'objectif : elles restent.</p>
+    <div class="row"><span>🔥 Série</span><b>Gardée · 13 jours</b></div><div class="row"><span>Récompenses</span><b>Gardées · 4</b></div><div class="row"><span>Front squat</span><b>Retiré · son historique reste dans la fiche</b></div><div class="row"><span>Nouvel objectif</span><b>Part de ta dernière valeur, ses séances des 4 dernières semaines comptent déjà</b></div>
+    <button class="cta" data-act="close">Choisir un autre objectif</button></div></div>`;
+  if(S.sheet==="after"){const o=OBJ[S.open],t=TRAJ[S.open],st=S.mode==="streak";return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><div class="mono" style="color:#8a8f94">Fin de séance</div><h3>${st?`Semaine validée. 🔥 ${t.streak+1} d'affilée.`:"Semaine 4 validée."}</h3><p class="s">2 séances sur 2 ${o.word}, charge dans la zone, séance ajustée à ta récup.</p>
+    ${st?`<div class="row"><span>Série</span><b>🔥 ${t.streak} → ${t.streak+1} semaines</b></div><div class="row"><span>Record</span><b>${t.streak+1>t.best?`Nouveau record : ${t.streak+1}`:t.best}</b></div>`:`<div class="row"><span>Trajectoire</span><b>Semaine 4 validée · ${doneTxt(t).replace(/^\d+/,m=>+m+1)}</b></div>`}
+    <div class="row"><span>Prochain test</span><b>${t.test}</b></div>
+    <button class="cta" data-act="close">OK</button></div></div>`}
+  if(S.sheet==="test"){const st=S.mode==="streak";return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><div class="mono" style="color:#8a8f94">Jour du test</div><h3>136 kg. ${st?"Tes 5 semaines ont payé.":"Au-dessus du tracé."}</h3><p class="s">${st?"5 semaines validées depuis ton dernier test, +3,5 kg mesurés.":"Le tracé prévoyait 135 kg à cette date. Tu es devant."} Ta suite repart de ce vrai chiffre.</p>
+    <div class="row"><span>Depuis le départ</span><b>▲ +3,5 kg</b></div><div class="row"><span>Il te reste</span><b>2 kg d'ici le 18 janvier</b></div><div class="row"><span>Semaines validées</span><b>5 sur 6</b></div>
+    <p class="s" style="margin-top:10px">Sous le tracé : « 132,5 kg. Ta trajectoire repart de là. » Jamais de reproche.</p>
+    <button class="cta" data-act="close">Continuer</button></div></div>`}
+  if(S.sheet==="edit")return `<div class="dim" data-act="close"></div><div class="sheet"><div class="sc"><div class="grab"></div><h3>Modifier l'objectif</h3><p class="s">Comme en prod : échéance, date précise, retirer.</p><button class="cta" data-act="close">OK</button></div></div>`;
+  return "";
 }
-function done(){
-  return `<div class="done-scr"><div class="mono" style="color:var(--soft)">Séance terminée</div><div style="font-size:26px;font-weight:900;margin-top:6px">Force jambes</div><div class="ring">Dans la zone.</div>
-    <div class="gain">${[["fs","+8 %"],["reg","+8 %"]].map(([id,g])=>`<div class="gr"><span>${OBJ[id].nm}</span><b>${g}</b></div>${gauge(id)}`).join("")}</div>
-    <button class="btn wide" style="margin-top:16px" data-step="0">Continuer</button></div>`;
-}
+
 const STEPS=[
-  {h:"Objectifs",p:"Façon « Règles » d'Opal : « + » en haut à droite ; tes objectifs en cartes sombres, 2 par ligne (repère → cible, pastille Préparation, aujourd'hui → cible · date). Puis la bibliothèque : filtres par qualité (comme en prod), la recommandation et le test conseillé (prod), puis une section par qualité avec titre et sous-titre, en carrousel de cartes photo avec « + » (statut et écart au repère conservés).",go:()=>{S.lib="obj";S.v="home";S.role="athlete"}},
-  {h:"Programmes",p:"Même format : ton programme en cours, puis les filtres (pour mes objectifs, qualité, durée) et le carrousel de cartes photo avec « + » ; chaque carte dit si elle sert tes objectifs.",go:()=>{S.lib="prog";S.v="home";S.role="athlete"}},
-  {h:"Un objectif de la bibliothèque",p:"Aujourd'hui → cible, le statut et l'écart au repère (prod), une phrase d'analyse, la courbe, dernier et prochain test, l'historique (prod). « Pour y arriver » : tes séances comptent déjà, ou deux programmes qui le servent. Un bouton : Suivre cet objectif.",go:()=>{S.open="cmj";S.v="obj";S.role="athlete"}},
-  {h:"Un objectif suivi",p:"Aujourd'hui → la date, une jauge, une phrase (« À ce rythme, tu y es le 18 janvier »), la courbe, « Ce qui le sert » en une ligne. Modifier dans le menu ⋯.",go:()=>{S.open="fs";S.v="obj";S.role="athlete"}},
-  {h:"Un programme",p:"Les objectifs qu'il sert, en cartes ; une semaine type ; Activer. Ses objectifs s'ajoutent aux tiens.",go:()=>{S.prog="p2";S.v="prog";S.role="athlete"}},
-  {h:"Fin de séance",p:"Une ligne par objectif servi, avec sa jauge qui monte. Identique avec ou sans programme : seule compte la séance faite.",go:()=>{S.v="done";S.role="athlete"}},
-  {h:"Côté coach",p:"Les objectifs du sportif, « Lui fixer un objectif », son programme. Les mêmes bibliothèques.",go:()=>{S.v="coach";S.role="coach"}},
+  {h:"Onglet Objectifs",p:"Tes objectifs, le programme qui les sert, puis la bibliothèque rangée par objectif.",go:()=>{S.v="home";S.seg="obj";S.sheet=null}},
+  {h:"Page objectif",p:"Actuel → cible, puis trois moyens d'y arriver : tes séances, un programme fait pour lui, ceux qui le servent.",go:()=>{S.v="obj";S.open="fs";S.sheet=null}},
+  {h:"Programme fait pour l'objectif",p:"Le générateur reçoit l'objectif et l'échéance.",go:()=>{S.v="obj";S.open="fs";S.sheet="gen"}},
+  {h:"Page programme",p:"Ce qu'il sert. Au démarrage, l'app propose de suivre ces objectifs.",go:()=>{S.v="prog";S.prog="spsq";S.sheet="start"}},
+  {h:"Accueil",p:"La puce du header porte la série. Rien d'autre ne change.",go:()=>{S.v="today";S.day=0;S.sheet=null}},
+  {h:"Fin de séance",p:"Dernière page du mini bilan : la série, la semaine, la prochaine récompense.",go:()=>{S.v="today";S.day=2;S.sheet="streak"}},
+  {h:"Récompenses",p:"Une seule grille, accessible depuis la série.",go:()=>{S.v="today";S.day=2;S.sheet="rewards"}},
+  {h:"Jour sauvé",p:"Repos conseillé suivi : la série tient.",go:()=>{S.v="today";S.day=1;S.sheet="saved"}},
 ];
-const phone=document.getElementById("phone"), log=document.getElementById("log");
+
+const phone=document.getElementById("phone"),log=document.getElementById("log");
 const frame=()=>`<div class="island"></div><div class="sb"><span>9:41</span><span>●●● 4G</span></div><div class="homebar"></div>`;
-const V={home,obj:objPage,prog:progPage,done,coach};
-function render(still){
-  document.getElementById("ctl").innerHTML=`<span class="mono">Voir</span>${STEPS.map((s,i)=>`<button class="${i===S.i?"on":""}" data-step="${i}">${i+1}</button>`).join("")}`;
+const V={home,obj:objPage,prog:progPage,today:todayView};
+function render(still,scroll){
   phone.innerHTML=`<div class="scr ${still?"still":""}">${V[S.v]()}</div>${frame()}`;
-  log.innerHTML=STEPS.map((st,i)=>`<button class="step ${i===S.i?"on":""}" data-step="${i}"><span class="n">${String(i+1).padStart(2,"0")}</span><span><div class="h">${st.h}</div><div class="p">${st.p}</div></span></button>`).join("");
+  if(scroll){const pg=phone.querySelector(".page");if(pg)pg.scrollTop=scroll}
+  if(window.lucide)window.lucide.createIcons();
+  log.innerHTML=STEPS.map((s,i)=>`<button class="step ${i===S.i?"on":""}" data-step="${i}"><span class="n">${String(i+1).padStart(2,"0")}</span><span><div class="h">${s.h}</div><div class="p">${s.p}</div></span></button>`).join("");
 }
-function goStep(i){S.i=i;STEPS[i].go();render()}
+function goStep(i){S.role="athlete";S.i=i;STEPS[i].go();render(false,STEPS[i].scroll)}
 document.addEventListener("click",e=>{
-  const t=e.target.closest("[data-fo],[data-fp],[data-step],[data-lib],[data-obj],[data-prog],[data-back],[data-way],[data-add]");if(!t)return;const d=t.dataset;
+  const t=e.target.closest("[data-mode],[data-step],[data-home],[data-obj],[data-prog],[data-seg],[data-act],[data-tabs],[data-role],[data-tog]");if(!t)return;const d=t.dataset;
   if(d.step!==undefined)return goStep(+d.step);
-  if(d.fo){S.fo=d.fo;return render(true)}
-  if(d.fp){S.fp=d.fp;return render(true)}
-  if(d.lib){S.lib=d.lib;S.v="home";S.i=d.lib==="obj"?0:1;return render(true)}
-  if(d.obj){S.open=d.obj;S.v="obj";S.i=S.mine.includes(d.obj)?3:2;S.added=false;return render()}
-  if(d.prog){S.prog=d.prog;S.v="prog";S.i=4;return render()}
-  if(d.back){S.v=S.role==="coach"?"coach":"home";S.i=S.role==="coach"?6:(S.lib==="obj"?0:1);return render()}
-  if(d.way){S.way=d.way;return render(true)}
-  if(d.add&&S.mine.length<3){S.mine.push(d.add);S.i=3;return render(true)}
+  if(d.tabs){S.tabs=+d.tabs;return render(true)}
+  if(d.mode){S.mode=d.mode;return render(true)}
+  if(d.role){S.role=d.role;return render(true)}
+  if(d.home){S.v="home";S.sheet=null;return render()}
+  if(d.seg){S.v="home";S.seg=d.seg;S.sheet=null;return render(true,420)}
+  if(d.obj){S.v="obj";S.open=d.obj;S.sheet=null;return render()}
+  if(d.prog){S.v="prog";S.prog=d.prog;S.sheet=null;return render()}
+  if(d.tog){S.follow[d.tog]=S.follow[d.tog]===false;return render(true)}
+  if(d.act==="gen"){if(S.v!=="obj"){S.v="obj";S.open="fs"}S.sheet="gen";return render(true)}
+  if(d.act==="start"){if(!PROGS[S.prog].cur){S.sheet="start"}return render(true)}
+  if(d.act==="edit"){S.sheet="edit";return render(true)}
+  if(d.act==="pf"){S.day=1;return render(true)}
+  if(d.act==="done"){S.day=2;S.sheet="streak";return render(true)}
+  if(d.act==="streak"){S.sheet="streak";return render(true)}
+  if(d.act==="rewards"){S.sheet="rewards";return render(true)}
+  if(d.act==="onbpanel"){S.sheet="onbpanel";return render(true)}
+  if(d.act==="change"){S.sheet="change";return render(true)}
+  if(d.act==="create"){S.sheet="create";return render(true)}
+  if(d.act==="import"){S.sheet="imported";if(!S.made.length)S.made.push("imp");return render(true)}
+  if(d.act==="importok"){S.sheet=null;S.v="home";S.seg="prog";return render(true,420)}
+  if(d.act==="importdone"){S.sheet="imported";return render(true)}
+  if(d.act==="blank"){S.sheet="blank";return render(true)}
+  if(d.act==="lib"){S.sheet=null;S.v="home";S.seg="obj";return render(true,420)}
+  if(d.act==="follow"){if(S.mine.length<3&&!S.mine.includes(S.open))S.mine.push(S.open);return render(true)}
+  if(d.act==="close"){S.sheet=null;return render(true)}
 });
-{const h=location.hash.match(/^#s(\d)$/);goStep(h?+h[1]-1:0)}
+STEPS[0].go();render();
 })();
 </script>

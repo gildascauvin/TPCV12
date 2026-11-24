@@ -13,6 +13,10 @@ import type { StripCell, Lift } from "@/lib/bilan";
 import { loadCheckinContext, loadSessionContext, type TodaySession } from "@/lib/resultContext";
 import MiniBilan, { miniCard } from "@/components/physio/MiniBilan";
 import ObjectiveContribution from "@/components/objectives/ObjectiveContribution";
+import { refreshStreak, localToday, unseenRewards, markRewardsSeen, type StreakPayload } from "@/lib/streakClient";
+import { WeekStrip, NextReward, RewardReveal, streakLine, recordLine } from "@/components/streak/StreakView";
+import { StreakIgnite } from "@/components/streak/Flame";
+import type { Reward } from "@/lib/streak";
 import { sessionSlides, wellnessSlides } from "@/components/physio/miniSlides";
 import { createClient } from "@/lib/supabase/client";
 
@@ -86,7 +90,26 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
   const [shown, setShown] = useState<Shown | null>(null);
   const [nav, setNav] = useState<Nav | null>(null);
   const [sport, setSport] = useState<string | null>(null);
+  /* Série du jour (P1, 24/11) : dernière page du mini bilan, une fois par jour, quand ce point forme ou
+     cette séance valide la journée. Seulement dans l'app (pas pendant l'onboarding, userId absent). */
+  const [streak, setStreak] = useState<{ s: StreakPayload; fresh: Reward[] } | null>(null);
   const router = useRouter();
+  const loadStreakFor = (date: string) => {
+    setStreak(null);
+    if (!userIdProp || date !== localToday()) return;
+    const key = "tpc_streak_slide_shown";
+    let last: string | null = null;
+    try { last = localStorage.getItem(key); } catch { /* stockage indisponible */ }
+    if (last === date) return;
+    refreshStreak().then(st => {
+      if (!st?.enabled || !st.todayState.validated) return;
+      try { localStorage.setItem(key, date); } catch { /* idem */ }
+      const fresh = unseenRewards(st);
+      markRewardsSeen(fresh.map(r => r.key));
+      setStreak({ s: st, fresh });
+      posthog.capture("streak_slide_added", { current: st.current, kind: st.todayState.kind });
+    });
+  };
 
   /* Sport du sportif : la photo des slides séance (même image que son onboarding et son bilan). */
   const sportFor = useRef<string | null>(null);
@@ -115,6 +138,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
         setNav(null);
         const workout = data ? matchWorkout({ date: detail.date, duration: detail.duration }, data.workouts) : null;
         setShown({ kind: "session", detail, result, summary, session: ctx?.session ?? null, week: ctx?.week ?? [], before: ctx?.before ?? [], workout });
+        loadStreakFor(detail.date);
         posthog.capture("session_result_shown", { rows: summary?.rows.length ?? 0, heart: result ? (result.kind === "ok" ? result.verdict : "calibrating") : null });
         if (result) posthog.capture("physio_reveal_shown", { kind: "session", result: result.kind === "ok" ? result.verdict : "calibrating" });
       } else {
@@ -127,6 +151,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
         if (!verdict && !checkin) return;
         setNav(null);
         setShown({ kind: "wellness", date: detail.date, verdict, checkin, row: ctx?.today ?? null, history: ctx?.history ?? [], todaySession: ctx?.todaySession ?? null, restDay: ctx?.restDay ?? false, health: data?.health ?? [] });
+        loadStreakFor(detail.date);
         posthog.capture("checkin_result_shown", { day: checkin?.day ?? null, relative: checkin?.relative ?? null, physio: verdict?.kind ?? null });
         if (verdict) posthog.capture("physio_reveal_shown", { kind: "wellness", result: verdict.kind });
       }
@@ -231,6 +256,23 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
         extras: shown.summary || shown.session ? <>{shown.summary && <SessionExtras r={shown.summary} onCorrect={correct} />}{shown.session && <ObjectiveContribution session={shown.session} sport={sport} />}</> : null,
         recal: shown.recal ? <RecalNote recal={shown.recal} onUndo={undoRecal} /> : null,
       }, sport);
+  if (streak && !nav && slides.length) {
+    const st = streak.s;
+    slides.push({
+      key: "serie", kicker: "TA SÉRIE", photo: "recup", sportPhoto: null,
+      backdrop: <div aria-hidden style={{ position: "absolute", inset: 0, background: "radial-gradient(90% 55% at 50% 30%, rgba(232,70,10,.32), rgba(7,10,13,0) 70%), #070a0d" }} />,
+      hero: { big: st.current, cap: "d'affilée", color: "#ff8a55" },
+      heroNode: <StreakIgnite to={st.current} />,
+      sub: streakLine(st) ? <span style={{ display: "block", textAlign: "center" }}>{streakLine(st)}</span> : undefined,
+      body: (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <WeekStrip s={st} />
+          <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.55)", textAlign: "center" }}>{recordLine(st)}</div>
+          {streak.fresh[0] ? <RewardReveal r={streak.fresh[0]} /> : st.next && <NextReward r={st.next} />}
+        </div>
+      ),
+    });
+  }
   if (!slides.length) return null;
   const toToday = shown.kind === "wellness" && slides[slides.length - 1].key === "seance";
   const editBtn = canEdit ? (

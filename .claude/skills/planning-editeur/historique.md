@@ -937,3 +937,6 @@ Pourquoi : Gildas veut que la valeur reste visible même sans programme (« le p
 
 ## 2026-11-24 — Objectifs côté coach (tous les sportifs) et sandbox
 Pourquoi : Gildas veut la même page Objectifs partout. Un sportif sans compte n'a pas de user_id, d'où `objectives.coach_athlete_id` (migration 050) plutôt qu'une table à part : une seule table, un seul calcul. La sandbox montre un objectif atteint et un en cours pour que la récompense se voie dès la démo.
+
+## 2026-11-24 — Série du jour (P1) déployée
+Pourquoi : Gildas veut une récompense quotidienne façon Opal qui fasse revenir, sans surcharger l'écran, et où le cœur du produit compte (une séance allégée valide la journée, un repos conseillé la sauve). Choix : la checklist d'onboarding du sportif fusionne dans la série (ses étapes = premières récompenses), puce 🔥 au même endroit, panneau en feuille du bas, série en dernière page du mini bilan une fois par jour ; oubli = série à zéro sans joker (« au plus simple »), record gardé ; pas d'estimation chiffrée, pas d'anneau (réservé à la décision) ; icônes dans la charte du logo. Symbole alternatif « niveau à bulle / dans l'axe » proposé, non retenu pour l'instant.
