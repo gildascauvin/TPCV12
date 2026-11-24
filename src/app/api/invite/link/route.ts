@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { migratePlaceholderObjectives } from "@/lib/migratePlaceholderObjectives";
 import { migratePlaceholderSessions } from "@/lib/migratePlaceholderSessions";
 import { notifyAthleteJoined } from "@/lib/pushSend";
 
@@ -69,8 +70,10 @@ export async function POST() {
       // coach avant l'inscription (voir migratePlaceholderSessions.ts) — ne supprime plus tout sans
       // distinction (bug corrigé le 2026-09-16).
       placeholder ? migratePlaceholderSessions(admin, placeholder.id, user.id) : Promise.resolve({ ok: true }),
+      // Objectifs fixés par le coach avant l'inscription : passent sur son compte (24/11/2026).
+      placeholder ? migratePlaceholderObjectives(admin, placeholder.id, user.id) : Promise.resolve({ ok: true }),
     ]);
-    const labels = ["profiles.invited_by_coach_id", "coach_invites.status", "coach_athletes", "coach_sessions migration"];
+    const labels = ["profiles.invited_by_coach_id", "coach_invites.status", "coach_athletes", "coach_sessions migration", "objectives migration"];
     const failed = results
       .map((r, i) => {
         const error = r && typeof r === "object" && "error" in r ? r.error : null;

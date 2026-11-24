@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { migratePlaceholderObjectives } from "@/lib/migratePlaceholderObjectives";
 import { migratePlaceholderSessions } from "@/lib/migratePlaceholderSessions";
 import { notifyAthleteJoined } from "@/lib/pushSend";
 
@@ -58,6 +59,8 @@ export async function POST(request: Request) {
     // coach avant l'inscription (voir migratePlaceholderSessions.ts) — ne supprime plus tout sans
     // distinction (bug corrigé le 2026-09-16).
     placeholder ? migratePlaceholderSessions(admin, placeholder.id, user.id) : Promise.resolve({ ok: true }),
+    // Objectifs fixés par le coach avant l'inscription : passent sur son compte (24/11/2026).
+    placeholder ? migratePlaceholderObjectives(admin, placeholder.id, user.id) : Promise.resolve({ ok: true }),
   ]);
 
   await notifyAthleteJoined(admin, coachId, user.id, athleteProfile?.name ?? null);

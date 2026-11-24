@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { migratePlaceholderObjectives } from "@/lib/migratePlaceholderObjectives";
 
 /* Objectifs d'un sportif vus et fixés par son coach (23/11/2026). Table `objectives` en RLS propriétaire :
    le coach passe par ici (client admin après vérification du lien coach_athletes), comme /api/coach/checkin.
@@ -16,6 +17,8 @@ async function linkFor(athleteId: unknown) {
   if (!link) return { error: Response.json({ error: "Sportif introuvable" }, { status: 404 }) };
   /* Sportif inscrit : objectifs sur son compte (il les voit). Sans compte : sur sa fiche coach (24/11). */
   const athleteUserId = (link.user_id as string | null) ?? null;
+  /* Filet : objectifs restés sur la fiche d'un sportif inscrit depuis (liaison antérieure au transfert). */
+  if (athleteUserId) await migratePlaceholderObjectives(createAdminClient(), link.id as string, athleteUserId);
   const owner = athleteUserId ? { col: "user_id", val: athleteUserId } : { col: "coach_athlete_id", val: link.id as string };
   return { coachId: user.id, athleteUserId, coachAthleteId: link.id as string, owner };
 }
