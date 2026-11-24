@@ -7,6 +7,7 @@ import { SPORT_CATEGORIES, EXTRA_CATEGORIES, OTHER_CATEGORY, programSportEmoji }
 import { programCover } from "@/lib/programCovers";
 import { sportShortLabel, DEFAULT_SHORT_LABEL } from "@/lib/sportShortLabel";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useFollowedObjectives } from "@/lib/objectivesClient";
 
 /* Page Programmes façon boutique (2026-10-03/04, POC poc-programme-header-v3.html) : création en
    premier, mes programmes, "Pour toi" (sport de l'utilisateur, masqué s'il est inconnu), puis tous
@@ -176,8 +177,27 @@ export function loadLibrary(): Promise<LibraryProgram[]> {
 }
 
 /* ─── Modèles : "Pour toi" + tous les modèles ─── */
+/* Tags « ce qu'il sert » sous un programme (P2, 24/11, comme le POC) : 🎯 et plein orange pour tes objectifs. */
+export function ServeTag({ label, mine = false, light = false }: { label: string; mine?: boolean; light?: boolean }) {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", fontSize: 11, fontWeight: 800, lineHeight: 1, padding: "4px 8px", borderRadius: 999, whiteSpace: "nowrap",
+      background: mine ? "#d44000" : light ? "rgba(255,138,85,.22)" : "rgba(212,64,0,.1)", color: mine ? "#fff" : light ? "#ffd2bd" : "#b33a00",
+    }}>{mine ? "🎯 " : ""}{label}</span>
+  );
+}
+function ServeTags({ p, mine, light = false }: { p: LibraryProgram; mine: string[] | null; light?: boolean }) {
+  if (!p.serves?.length) return null;
+  return (
+    <span style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+      {p.serves.map(s => <ServeTag key={s.metric} label={s.label} mine={!!mine?.includes(`metric:${s.metric}`)} light={light} />)}
+    </span>
+  );
+}
+
 export function TemplateSections({ userSport, onSelect }: { userSport?: string | null; onSelect: (p: LibraryProgram) => void }) {
   const { isMd } = useBreakpoint();
+  const mine = useFollowedObjectives();
   const [programs, setPrograms] = useState<LibraryProgram[] | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -212,7 +232,7 @@ export function TemplateSections({ userSport, onSelect }: { userSport?: string |
     const q = query.trim().toLowerCase();
     return programs.filter(p => {
       if (filter && categoryFor(p.sport).id !== filter) return false;
-      if (q && !p.name.toLowerCase().includes(q) && !(p.sport ?? "").toLowerCase().includes(q)) return false;
+      if (q && !p.name.toLowerCase().includes(q) && !(p.sport ?? "").toLowerCase().includes(q) && !(p.serves ?? []).some(s => s.label.toLowerCase().includes(q))) return false;
       return true;
     });
   }, [programs, filter, query]);
@@ -241,6 +261,7 @@ export function TemplateSections({ userSport, onSelect }: { userSport?: string |
                       <span style={metaChip}>{p.sessions_per_week} J/SEM</span>
                     </span>
                     <span style={{ display: "block", fontFamily: "var(--font-display)", fontSize: 19, fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.02em" }}>{p.name}</span>
+                    <ServeTags p={p} mine={mine} light />
                   </span>
                 </Cover>
               </button>
@@ -277,6 +298,7 @@ export function TemplateSections({ userSport, onSelect }: { userSport?: string |
                 </Cover>
                 <span style={{ display: "block", fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, color: "#171b1f", lineHeight: 1.25 }}>{p.name}</span>
                 <span style={{ display: "block", fontSize: 11.5, color: "#8a8f94", marginTop: 2 }}>{categoryFor(p.sport).icon} {categoryFor(p.sport).id}</span>
+                <ServeTags p={p} mine={mine} />
               </button>
             ))}
           </div>

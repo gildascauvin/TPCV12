@@ -20,17 +20,20 @@ import type { SubscriptionStatus } from "@/types";
 // étape d'attente avant même de pouvoir afficher les tests.
 import TestsPanel from "@/components/tests/TestsPanel";
 import ObjectivesHub from "@/components/objectives/ObjectivesHub";
+import type { MetricKey } from "@/lib/testNorms";
 import type { ObjectiveData, ObjectiveItem } from "@/lib/objectives";
 const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
 const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 
-export default function ConseilsClient({ subscriptionStatus, hasActiveCoach, userId, sandboxMode = false, sport = null, sexe = null, poidsKg = null, testsFixture, exampleTests, initialTests, objectives }: { subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; userId?: string; sandboxMode?: boolean; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null; testsFixture?: { merged: MergedTest[]; results: TestResultRow[] }; exampleTests?: { merged: MergedTest[]; results: TestResultRow[]; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null }; initialTests?: { ownTests: TestRow[]; ownResults: TestResultRow[]; strengthReps: StrengthRepRow[] }; objectives?: { initial: ObjectiveItem[]; weak: string[] | null; goal: string | null; data: ObjectiveData } }) {
+export default function ConseilsClient({ subscriptionStatus, hasActiveCoach, userId, sandboxMode = false, sport = null, sexe = null, poidsKg = null, testsFixture, exampleTests, initialTests, objectives, openMetric = null }: { subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; userId?: string; sandboxMode?: boolean; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null; testsFixture?: { merged: MergedTest[]; results: TestResultRow[] }; exampleTests?: { merged: MergedTest[]; results: TestResultRow[]; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null }; initialTests?: { ownTests: TestRow[]; ownResults: TestResultRow[]; strengthReps: StrengthRepRow[] }; objectives?: { initial: ObjectiveItem[]; weak: string[] | null; goal: string | null; data: ObjectiveData }; openMetric?: string | null }) {
   const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
   // Exemple affiché tant qu'aucun test n'est loggué ; "Ajouter mon 1er test" bascule sur le vrai panneau.
-  const [showExample, setShowExample] = useState(!!exampleTests);
+  /* Pas d'exemple dès qu'un objectif est suivi : la fiche mélangeait les valeurs d'exemple et l'objectif réel,
+     sans moyen d'ajouter une valeur (24/11). */
+  const [showExample, setShowExample] = useState(!!exampleTests && !(objectives?.initial.length));
   const realPaywall = usePaywall(subscriptionStatus, hasActiveCoach);
   const sandboxPaywall = useSandboxGate("athlete");
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
@@ -61,7 +64,7 @@ export default function ConseilsClient({ subscriptionStatus, hasActiveCoach, use
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
       <div className="page-shell">
         {(userId || sandboxMode) && objectives ? (
-          <ObjectivesHub initial={objectives.initial} sport={sport} data={objectives.data} sexe={sexe} poidsKg={poidsKg} locked={!isActive && !sandboxMode} persist={!sandboxMode}>
+          <ObjectivesHub initial={objectives.initial} sport={sport} data={objectives.data} sexe={sexe} poidsKg={poidsKg} locked={!isActive && !sandboxMode} persist={!sandboxMode} initialOpenMetric={(openMetric as MetricKey | null) ?? null}>
             {api => sandboxMode && testsFixture ? (
               <TestsPanel
                 layout="objectives" objectives={api}

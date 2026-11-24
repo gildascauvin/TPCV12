@@ -119,7 +119,7 @@ function RewardCard({ index, photo, label, current, target, hint, pct, gain, day
 /* Courbe de l'objectif : toutes les valeurs + le tracé jusqu'à la cible. */
 function Curve({ p, deadline }: { p: ObjectiveProgress; deadline: string }) {
   const W = 330, H = 160, pad = { l: 36, r: 14, t: 12, b: 22 };
-  if (!p.points.length) return <div style={{ fontSize: 13.5, color: "rgba(255,255,255,.55)", padding: "22px 4px" }}>Ajoute ta première valeur : la courbe démarre ici.</div>;
+  if (!p.points.length) return null; // sans valeur : pas de courbe vide, le bouton « Renseigne ton 1er test » suit
   const last = p.points[p.points.length - 1];
   const t0 = Date.parse(p.points[0].date), t1 = Math.max(Date.parse(deadline), Date.parse(last.date) + 86400000);
   const x = (iso: string) => pad.l + ((Date.parse(iso) - t0) / ((t1 - t0) || 1)) * (W - pad.l - pad.r);
@@ -240,6 +240,7 @@ export default function ObjectivesHub({ initial, sport, data, sexe = null, poids
   /* Courbe de l'objectif (toutes les valeurs + tracé jusqu'à la cible), sous l'en-tête de la fiche. */
   const objectiveBlock = (d: ObjectiveDef) => {
     const it = itemFor(d.id), p = measure(d);
+    if (!p.points.length) return null;
     return (
       <div style={{ borderRadius: 20, padding: "12px 10px 8px", background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)" }}>
         <Curve p={p} deadline={it.deadline} />
@@ -262,6 +263,7 @@ export default function ObjectivesHub({ initial, sport, data, sexe = null, poids
 
   const api: TestsObjectivesAdapter = {
     isFollowed: m => items.some(i => i.id === metricId(m)),
+    followedMetrics: items.filter(i => i.id.startsWith("metric:")).map(i => i.id.slice(7) as MetricKey),
     canFollow: items.length < MAX_OBJECTIVES,
     onFollow: m => { const d = defById(metricId(m), sport); if (d) follow(d); },
     onUnfollow: m => unfollow(metricId(m)),

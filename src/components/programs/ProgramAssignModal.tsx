@@ -1,5 +1,6 @@
 "use client";
 
+import { notifyProgramStarted } from "@/components/objectives/FollowProgramObjectives";
 import { useState } from "react";
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import type { CoachAthlete } from "@/types";
@@ -110,7 +111,7 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
           return;
         }
         setSuccess(true);
-        notifyOnboardingProgressSoon(0); setTimeout(() => { onAssigned(); onClose(); }, 1400);
+        notifyOnboardingProgressSoon(0); setTimeout(() => { onAssigned(); onClose(); notifyProgramStarted(programId); }, 1400);
         return;
       }
 

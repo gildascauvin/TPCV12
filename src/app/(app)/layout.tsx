@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import BottomNav from "@/components/layout/BottomNav";
@@ -7,6 +8,7 @@ import LiveSessionHost from "@/components/sessions/LiveSessionHost";
 import { coachIsPaying } from "@/lib/access";
 import InviteHost from "@/components/coach/InviteHost";
 import PhysioRevealHost from "@/components/physio/PhysioRevealHost";
+import FollowProgramObjectives from "@/components/objectives/FollowProgramObjectives";
 import CoachResultHost from "@/components/coach/CoachResultHost";
 import ToastHost from "@/components/layout/ToastHost";
 import PointFormeGate from "@/components/layout/PointFormeGate";
@@ -51,6 +53,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {role === "coach" && <CoachResultHost />}
       {role === "athlete" && <PhysioRevealHost userId={user.id} />}
       {role === "athlete" && <PointFormeGate userId={user.id} />}
+      {role === "athlete" && <Suspense fallback={null}><FollowProgramObjectives /></Suspense>}
       {role === "athlete" && <LiveSessionHost userId={user.id} elite={elite} userName={(profile as { name?: string | null } | null)?.name ?? "Toi"} />}
     </div>
   );

@@ -6,6 +6,9 @@ import type { ProgramTemplate } from "@/types";
 import { Cover } from "./ProgramStoreSections";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
+import { programServes } from "@/lib/programServes";
+import ServeObjectiveCards from "@/components/objectives/ServeObjectiveCards";
+import { ServeTag } from "./ProgramStoreSections";
 
 /* Fiche d'un modèle de programme (2026-10-03, V2 de la page Programmes, POC
    poc-programme-header-v3.html) : comme une page produit — photo, ce que ça change, la
@@ -56,6 +59,8 @@ export default function ProgramTemplateDetail({ program: p, role, onBack, onStar
   }, [p.id]);
 
   const weeks = useMemo(() => template?.weeks ?? [], [template]);
+  /* « Il sert » (P2, 24/11) : ce que le programme travaille, tes objectifs suivis marqués 🎯. */
+  const serves = useMemo(() => programServes(template), [template]);
   const totalSessions = useMemo(() => weeks.reduce((t, w) => t + DAYS.reduce((u, d) => u + (w[d]?.length ?? 0), 0), 0), [weeks]);
   const trainingDays = useMemo(() => DAYS.filter(d => (weeks[0]?.[d]?.length ?? 0) > 0), [weeks]);
   const level = p.level ? LEVEL_LABELS[p.level] : null;
@@ -122,6 +127,15 @@ export default function ProgramTemplateDetail({ program: p, role, onBack, onStar
             <p style={{ fontSize: 14, color: "#4a5057", lineHeight: 1.55, margin: "10px 0 0" }}>
               Chaque séance s'ajuste à {coach ? "la forme du sportif" : "ta forme"} du jour après le point forme.
             </p>
+          )}
+
+          {serves.length > 0 && (
+            <>
+              <h2 style={h2}>Il sert</h2>
+              {coach ? (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{serves.map(sv => <ServeTag key={sv.metric} label={sv.label} />)}</div>
+              ) : <ServeObjectiveCards serves={serves} weeks={p.weeks_count} />}
+            </>
           )}
 
           <h2 style={h2}>{coach ? "Ce que ça change pour tes sportifs" : "Ce que ça change pour toi"}</h2>

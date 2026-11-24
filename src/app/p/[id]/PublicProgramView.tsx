@@ -131,8 +131,10 @@ export default function PublicProgramView({ program, coachName }: Props) {
           is_embedded: isEmbedded,
         });
         setClaimed(true);
+        const claimedId = ((await res.json().catch(() => ({}))) as { programId?: string }).programId;
         setTimeout(() => {
-          const dest = userMode === "coach" ? "/coach/planning" : "/today";
+          /* Sportif : l'app propose ensuite de suivre les objectifs que ce programme sert (P2, 24/11). */
+          const dest = userMode === "coach" ? "/coach/planning" : `/today${claimedId ? `?suivre=${claimedId}` : ""}`;
           if (isEmbedded) window.open(dest, "_blank");
           else window.location.href = dest;
         }, 1200);

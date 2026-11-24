@@ -1,4 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { programServes, serveLine } from "@/lib/programServes";
+import type { ProgramTemplate } from "@/types";
 
 /* Bibliothèque publique complète (2026-09-04) — remplace le lien externe vers la page WordPress
    "Utiliser un modèle" du picker de création (ProgramCreatePicker.tsx) : au lieu d'ouvrir un nouvel
@@ -33,10 +35,12 @@ export async function GET() {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("programs")
-    .select("id, name, sport, level, focus, weeks_count, sessions_per_week, created_at")
+    .select("id, name, sport, level, focus, weeks_count, sessions_per_week, created_at, template")
     .eq("is_official_template", true)
     .order("name", { ascending: true });
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
-  return Response.json({ programs: data ?? [] });
+  /* « Il sert » (P2, 24/11) : calculé ici depuis le contenu, puis le contenu est retiré de la réponse. */
+  const programs = (data ?? []).map(({ template, ...p }) => ({ ...p, serves: programServes(template as ProgramTemplate).map(s => ({ metric: s.metric, label: s.label, line: serveLine(s) })) }));
+  return Response.json({ programs });
 }

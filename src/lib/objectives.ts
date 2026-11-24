@@ -229,7 +229,7 @@ export function measureObjective(def: ObjectiveDef, state: ObjectivesState, d: O
     const before = all.filter(p => p.date <= state.start);
     const startPt = before[before.length - 1] ?? all.find(p => p.date > state.start) ?? null;
     const unit = METRIC_DISPLAY[m.metric]?.unit ?? "";
-    if (!startPt) return { ...base, unit, lowerIsBetter: lower, emptyHint: `Départ à ton 1er test : ${METRIC_DISPLAY[m.metric]?.name ?? def.label}.` };
+    if (!startPt) return { ...base, unit, lowerIsBetter: lower, emptyHint: "Renseigne ton 1er test" };
     const start = startPt.value;
     const gain = m.gainAbs ?? start * (m.gainPct ?? 0) / 100;
     const target = lower ? start - gain : start + gain;

@@ -105,6 +105,7 @@ function movementEmoji(metric: MetricKey | undefined, fallbackQualities?: Qualit
 
 // Dark (2026-09, suite) — la liste de tests vit désormais dans la carte "Recommandations" (fond
 // sombre), recolorée en conséquence.
+const INPUT_LIGHT = { width: "100%", background: "#f7f6f4", border: "1px solid rgba(0,0,0,.12)", borderRadius: 12, padding: "12px 12px", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const, color: "#171b1f" };
 const INPUT_STYLE = { width: "100%", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.18)", borderRadius: 12, padding: "9px 10px", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const, color: "#fff" };
 
 function sexeLabel(s: Sexe): string { return s === "homme" ? "Homme" : s === "femme" ? "Femme" : "Sexe non renseigné"; }
@@ -522,6 +523,41 @@ function RowMenu({ mergeSuggestions, onMerge, onDeleteWhole }: {
    `comparisons` est fourni (sinon carte "brute", sans interprétation — cas d'un test hors des
    normes connues, toujours affiché mais sans jugement forces/faiblesses). Toujours visible en
    entier, jamais un détail caché derrière une sélection préalable. */
+/* Feuille du bas sombre (onglet Objectifs, 24/11) : portail dans <body> (le conteneur animé de la page casse
+   position:fixed), Échap ferme, le fond ne défile pas. */
+function BottomSheet({ title, subtitle, onClose, children, dark = false }: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode; dark?: boolean }) {
+  /* Thème de l'app : feuille blanche (CLAUDE.md, modales #fff). `dark` : « Comment on te compare » (Gildas). */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
+  }, [onClose]);
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 2147483190, background: "rgba(4,6,8,.55)" }} />
+      <div role="dialog" aria-modal="true" aria-label={title} style={{
+        position: "fixed", left: "50%", bottom: 0, transform: "translateX(-50%)", zIndex: 2147483195, width: "min(560px, 100vw)", maxHeight: "88dvh", overflowY: "auto",
+        background: dark ? "#1a1f24" : "#fff", color: dark ? "#fff" : "#171b1f", borderRadius: "28px 28px 0 0", borderTop: dark ? "1px solid rgba(255,255,255,.14)" : "none",
+        padding: "10px 20px calc(24px + env(safe-area-inset-bottom, 0px))", boxShadow: "0 -20px 50px rgba(0,0,0,.55)", animation: "sheetInUp .32s cubic-bezier(.32,.72,0,1)",
+      }}>
+        <div aria-hidden style={{ width: 38, height: 4, borderRadius: 4, background: dark ? "rgba(255,255,255,.22)" : "rgba(0,0,0,.14)", margin: "0 auto 12px" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+          <div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em" }}>{title}</div>
+            {subtitle && <div style={{ fontSize: 13, color: dark ? "rgba(255,255,255,.6)" : "#62686e", marginTop: 2 }}>{subtitle}</div>}
+          </div>
+          <button type="button" onClick={onClose} aria-label="Fermer" style={{ border: 0, background: dark ? "rgba(255,255,255,.08)" : "rgba(0,0,0,.06)", color: dark ? "#fff" : "#171b1f", width: 34, height: 34, borderRadius: "50%", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>×</button>
+        </div>
+        {children}
+      </div>
+    </>,
+    document.body,
+  );
+}
+
 function TestCard({ hideChart = false, contextLast = false, title, unit, results, comparisons, onAdd, onAddNew, onAddPair, readOnly, batteryInfo, onDeleteResult, metric, sscProfile, secondaryByDate, ftctInfo, repEntries, onAddRepEntry, onDeleteRepEntry, initialOpen, analysisLocked = false, exampleNote, projectedDate }: {
   /** Prochain test (ISO) : un 1er résultat montre déjà sa courbe avec le point à venir en pointillés. */
   projectedDate?: string;
@@ -591,6 +627,11 @@ function TestCard({ hideChart = false, contextLast = false, title, unit, results
   initialOpen?: boolean;
 }) {
   const [open, setOpen] = useState(!!initialOpen);
+  const [infoOpen, setInfoOpen] = useState(false);
+  /* Fiche de l'onglet Objectifs : l'ajout d'un résultat se fait dans une feuille du bas (24/11, Gildas). */
+  const asSheet = (node: React.ReactNode) => contextLast
+    ? <BottomSheet title={results.length ? "Ajouter un résultat" : "Ton 1er test"} subtitle={title} onClose={() => setOpen(false)}>{node}</BottomSheet>
+    : node;
   const [value, setValue] = useState("");
   const [contactValue, setContactValue] = useState("");
   const [newUnit, setNewUnit] = useState<string>("kg");
@@ -813,15 +854,21 @@ function TestCard({ hideChart = false, contextLast = false, title, unit, results
         </div>
       )}
 
-      {!readOnly && (
+      {!readOnly && (contextLast ? (
+        /* Fiche de l'onglet Objectifs (24/11, Gildas) : un vrai bouton secondaire, pas un lien. */
+        <button onClick={() => setOpen(o => !o)} aria-expanded={open}
+          style={{ width: "100%", height: 48, marginTop: 14, borderRadius: 14, border: "1.5px solid rgba(255,255,255,.35)", background: open ? "rgba(255,255,255,.1)" : "rgba(255,255,255,.04)", color: "#fff", fontFamily: "inherit", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+          {results.length ? "＋ Ajouter un résultat" : "＋ Renseigne ton 1er test"}
+        </button>
+      ) : (
       <button onClick={() => setOpen(o => !o)} style={{ background: "none", border: "none", color: "#f04a08", fontWeight: 800, fontSize: 11.5, cursor: "pointer", padding: "10px 0 0" }}>
         + Ajouter un résultat
       </button>
-      )}
-      {!readOnly && open && (
-        <div style={{ marginTop: 9, paddingTop: 10, borderTop: "1px dashed rgba(255,255,255,.12)" }}>
+      ))}
+      {!readOnly && open && asSheet(
+        <div style={{ marginTop: 9, paddingTop: 10, borderTop: contextLast ? "none" : "1px dashed rgba(255,255,255,.12)" }}>
           {sameJumpNote && (
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", lineHeight: 1.4, marginBottom: 9 }}>{sameJumpNote}</div>
+            <div style={{ fontSize: 11, color: contextLast ? "#62686e" : "rgba(255,255,255,.55)", lineHeight: 1.4, marginBottom: 9 }}>{sameJumpNote}</div>
           )}
           {isDropJumpHeight && (
             <div style={{ display: "flex", gap: 6, marginBottom: 9 }}>
@@ -830,8 +877,8 @@ function TestCard({ hideChart = false, contextLast = false, title, unit, results
                   key={m} type="button" onClick={() => setInputMode(m)}
                   style={{
                     fontSize: 10.5, fontWeight: 700, padding: "5px 10px", borderRadius: 24, cursor: "pointer",
-                    border: inputMode === m ? "1px solid #fff" : "1px solid rgba(255,255,255,.15)",
-                    background: inputMode === m ? "#fff" : "transparent", color: inputMode === m ? "#171b1f" : "#fff",
+                    border: inputMode === m ? (contextLast ? "1px solid #171b1f" : "1px solid #fff") : (contextLast ? "1px solid rgba(0,0,0,.15)" : "1px solid rgba(255,255,255,.15)"),
+                    background: inputMode === m ? (contextLast ? "#171b1f" : "#fff") : "transparent", color: inputMode === m ? (contextLast ? "#fff" : "#171b1f") : (contextLast ? "#171b1f" : "#fff"),
                   }}
                 >
                   {m === "direct" ? "Hauteur (cm)" : "Temps de vol (ms)"}
@@ -848,8 +895,8 @@ function TestCard({ hideChart = false, contextLast = false, title, unit, results
                   key={m} type="button" onClick={() => setInputMode(m)}
                   style={{
                     fontSize: 10.5, fontWeight: 700, padding: "5px 10px", borderRadius: 24, cursor: "pointer",
-                    border: inputMode === m ? "1px solid #fff" : "1px solid rgba(255,255,255,.15)",
-                    background: inputMode === m ? "#fff" : "transparent", color: inputMode === m ? "#171b1f" : "#fff",
+                    border: inputMode === m ? (contextLast ? "1px solid #171b1f" : "1px solid #fff") : (contextLast ? "1px solid rgba(0,0,0,.15)" : "1px solid rgba(255,255,255,.15)"),
+                    background: inputMode === m ? (contextLast ? "#171b1f" : "#fff") : "transparent", color: inputMode === m ? (contextLast ? "#fff" : "#171b1f") : (contextLast ? "#171b1f" : "#fff"),
                   }}
                 >
                   {m === "direct" ? "VO2max direct" : "Test Cooper (12 min)"}
@@ -864,8 +911,8 @@ function TestCard({ hideChart = false, contextLast = false, title, unit, results
                   key={m} type="button" onClick={() => setInputMode(m)}
                   style={{
                     fontSize: 10.5, fontWeight: 700, padding: "5px 10px", borderRadius: 24, cursor: "pointer",
-                    border: inputMode === m ? "1px solid #fff" : "1px solid rgba(255,255,255,.15)",
-                    background: inputMode === m ? "#fff" : "transparent", color: inputMode === m ? "#171b1f" : "#fff",
+                    border: inputMode === m ? (contextLast ? "1px solid #171b1f" : "1px solid #fff") : (contextLast ? "1px solid rgba(0,0,0,.15)" : "1px solid rgba(255,255,255,.15)"),
+                    background: inputMode === m ? (contextLast ? "#171b1f" : "#fff") : "transparent", color: inputMode === m ? (contextLast ? "#fff" : "#171b1f") : (contextLast ? "#171b1f" : "#fff"),
                   }}
                 >
                   {m === "direct" ? "VMA directe" : "Demi-Cooper (6 min)"}
@@ -875,7 +922,7 @@ function TestCard({ hideChart = false, contextLast = false, title, unit, results
           )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div style={{ flex: 1, minWidth: 90 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.55)", marginBottom: 4 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: contextLast ? "#62686e" : "rgba(255,255,255,.55)", marginBottom: 4 }}>
                 {isDropJumpHeight && inputMode === "flight" ? "Temps de vol (ms)"
                   : (isVo2max && inputMode === "cooper") || (isVma && inputMode === "demiCooper") ? "Distance parcourue (m)"
                   : onAddPair ? "Hauteur (cm)" : onAddNew ? "Résultat" : `Résultat (${unit})`}
@@ -883,53 +930,63 @@ function TestCard({ hideChart = false, contextLast = false, title, unit, results
               <input
                 type="number"
                 step={isDropJumpHeight ? (inputMode === "flight" ? "1" : "0.1") : (isVo2max && inputMode === "cooper") || (isVma && inputMode === "demiCooper") ? "1" : "0.01"}
-                value={value} onChange={e => setValue(e.target.value)} style={{ ...INPUT_STYLE, fontSize: 14 }}
+                value={value} onChange={e => setValue(e.target.value)} style={{ ...(contextLast ? INPUT_LIGHT : INPUT_STYLE), fontSize: 14 }}
               />
               {flightPreview != null && (
-                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.5)", marginTop: 4 }}>≈ {frNum(formatDropJumpHeightCm(heightFromFlightTime(flightPreview / 1000)))}</div>
+                <div style={{ fontSize: 10.5, color: contextLast ? "#8a8f94" : "rgba(255,255,255,.5)", marginTop: 4 }}>≈ {frNum(formatDropJumpHeightCm(heightFromFlightTime(flightPreview / 1000)))}</div>
               )}
               {cooperPreview != null && (
-                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.5)", marginTop: 4 }}>≈ {frNum(vo2maxFromCooperDistance(cooperPreview).toFixed(1))} ml/kg/min</div>
+                <div style={{ fontSize: 10.5, color: contextLast ? "#8a8f94" : "rgba(255,255,255,.5)", marginTop: 4 }}>≈ {frNum(vo2maxFromCooperDistance(cooperPreview).toFixed(1))} ml/kg/min</div>
               )}
               {demiCooperPreview != null && (
-                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.5)", marginTop: 4 }}>≈ {frNum(vmaFromDemiCooperDistance(demiCooperPreview).toFixed(1))} km/h</div>
+                <div style={{ fontSize: 10.5, color: contextLast ? "#8a8f94" : "rgba(255,255,255,.5)", marginTop: 4 }}>≈ {frNum(vmaFromDemiCooperDistance(demiCooperPreview).toFixed(1))} km/h</div>
               )}
             </div>
             {onAddNew && (
               <div style={{ flexShrink: 0, minWidth: 80 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.55)", marginBottom: 4 }}>Unité</div>
-                <select value={newUnit} onChange={e => setNewUnit(e.target.value)} style={{ ...INPUT_STYLE, fontSize: 14, height: 36 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: contextLast ? "#62686e" : "rgba(255,255,255,.55)", marginBottom: 4 }}>Unité</div>
+                <select value={newUnit} onChange={e => setNewUnit(e.target.value)} style={{ ...(contextLast ? INPUT_LIGHT : INPUT_STYLE), fontSize: 14, height: 36 }}>
                   {TEST_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
               </div>
             )}
             {onAddPair && (
               <div style={{ flex: 1, minWidth: 90 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.55)", marginBottom: 4 }}>Temps de contact (ms)</div>
-                <input type="number" step="1" value={contactValue} onChange={e => setContactValue(e.target.value)} style={{ ...INPUT_STYLE, fontSize: 14 }} />
+                <div style={{ fontSize: 10, fontWeight: 700, color: contextLast ? "#62686e" : "rgba(255,255,255,.55)", marginBottom: 4 }}>Temps de contact (ms)</div>
+                <input type="number" step="1" value={contactValue} onChange={e => setContactValue(e.target.value)} style={{ ...(contextLast ? INPUT_LIGHT : INPUT_STYLE), fontSize: 14 }} />
               </div>
             )}
             {onAddRepEntry && (
               <div style={{ flexShrink: 0, minWidth: 70 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.55)", marginBottom: 4 }}>Nbr de reps</div>
-                <input type="number" step="1" min="1" placeholder="1" value={repsCount} onChange={e => setRepsCount(e.target.value)} style={{ ...INPUT_STYLE, fontSize: 14 }} />
+                <div style={{ fontSize: 10, fontWeight: 700, color: contextLast ? "#62686e" : "rgba(255,255,255,.55)", marginBottom: 4 }}>Nbr de reps</div>
+                <input type="number" step="1" min="1" placeholder="1" value={repsCount} onChange={e => setRepsCount(e.target.value)} style={{ ...(contextLast ? INPUT_LIGHT : INPUT_STYLE), fontSize: 14 }} />
               </div>
             )}
             <div style={{ flex: 1, minWidth: 120 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.55)", marginBottom: 4 }}>Date</div>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...INPUT_STYLE, fontSize: 13 }} />
+              <div style={{ fontSize: 10, fontWeight: 700, color: contextLast ? "#62686e" : "rgba(255,255,255,.55)", marginBottom: 4 }}>Date</div>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...(contextLast ? INPUT_LIGHT : INPUT_STYLE), fontSize: 13 }} />
             </div>
+            {!contextLast && (
             <button
               onClick={handleSave} disabled={saving || !value.trim() || (!!onAddPair && !contactValue.trim())}
               style={{ height: 36, padding: "0 16px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", opacity: (!value.trim() || (!!onAddPair && !contactValue.trim())) ? 0.6 : 1 }}
             >
               {saving ? "..." : "Enregistrer"}
             </button>
+            )}
           </div>
           {onAddRepEntry && (
-            <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.5)", marginTop: 6, lineHeight: 1.4 }}>
+            <div style={{ fontSize: 10.5, color: contextLast ? "#8a8f94" : "rgba(255,255,255,.5)", marginTop: 6, lineHeight: 1.4 }}>
               Laisse "Nbr de reps" vide (ou 1) pour un vrai 1RM (utilisé pour tes ratios) ; renseigne-le pour une série sous-maximale (ex. 5RM) — jamais utilisée pour tes ratios, juste informative.
             </div>
+          )}
+          {contextLast && (
+            <button
+              onClick={handleSave} disabled={saving || !value.trim() || (!!onAddPair && !contactValue.trim())}
+              style={{ width: "100%", height: 52, marginTop: 18, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontFamily: "inherit", fontSize: 15.5, fontWeight: 800, cursor: "pointer", opacity: (!value.trim() || (!!onAddPair && !contactValue.trim())) ? 0.6 : 1 }}
+            >
+              {saving ? "Enregistrement…" : "Enregistrer"}
+            </button>
           )}
         </div>
       )}
@@ -975,7 +1032,14 @@ function TestCard({ hideChart = false, contextLast = false, title, unit, results
           </div>
         );
       })()}
-      {contextLast && <div style={{ marginTop: 18 }}>{contextBlock}</div>}
+      {/* Repères, calculateur et comparaisons : intéressants mais experts (24/11, Gildas) → une ligne qui ouvre une feuille. */}
+      {contextLast && (
+        <button type="button" onClick={() => setInfoOpen(true)}
+          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", marginTop: 16, padding: "13px 14px", borderRadius: 14, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.04)", color: "rgba(255,255,255,.85)", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+          Comment on te compare <span style={{ color: "#ff8a55" }}>›</span>
+        </button>
+      )}
+      {contextLast && infoOpen && <BottomSheet dark title="Comment on te compare" onClose={() => setInfoOpen(false)}>{contextBlock}</BottomSheet>}
     </div>
   );
 }
@@ -1120,6 +1184,8 @@ function unifiedRowFromRaw(key: string, name: string, emoji: string, metric: Met
 
 export interface TestsObjectivesAdapter {
   isFollowed: (metric: MetricKey) => boolean;
+  /** Mesures des objectifs suivis : une ligne « pas encore testé » est créée si aucune n'existe (24/11). */
+  followedMetrics?: MetricKey[];
   canFollow: boolean;
   onFollow: (metric: MetricKey) => void;
   onUnfollow: (metric: MetricKey) => void;
@@ -1811,7 +1877,19 @@ export default function TestsPanel({ layout = "list", objectives, ownerId, subje
   // (priorité réelle façon bilan — "commence par ton plus gros écart"), puis les lignes neutres
   // (jamais loguées ou sans norme sourcée) à la suite, dans leur ordre d'apparition d'origine (tri
   // stable, jamais mélangées entre elles).
-  const unifiedRowsAll: UnifiedRow[] = [...interpretedRows, ...uninterpretedRows, ...recommendedRows, ...rawRows]
+  /* Objectif suivi sans aucune ligne (ex. back squat d'un sprinteur sans test) : une ligne à remplir,
+     sinon sa fiche ne s'ouvre pas et rien ne permet d'ajouter la 1re valeur (bug 24/11, compte +liv). */
+  const haveMetric = (m: MetricKey) => [...interpretedRows, ...uninterpretedRows, ...recommendedRows, ...rawRows].some(r => r.cardProps.metric === m || r.key === `insight-${m}` || r.key === `metric-${m}`);
+  const followedRows: UnifiedRow[] = (layout === "objectives" ? objectives?.followedMetrics ?? [] : []).filter(m => METRIC_DISPLAY[m] && !haveMetric(m)).map(m => {
+    const name = METRIC_DISPLAY[m].name;
+    const cardProps: TestCardProps = {
+      title: name, unit: METRIC_DISPLAY[m].unit, results: [],
+      onAdd: async () => {}, onAddNew: (v, u, d) => handleAddForNewRecommendedTest(name, v, u, d),
+      readOnly: !!fixture, onDeleteResult: handleDeleteHistoryRow, metric: m,
+    };
+    return { ...unifiedRowFromRaw(`metric-${m}`, name, movementEmoji(m), m, [], cardProps), group: groupOfMetric(m) };
+  });
+  const unifiedRowsAll: UnifiedRow[] = [...interpretedRows, ...uninterpretedRows, ...recommendedRows, ...rawRows, ...followedRows]
     .sort((a, b) => {
       if (a.score == null && b.score == null) return 0;
       if (a.score == null) return 1;
