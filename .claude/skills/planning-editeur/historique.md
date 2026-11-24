@@ -931,3 +931,6 @@ Départ : Maxime Leblois avait ajouté son échauffement et des exercices en S1 
 - Corriger un ressenti : tap sur une case faite, même jauge, la suite est rejouée depuis le prévu (`replayFeels`).
 - « Revenir au prévu » retiré : il ne touchait que les séries restantes (perçu comme « ne change que le dernier set ») et la correction du ressenti couvre les erreurs ; suivre le plan malgré le ressenti = retoucher la ligne.
 - Piège : un `next build` dans le worktree écrase le `.next` du serveur de dev (NEXT_DIST_DIR n'est pas lu) → arrêter le dev, `rm -rf .next`, relancer.
+
+## 2026-11-24 — Objectifs (les tests deviennent des objectifs)
+Pourquoi : Gildas veut que la valeur reste visible même sans programme (« le programme est le véhicule, l'objectif la destination »), inspiré d'Opal (1 à 3 règles en cartes) et d'Ahead. La plupart des objectifs sont des tests, d'où la fusion de la liste des tests et de la bibliothèque d'objectifs dans l'onglet renommé Objectifs. Choix validés : cible calculée (moins de friction), compte des séances qui travaillent l'objectif (rétroactif 4 semaines, en mots concrets « séances avec du squat »), valeur = résultats réels seulement (l'estimation reps × charge affichait plus que le record), fiche allégée (actuel → cible, barre seule, analyse gardée), cartes suivies = récompense (gain, piste, J-x). Déployé 96224d0.
