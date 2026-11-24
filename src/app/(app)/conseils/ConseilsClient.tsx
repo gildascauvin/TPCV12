@@ -60,9 +60,16 @@ export default function ConseilsClient({ subscriptionStatus, hasActiveCoach, use
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
       <div className="page-shell">
-        {userId && objectives ? (
-          <ObjectivesHub initial={objectives.initial} sport={sport} data={objectives.data} sexe={sexe} poidsKg={poidsKg} locked={!isActive && !sandboxMode}>
-            {api => showExample && exampleTests ? (
+        {(userId || sandboxMode) && objectives ? (
+          <ObjectivesHub initial={objectives.initial} sport={sport} data={objectives.data} sexe={sexe} poidsKg={poidsKg} locked={!isActive && !sandboxMode} persist={!sandboxMode}>
+            {api => sandboxMode && testsFixture ? (
+              <TestsPanel
+                layout="objectives" objectives={api}
+                ownerId="sandbox" subject={{ subjectUserId: "sandbox" }}
+                sport={sport} sexe={sexe} poidsKg={poidsKg}
+                fixture={testsFixture} onDarkPage
+              />
+            ) : showExample && exampleTests ? (
               <>
                 <TestsPanel
                   layout="objectives" objectives={api}
@@ -80,7 +87,7 @@ export default function ConseilsClient({ subscriptionStatus, hasActiveCoach, use
             ) : (
               <TestsPanel
                 layout="objectives" objectives={api}
-                ownerId={userId} subject={{ subjectUserId: userId }} mergeCoach
+                ownerId={userId ?? ""} subject={{ subjectUserId: userId ?? "" }} mergeCoach
                 initialData={initialTests}
                 sport={sport} sexe={sexe} poidsKg={poidsKg}
                 onEditProfile={() => setProfileOpen(true)}

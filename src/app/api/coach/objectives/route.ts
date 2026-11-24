@@ -13,8 +13,11 @@ async function linkFor(athleteId: unknown) {
   if (typeof athleteId !== "string") return { error: Response.json({ error: "Sportif manquant" }, { status: 400 }) };
   const { data: link, error } = await supabase.from("coach_athletes").select("id,user_id").eq("id", athleteId).eq("coach_id", user.id).maybeSingle();
   if (error) return { error: Response.json({ error: error.message }, { status: 500 }) };
-  if (!link?.user_id) return { error: Response.json({ error: "Sportif introuvable ou sans compte" }, { status: 404 }) };
-  return { coachId: user.id, athleteUserId: link.user_id as string, coachAthleteId: link.id as string };
+  if (!link) return { error: Response.json({ error: "Sportif introuvable" }, { status: 404 }) };
+  /* Sportif inscrit : objectifs sur son compte (il les voit). Sans compte : sur sa fiche coach (24/11). */
+  const athleteUserId = (link.user_id as string | null) ?? null;
+  const owner = athleteUserId ? { col: "user_id", val: athleteUserId } : { col: "coach_athlete_id", val: link.id as string };
+  return { coachId: user.id, athleteUserId, coachAthleteId: link.id as string, owner };
 }
 
 export async function GET(req: Request) {
@@ -22,13 +25,15 @@ export async function GET(req: Request) {
   if ("error" in l) return l.error;
   const admin = createAdminClient();
   const since = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10);
-  const subj = `subject_user_id.eq.${l.athleteUserId},subject_coach_athlete_id.eq.${l.coachAthleteId}`;
+  const subj = l.athleteUserId ? `subject_user_id.eq.${l.athleteUserId},subject_coach_athlete_id.eq.${l.coachAthleteId}` : `subject_coach_athlete_id.eq.${l.coachAthleteId}`;
+  const sessQ = admin.from("sessions").select("date,done,rpe,duration,name,notes").gte("date", since);
   const [objs, results, reps, sessions, profile] = await Promise.all([
-    admin.from("objectives").select("objective_id,start_date,deadline").eq("user_id", l.athleteUserId).order("created_at"),
+    admin.from("objectives").select("objective_id,start_date,deadline").eq(l.owner.col, l.owner.val).order("created_at"),
     admin.from("test_results").select("id,test_id,date,value,unit,video_url").or(subj).order("date"),
     admin.from("strength_reps").select("id,test_id,date,reps,weight").or(subj).order("date"),
-    admin.from("sessions").select("date,done,rpe,duration,name,notes").eq("user_id", l.athleteUserId).gte("date", since),
-    admin.from("profiles").select("freq_target").eq("user_id", l.athleteUserId).maybeSingle(),
+    /* Sans compte, ses séances vivent dans coach_sessions (athlete_id = fiche coach). */
+    l.athleteUserId ? sessQ.eq("user_id", l.athleteUserId) : admin.from("coach_sessions").select("date,done,rpe,duration,name,notes").eq("athlete_id", l.coachAthleteId).gte("date", since),
+    l.athleteUserId ? admin.from("profiles").select("freq_target").eq("user_id", l.athleteUserId).maybeSingle() : Promise.resolve({ data: null, error: null }),
   ]);
   const err = [objs, results, reps, sessions, profile].find(r => r.error)?.error;
   if (err) return Response.json({ error: err.message }, { status: 500 });
@@ -50,22 +55,22 @@ export async function POST(req: Request) {
     return Response.json({ error: "Objectifs invalides" }, { status: 400 });
   }
   const admin = createAdminClient();
-  const { data: current, error: readErr } = await admin.from("objectives").select("objective_id").eq("user_id", l.athleteUserId);
+  const { data: current, error: readErr } = await admin.from("objectives").select("objective_id").eq(l.owner.col, l.owner.val);
   if (readErr) return Response.json({ error: readErr.message }, { status: 500 });
   const removed = (current ?? []).map(c => c.objective_id as string).filter(id => !items.some(i => i.id === id));
   if (removed.length) {
-    const { error } = await admin.from("objectives").delete().eq("user_id", l.athleteUserId).in("objective_id", removed);
+    const { error } = await admin.from("objectives").delete().eq(l.owner.col, l.owner.val).in("objective_id", removed);
     if (error) return Response.json({ error: error.message }, { status: 500 });
   }
   /* Nouveaux objectifs : fixés par le coach (set_by). Existants : seule l'échéance change, l'auteur reste. */
   const existing = new Set((current ?? []).map(c => c.objective_id as string));
   const added = items.filter(i => !existing.has(i.id));
   if (added.length) {
-    const { error } = await admin.from("objectives").insert(added.map(i => ({ user_id: l.athleteUserId, objective_id: i.id, start_date: i.start, deadline: i.deadline, set_by: l.coachId })));
+    const { error } = await admin.from("objectives").insert(added.map(i => ({ [l.owner.col]: l.owner.val, objective_id: i.id, start_date: i.start, deadline: i.deadline, set_by: l.coachId })));
     if (error) return Response.json({ error: error.message }, { status: 500 });
   }
   for (const i of items.filter(x => existing.has(x.id))) {
-    const { error } = await admin.from("objectives").update({ deadline: i.deadline }).eq("user_id", l.athleteUserId).eq("objective_id", i.id);
+    const { error } = await admin.from("objectives").update({ deadline: i.deadline }).eq(l.owner.col, l.owner.val).eq("objective_id", i.id);
     if (error) return Response.json({ error: error.message }, { status: 500 });
   }
   return Response.json({ ok: true });

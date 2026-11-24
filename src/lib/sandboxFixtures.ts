@@ -413,3 +413,18 @@ export function buildAthleteSignatures(fixture: CoachFixture, now: Date = new Da
 
   return { signatures, trends, trendInputs, baselines, baselineSeries };
 }
+
+/* Onglet Objectifs en sandbox (24/11/2026) : 2 objectifs suivis depuis 4 semaines sur les tests factices
+   (gain visible sur les cartes), séances données ou générées. Rien n'est écrit (ObjectivesHub persist=false). */
+export function buildSandboxObjectives(fixture: { merged: MergedTest[]; results: TestResultRow[] }, sessions: { date: string; done: boolean; rpe: number | null; duration: number | null; name?: string | null; notes?: string | null }[] = [], now: Date = new Date()) {
+  const start = dstr(now, -28);
+  const tests = fixture.merged.map(m => ({ id: m.athleteTestId as string, name: m.name, name_key: m.name_key, unit: m.unit, qualities: m.qualities, owner_id: "sandbox" }));
+  const sess = sessions.length ? sessions : Array.from({ length: 12 }, (_, i) => ({ date: dstr(now, -26 + i * 2), done: true, rpe: 7, duration: 60, name: i % 2 ? "Force jambes" : "Sprint et sauts", notes: i % 2 ? "Back squat 5×3\nFront squat 4×3" : "Sprint 10m ×6\nCMJ ×5" }));
+  return {
+    initial: [
+      { id: "metric:backSquat", start, deadline: dstr(now, 28) },
+      { id: "metric:squatJumpHeight", start, deadline: dstr(now, 42) },
+    ],
+    data: { tests, results: fixture.results, strengthReps: [], sessions: sess, wellness: [], freqTarget: 4 },
+  };
+}

@@ -222,7 +222,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
       {/* Sélecteur de sportif au-dessus du header de date — voir CoachClient.tsx pour le pourquoi. */}
       <AthleteFilterBar athletes={athletes} selectedId={selectedAthleteId} onSelect={selectAthleteFilter} contentMaxWidth={contentMaxWidth} />
       <CalendarHeader
-        mode={selectedAthleteId ? "title" : "day"} title="Performance" contentMaxWidth={contentMaxWidth}
+        mode={selectedAthleteId ? "title" : "day"} title={selectedAthleteId ? "Objectifs" : "Performance"} contentMaxWidth={contentMaxWidth}
         selectedDate={selectedDate} onDateChange={selectedAthleteId ? undefined : handleDateChange}
         onProfileClick={() => setProfileOpen(true)}
         seamless
@@ -259,17 +259,8 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
               {/* Pas de titre "Performance / {nom}" ici (2026-09-24, retour de Gildas) — le nom du
                  sportif est déjà visible via la puce active dans AthleteFilterBar juste au-dessus,
                  le répéter est redondant. */}
-              {a.user_id && !sandboxMode ? (
-                <CoachObjectivesTests coachId={userId} athlete={{ ...a, user_id: a.user_id }} locked={analysisLocked} onUnlock={() => setPaywallStep("priming")} />
-              ) : (
-              <TestsPanel
-                ownerId={userId} subject={{ subjectCoachAthleteId: a.id }} linkedUserId={a.user_id}
-                emptyHint={`Aucun test enregistré pour ${a.name} — marque une ligne d'exercice comme test (menu ⋯) dans une de ses séances.`}
-                sport={a.sport} sexe={a.sexe ?? null} poidsKg={a.poids_kg ?? null}
-                onDarkPage
-                lockedAnalysis={analysisLocked ? { onUnlock: () => setPaywallStep("priming") } : null}
-              />
-              )}
+              {/* Objectifs pour tous (24/11) : inscrit = sur son compte, sans compte = sur sa fiche, sandbox = démo sans écriture. */}
+              <CoachObjectivesTests coachId={userId} athlete={{ ...a, user_id: a.user_id ?? null }} locked={analysisLocked} onUnlock={() => setPaywallStep("priming")} sandbox={sandboxMode} />
             </>
           );
         })() : (

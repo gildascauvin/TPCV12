@@ -934,3 +934,6 @@ Départ : Maxime Leblois avait ajouté son échauffement et des exercices en S1 
 
 ## 2026-11-24 — Objectifs (les tests deviennent des objectifs)
 Pourquoi : Gildas veut que la valeur reste visible même sans programme (« le programme est le véhicule, l'objectif la destination »), inspiré d'Opal (1 à 3 règles en cartes) et d'Ahead. La plupart des objectifs sont des tests, d'où la fusion de la liste des tests et de la bibliothèque d'objectifs dans l'onglet renommé Objectifs. Choix validés : cible calculée (moins de friction), compte des séances qui travaillent l'objectif (rétroactif 4 semaines, en mots concrets « séances avec du squat »), valeur = résultats réels seulement (l'estimation reps × charge affichait plus que le record), fiche allégée (actuel → cible, barre seule, analyse gardée), cartes suivies = récompense (gain, piste, J-x). Déployé 96224d0.
+
+## 2026-11-24 — Objectifs côté coach (tous les sportifs) et sandbox
+Pourquoi : Gildas veut la même page Objectifs partout. Un sportif sans compte n'a pas de user_id, d'où `objectives.coach_athlete_id` (migration 050) plutôt qu'une table à part : une seule table, un seul calcul. La sandbox montre un objectif atteint et un en cours pour que la récompense se voie dès la démo.
