@@ -4,6 +4,7 @@ import { pressable } from "@/lib/pressable";
 import { Skel } from "@/components/ui/Skeleton";
 import LockedBlur from "@/components/paywall/LockedBlur";
 import { Fragment, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import { createPortal } from "react-dom";
 import { cardioZonesFor, type CardioZones } from "@/lib/cardioZones";
 import {
   listTests, listOwnResults, fetchAthleteOwnTests, fetchCoachTestsForAthlete, mergeTests,
@@ -12,6 +13,7 @@ import {
   type TestResultRow, type TestSubject, type MergedTest, type StrengthRepRow, type TestRow,
 } from "@/lib/testResults";
 import TestEvolutionChart from "@/components/tests/TestEvolutionChart";
+import { mediaForLine, ytFrame } from "@/lib/exerciseDemos";
 import { ExampleNote } from "@/components/conseils/MetricChart";
 import { guessSportChip } from "@/lib/sportCategories";
 import {
@@ -520,9 +522,13 @@ function RowMenu({ mergeSuggestions, onMerge, onDeleteWhole }: {
    `comparisons` est fourni (sinon carte "brute", sans interprétation — cas d'un test hors des
    normes connues, toujours affiché mais sans jugement forces/faiblesses). Toujours visible en
    entier, jamais un détail caché derrière une sélection préalable. */
-function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPair, readOnly, batteryInfo, onDeleteResult, metric, sscProfile, secondaryByDate, ftctInfo, repEntries, onAddRepEntry, onDeleteRepEntry, initialOpen, analysisLocked = false, exampleNote, projectedDate }: {
+function TestCard({ hideChart = false, contextLast = false, title, unit, results, comparisons, onAdd, onAddNew, onAddPair, readOnly, batteryInfo, onDeleteResult, metric, sscProfile, secondaryByDate, ftctInfo, repEntries, onAddRepEntry, onDeleteRepEntry, initialOpen, analysisLocked = false, exampleNote, projectedDate }: {
   /** Prochain test (ISO) : un 1er résultat montre déjà sa courbe avec le point à venir en pointillés. */
   projectedDate?: string;
+  /** Fiche objectif (23/11) : la page hôte affiche déjà la courbe en grand. */
+  hideChart?: boolean;
+  /** Fiche objectif : description, calculateur et comparaisons après l'historique et la saisie. */
+  contextLast?: boolean;
   /* Freemium : comparaisons, profil et courbe floutés ; l'historique brut et l'ajout restent libres. */
   analysisLocked?: boolean;
   /** Tests d'exemple (2026-10-01) : mention centrée sur la courbe d'évolution. */
@@ -671,8 +677,10 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
   const primaryComparison = resolvedComparisons.length ? resolvedComparisons.reduce((a, b) => (b.score! < a.score! ? b : a)) : null;
   const secondaryComparisons = resolvedComparisons.filter(c => c.id !== primaryComparison?.id);
 
-  return (
-    <div>
+  /* Contexte (description, calculateur, comparaisons, profil) : en tête par défaut ; en fin de fiche dans
+     l'onglet Objectifs (`contextLast`), pour garder courbe, historique et saisie ensemble. */
+  const contextBlock = (
+    <>
       {batteryInfo && (
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 10, padding: "8px 10px", background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12 }}>
           <div>
@@ -749,10 +757,15 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
       )}
 
       </LockedBlur>
+    </>
+  );
+  return (
+    <div>
+      {!contextLast && contextBlock}
 
       {/* Courbe et premier/dernier = tes propres résultats (des entrées) : toujours lisibles, même
           en compte gratuit (2026-10-01). Seuls les repères et l'analyse au-dessus sont floutés. */}
-      {results.length >= 2 || (projectedDate && results.length === 1) ? (
+      {hideChart ? null : results.length >= 2 || (projectedDate && results.length === 1) ? (
         <div style={{ marginTop: 10 }}>
           <div style={{ position: "relative" }}>
             <TestEvolutionChart points={results.map(r => ({ date: r.date, value: r.value }))} height={exampleNote ? 96 : 70} projectedDate={results.length === 1 ? projectedDate : undefined} />
@@ -962,6 +975,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
           </div>
         );
       })()}
+      {contextLast && <div style={{ marginTop: 18 }}>{contextBlock}</div>}
     </div>
   );
 }
@@ -1104,7 +1118,28 @@ function unifiedRowFromRaw(key: string, name: string, emoji: string, metric: Met
   };
 }
 
-export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach, emptyHint, sport, sexe, poidsKg, onEditProfile, fixture, onDarkPage = false, lockedAnalysis = null, example = false, examplePerspective = "athlete", initialData }: {
+export interface TestsObjectivesAdapter {
+  isFollowed: (metric: MetricKey) => boolean;
+  canFollow: boolean;
+  onFollow: (metric: MetricKey) => void;
+  onUnfollow: (metric: MetricKey) => void;
+  /** Ouvre la feuille « Modifier l'objectif » (échéance, retirer). */
+  onEdit?: (metric: MetricKey) => void;
+  /** Objectif suivi : cible et échéance pour l'en-tête « actuel → cible » de la fiche. */
+  headline?: (metric: MetricKey) => { target: string; date: string; reached: boolean; current: string | null; pct: number; remaining: string | null; sessions: string | null } | null;
+  /** Bloc objectif dans la fiche (cible, échéance, avancement, courbe projetée) ; null si pas suivi. */
+  panel: (metric: MetricKey) => React.ReactNode;
+  /** Cartes hors test (régularité, récupération, jour J), ajoutées à « Tous ». */
+  extraCards?: React.ReactNode;
+  /** Ouvre la fiche d'une mesure (depuis le carrousel des objectifs). */
+  openMetric?: MetricKey | null;
+  onOpenMetricHandled?: () => void;
+  onDataChanged?: () => void;
+  /** Vue coach : textes à la 3e personne. */
+  coachWords?: boolean;
+}
+
+export default function TestsPanel({ layout = "list", objectives, ownerId, subject, linkedUserId, mergeCoach, emptyHint, sport, sexe, poidsKg, onEditProfile, fixture, onDarkPage = false, lockedAnalysis = null, example = false, examplePerspective = "athlete", initialData }: {
   ownerId: string;
   subject: TestSubject;
   linkedUserId?: string | null;
@@ -1143,6 +1178,10 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
      affichés tout de suite, sans attendre le chargement du composant puis ses requêtes. Seuls les
      tests du coach (fusion) restent chargés côté client. Les écritures refont un chargement complet. */
   initialData?: { ownTests: TestRow[]; ownResults: TestResultRow[]; strengthReps: StrengthRepRow[] };
+  /* Onglet Objectifs (23/11/2026) : même logique, autre mise en page. Filtres « Pour toi » (batterie du
+     sport) / Tous / qualités, grille de cartes photo, fiche plein écran ; un test peut devenir un objectif. */
+  layout?: "list" | "objectives";
+  objectives?: TestsObjectivesAdapter;
 }) {
   const isCoachView = "subjectCoachAthleteId" in subject;
   const initialRef = useRef(initialData);
@@ -1156,6 +1195,10 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   // aucun filtre, tous les tests recommandés de l'app s'affichent. Cliquer le chip déjà actif redonne
   // la main à "tout afficher".
   const [activeQuality, setActiveQuality] = useState<Quality | null>(null);
+  const [objFilter, setObjFilter] = useState<"foryou" | "all">("foryou");
+  const [objQuery, setObjQuery] = useState("");
+  const [pageKey, setPageKey] = useState<string | null>(null);
+  const objRowsRef = useRef<UnifiedRow[]>([]);
   // Ligne dépliée (accordion, 2026-09, suite) — une seule à la fois, `key` = UnifiedRow.key. La carte
   // complète (TestCard) n'est montée QUE quand sa ligne est ouverte : `autoAddKey` mémorise que
   // l'ouverture vient du "+" rapide (pas d'un clic sur la ligne elle-même), pour que TestCard monte
@@ -1338,6 +1381,19 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
     await deleteStrengthRep(id);
     await refetchStrengthReps();
   }
+
+  /* Onglet Objectifs : ouvrir la fiche demandée par le carrousel, et prévenir la page quand les données changent
+     (hooks avant tout return anticipé). */
+  useEffect(() => {
+    if (layout !== "objectives" || !objectives?.openMetric) return;
+    const m = objectives.openMetric;
+    const r = objRowsRef.current.find(x => x.cardProps.metric === m || x.key === `insight-${m}` || x.key === `metric-${m}`);
+    if (r) setPageKey(r.key);
+    objectives.onOpenMetricHandled?.();
+  }, [objectives?.openMetric]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dataSig = `${ownResults.length}:${strengthReps.length}:${otherResults.length}`;
+  const firstSig = useRef(dataSig);
+  useEffect(() => { if (layout === "objectives" && dataSig !== firstSig.current) { firstSig.current = dataSig; objectives?.onDataChanged?.(); } }, [dataSig]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (merged === null) {
     return (
@@ -1850,19 +1906,197 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   const recoCard: React.CSSProperties = { background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 20, padding: "16px 16px 14px", color: "#fff", marginBottom: 16 };
   const hasVerdict = !!(activeQuality ? qualityVerdict : axisVerdict);
 
+  /* ── Onglet Objectifs : grille de cartes + fiche plein écran (23/11/2026) ── */
+  const isObj = layout === "objectives";
+  const GROUP_PHOTO: Record<string, string> = { vitesse: "/illustrations/sprint.jpg", puissance: "/illustrations/pliometrie.jpg", reactivite: "/illustrations/pliometrie.jpg", force: "/illustrations/powerlifting.jpg", endurance: "/illustrations/course.jpg", autres: "/illustrations/groupe.jpg" };
+  /* Image d'un test : miniature de démo (unique), sinon une photo de la réserve de sa qualité, jamais deux fois
+     la même dans la grille tant qu'il en reste (`usedImages`, rempli dans l'ordre d'affichage). */
+  const POOL: Record<string, string[]> = {
+    vitesse: ["sprint", "echauffement", "course", "rugby", "handball"], puissance: ["pliometrie", "basket", "volley", "crossfit", "hyrox"],
+    reactivite: ["pliometrie", "volley", "basket", "handball", "hockey"], force: ["powerlifting", "halterophilie", "gym", "crossfit", "circuit"],
+    endurance: ["course", "trail", "velo", "aviron", "natation"], autres: ["groupe", "mobilite", "etirements", "yoga", "circuit"],
+  };
+  const usedImages = new Map<string, string>();
+  const rowImage = (r: UnifiedRow) => {
+    const prev = usedImages.get(r.key); if (prev) return prev;
+    const taken = new Set(usedImages.values());
+    const m = mediaForLine(r.name);
+    const own = m ? (m.kind === "demo" ? ytFrame(m.items[0].yt) : m.src) : null;
+    const pool = (POOL[r.group ?? "autres"] ?? POOL.autres).map(n => `/illustrations/${n}.jpg`);
+    const pick = own && !taken.has(own) ? own : pool.find(x => !taken.has(x)) ?? own ?? GROUP_PHOTO[r.group ?? "autres"] ?? pool[0];
+    usedImages.set(r.key, pick); return pick;
+  };
+  const rowLast = (r: UnifiedRow) => r.cardProps.results[r.cardProps.results.length - 1];
+  const rowValue = (r: UnifiedRow) => { const l = rowLast(r); return l ? formatRawValue(r.cardProps.metric, l.value, l.unit, l.date, r.cardProps.secondaryByDate) : r.sprintComparison ? `${frNum(r.sprintComparison.actual.toFixed(2))} s` : null; };
+  const OBJ_STATUS_TXT: Record<CardStatus, string> = { red: "▼ Point faible", amber: "◆ Proche", green: "✓ Point fort" };
+  const OBJ_STATUS_COL: Record<CardStatus, string> = { red: "#ff8a7a", amber: "#ffc24a", green: "#7fdb8f" };
+  const SPRINT_STATUS: Record<SprintAxisComparison["label"], CardStatus> = { "axe de travail": "red", "conforme à l'attendu": "amber", "point fort": "green" };
+  const rowStatus = (r: UnifiedRow): CardStatus | null => r.sprintComparison ? SPRINT_STATUS[r.sprintComparison.label] : r.primaryComparison?.status ?? null;
+  const rowDelta = (r: UnifiedRow) => r.sprintComparison ? `${r.sprintComparison.actual > r.sprintComparison.predicted ? "+" : "−"}${frNum(Math.abs(r.sprintComparison.actual - r.sprintComparison.predicted).toFixed(2))} s` : r.deltaRealUnit;
+  /* Le profil de vitesse (segments « Fly 20m (10→30m) », sprints 60/100/200 m) est porté par la carte du test
+     lui-même, comme les autres repères, au lieu d'une liste à part. */
+  const axisMetric = (axis: string): MetricKey | null => { const f = axis.match(/^Fly (\d+)m/); if (f) return `fly${f[1]}m` as MetricKey; const sp = axis.match(/^Sprint (\d+)m/); return sp ? `sprint${sp[1]}m` as MetricKey : null; };
+  const rowMetric = (r: UnifiedRow): MetricKey | undefined => r.cardProps.metric ?? (r.batteryName ? batteryTestMetrics(r.batteryName)[0] : undefined);
+  const withSprint = (r: UnifiedRow): UnifiedRow => {
+    const rm = rowMetric(r);
+    if (r.sprintComparison || !rm) return r;
+    const c = sprintAxisComparisons.find(x => axisMetric(x.axis) === rm);
+    return c ? { ...r, sprintComparison: c, score: Math.max(0, Math.min(100, 50 - c.deltaPct * 4)) } : r;
+  };
+  const objAll = isObj ? unifiedRows.map(withSprint) : [];
+  /* Recherche (comme la bibliothèque de programmes) : sur tous les tests, nom, alias et description, sans accents. */
+  const fold = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const q = fold(objQuery.trim());
+  const objRows = !isObj ? [] : q
+    ? objAll.filter(r => fold(`${r.name} ${r.batteryName ?? ""} ${r.cardProps.batteryInfo?.desc ?? ""} ${r.cardProps.metric ? METRIC_DISPLAY[r.cardProps.metric].name : ""}`).includes(q))
+    : (objFilter === "foryou" && !activeQuality ? objAll.filter(isSportRow) : objAll);
+  const pageRow = pageKey ? (isObj ? objAll : unifiedRows).find(r => r.key === pageKey) ?? null : null;
+  objRowsRef.current = unifiedRows;
+
+  const objChip = (st: CardStatus, delta: string | null) => (
+    <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999, background: "rgba(0,0,0,.55)", color: OBJ_STATUS_COL[st], whiteSpace: "nowrap", ...(locked ? { filter: "blur(4px)", userSelect: "none" as const } : {}) }}>
+      {OBJ_STATUS_TXT[st]}{delta && st !== "green" && !/^[−-]?0(,0+)? /.test(delta) ? ` · ${delta}` : ""}
+    </span>
+  );
+  const objCard = (r: UnifiedRow) => {
+    const m = rowMetric(r), on = !!m && !!objectives?.isFollowed(m), st = rowStatus(r), val = rowValue(r);
+    return (
+      <div key={r.key} style={{ position: "relative", height: 200, borderRadius: 24, overflow: "hidden", border: `${on ? 2 : 1}px solid ${on ? "#fff" : "rgba(255,255,255,.1)"}`, background: "#11161a" }}>
+        <button type="button" onClick={() => setPageKey(r.key)} aria-label={r.name} style={{ position: "absolute", inset: 0, border: 0, padding: 0, background: "none", color: "#fff", textAlign: "left", cursor: "pointer" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={rowImage(r)} alt="" loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "grayscale(1) contrast(1.1) brightness(.5)" }} />
+          <span style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg,rgba(7,10,13,.05),rgba(7,10,13,.3) 45%,rgba(7,10,13,.94))" }} />
+          {st && <span style={{ position: "absolute", top: 12, left: 12 }}>{objChip(st, rowDelta(r))}</span>}
+          {example && <span style={{ position: "absolute", top: 12, right: 12, fontFamily: "var(--font-mono), monospace", fontSize: 9.5, fontWeight: 700, padding: "2px 6px", borderRadius: 6, background: "rgba(0,0,0,.55)", color: "#ffc24a" }}>EXEMPLE</span>}
+          <span style={{ position: "absolute", left: 14, right: 52, bottom: 14, display: "flex", flexDirection: "column", gap: 3 }}>
+            {val && <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", lineHeight: 1.05 }}>{val}</span>}
+            <span style={{ fontSize: 14.5, fontWeight: 800, lineHeight: 1.2 }}>{r.name}</span>
+            {!val && <span style={{ fontSize: 12, color: "rgba(255,255,255,.6)" }}>Pas encore testé</span>}
+          </span>
+        </button>
+        {m && objectives && (on
+          ? <button type="button" onClick={() => objectives.onUnfollow(m)} aria-label={`Retirer l'objectif ${r.name}`} style={{ position: "absolute", right: 12, bottom: 12, width: 32, height: 32, borderRadius: "50%", border: 0, background: "#fff", color: "#111", display: "grid", placeItems: "center", fontSize: 15, fontWeight: 900, cursor: "pointer" }}>✓</button>
+          : <button type="button" onClick={() => objectives.onFollow(m)} disabled={!objectives.canFollow} aria-label={`Suivre ${r.name} comme objectif`}
+              style={{ position: "absolute", right: 12, bottom: 12, width: 32, height: 32, borderRadius: "50%", border: 0, background: "rgba(255,255,255,.22)", color: "#fff", fontSize: 19, fontWeight: 700, cursor: "pointer", opacity: objectives.canFollow ? 1 : 0.35 }}>+</button>)}
+      </div>
+    );
+  };
+  const objChips = (
+    <>
+    <label style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 14, padding: "0 14px", marginBottom: 12 }}>
+      <span aria-hidden style={{ color: "rgba(255,255,255,.45)" }}>🔍</span>
+      <input type="search" value={objQuery} onChange={e => setObjQuery(e.target.value)} placeholder="Rechercher un test : squat, sprint, CMJ…" aria-label="Rechercher un test"
+        style={{ flex: 1, minWidth: 0, background: "transparent", border: 0, outline: "none", color: "#fff", fontSize: 14.5, fontFamily: "inherit", padding: "12px 0" }} />
+      {objQuery && <button type="button" onClick={() => setObjQuery("")} aria-label="Effacer la recherche" style={{ border: 0, background: "none", color: "rgba(255,255,255,.55)", fontSize: 16, cursor: "pointer" }}>✕</button>}
+    </label>
+    {!q && <div style={{ display: "flex", gap: 8, overflowX: "auto", margin: "0 -16px", padding: "0 16px 2px", scrollbarWidth: "none", marginBottom: hasVerdict ? 14 : 0 }}>
+      {([["foryou", "Pour toi"], ["all", "Tous"], ...QUALITY_ORDER.filter(q => q !== "polyvalence").map(q => [q, QUALITY_META[q].label.split(" / ")[0]])] as [string, string][]).map(([k, l]) => {
+        const on = k === "foryou" ? objFilter === "foryou" && !activeQuality : k === "all" ? objFilter === "all" && !activeQuality : activeQuality === k;
+        const g = (["force", "puissance", "reactivite", "vitesse", "endurance"] as string[]).includes(k) ? k as ProfileGroup : null;
+        const w = g ? groupWord(testProfile, g, doneRows.some(r => r.group === g)) : null;
+        const mark = !w || locked ? "" : w.tone === "axis" ? " ▼" : w.tone === "strong" ? " ✓" : "";
+        return (
+          <button key={k} type="button" aria-pressed={on}
+            onClick={() => { if (k === "foryou" || k === "all") { setActiveQuality(null); setObjFilter(k); } else { setActiveQuality(k as Quality); setObjFilter("all"); } }}
+            style={{ flexShrink: 0, border: `1px solid ${on ? "#fff" : "rgba(255,255,255,.14)"}`, background: on ? "#fff" : "rgba(255,255,255,.05)", color: on ? "#171b1f" : "rgba(255,255,255,.75)", borderRadius: 999, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{l}{mark && <span style={{ color: on ? (mark === " ▼" ? "#d44000" : "#2f8f4e") : mark === " ▼" ? "#ff8a7a" : "#7fdb8f" }}>{mark}</span>}</button>
+        );
+      })}
+    </div>}
+    </>
+  );
+  const objPage = pageRow && (() => {
+    const r = pageRow, m = rowMetric(r), on = !!m && !!objectives?.isFollowed(m), st = rowStatus(r), val = rowValue(r), pc = r.primaryComparison;
+    return (
+      <div role="dialog" aria-label={r.name} style={{ position: "fixed", inset: 0, zIndex: 2147483100, background: "#070a0d", color: "#fff", overflowY: "auto" }}>
+        <div style={{ maxWidth: 560, margin: "0 auto", paddingBottom: 48 }}>
+          <div style={{ position: "relative", height: 200 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={rowImage(r)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: "grayscale(1) contrast(1.1) brightness(.5)" }} />
+            <span style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg,rgba(7,10,13,.2),#070a0d 96%)" }} />
+            <button type="button" onClick={() => setPageKey(null)} aria-label="Retour" style={{ position: "absolute", top: "max(14px, env(safe-area-inset-top))", left: 14, width: 38, height: 38, borderRadius: "50%", border: 0, background: "rgba(0,0,0,.45)", color: "#fff", fontSize: 20, cursor: "pointer" }}>‹</button>
+            {r.unlinked && (r.onMerge || r.onDeleteWhole) && <span style={{ position: "absolute", top: "max(18px, env(safe-area-inset-top))", right: 16 }}><RowMenu mergeSuggestions={r.mergeSuggestions} onMerge={r.onMerge} onDeleteWhole={r.onDeleteWhole} /></span>}
+          </div>
+          <div style={{ padding: "0 20px", marginTop: -34, position: "relative" }}>
+            <div style={{ fontSize: 26, fontWeight: 900, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{r.name}</div>
+            {(() => { const h = m && on ? objectives?.headline?.(m) ?? null : null; return (
+              <>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 40, fontWeight: 900, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{h?.current ?? val ?? "?"}</span>
+                  {h && <><span style={{ fontSize: 26, color: "rgba(255,255,255,.4)" }}>→</span><span style={{ fontSize: 40, fontWeight: 900, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", lineHeight: 1, color: "#ff8a55" }}>{h.target}</span></>}
+                </div>
+                {h && !h.reached && (
+                  <div style={{ marginTop: 14, height: 8, borderRadius: 4, background: "rgba(255,255,255,.14)", overflow: "hidden" }}><i style={{ display: "block", height: "100%", width: `${Math.max(3, Math.min(100, h.pct))}%`, borderRadius: 4, background: "linear-gradient(90deg,#f04a08,#ff8a55)" }} /></div>
+                )}
+                {h && <div style={{ fontSize: 13.5, color: "rgba(255,255,255,.75)", marginTop: 10 }}>{h.reached ? "✓ Objectif atteint" : `d'ici le ${h.date}`}{h.sessions ? ` · ${h.sessions}` : ""}</div>}
+                {m && objectives && (on ? (
+                  <button type="button" onClick={() => objectives.onEdit?.(m)}
+                    style={{ width: "100%", marginTop: 16, border: 0, borderRadius: 16, padding: 14, fontSize: 15.5, fontWeight: 700, color: "#fff", background: "linear-gradient(180deg,#f04a08,#d44000)", cursor: "pointer" }}>Modifier l&apos;objectif</button>
+                ) : (
+                  <button type="button" onClick={() => objectives.onFollow(m)} disabled={!objectives.canFollow}
+                    style={{ width: "100%", marginTop: 16, border: 0, borderRadius: 16, padding: 14, fontSize: 15.5, fontWeight: 700, color: "#fff", background: "linear-gradient(180deg,#f04a08,#d44000)", cursor: "pointer", opacity: objectives.canFollow ? 1 : 0.5 }}>
+                    {objectives.canFollow ? (coachWords ? "🎯 En faire son objectif" : "🎯 En faire un objectif") : (coachWords ? "Il a déjà 3 objectifs" : "Tu suis déjà 3 objectifs")}
+                  </button>
+                ))}
+              </>
+            ); })()}
+            {!r.date && r.sprintComparison && <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.45)", marginTop: 6 }}>Calculé à partir de tes sprints départ arrêté · attendu {frNum(r.sprintComparison.predicted.toFixed(2))} s</div>}
+            {(st || r.sprintComparison || r.cardio || r.cardioHint) && (
+              <LockedBlur locked={locked} surface="tests_card" onUnlock={() => lockedAnalysis?.onUnlock()} bare radius={12}>
+                <div style={{ marginTop: 12 }}>
+                  {st ? (
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, fontSize: 12.5, color: "rgba(255,255,255,.5)" }}>
+                      {objChip(st, rowDelta(r))}
+                      {r.sprintComparison ? <span>attendu {frNum(r.sprintComparison.predicted.toFixed(2))} s</span>
+                        : pc && targetRealUnitDisplay(pc) ? <span>repère {targetRealUnitDisplay(pc)}<InfoTip text={`${pc.targetPrefix ?? `Cible vs ${pc.compareLabel}`} : ${targetRealUnitDisplay(pc)}.${pc.targetInfo ? ` ${pc.targetInfo}` : ""}`} /></span> : null}
+                    </div>
+                  ) : r.cardio ? <CardioZonesBlock z={r.cardio} />
+                    : r.cardioHint ? <div style={{ fontSize: 12, color: "rgba(255,255,255,.5)" }}>{r.cardioHint}</div> : null}
+                  {pc && <p style={{ fontSize: 14.5, color: "rgba(255,255,255,.82)", lineHeight: 1.5, margin: "12px 0 0" }}>{pc.desc} {pc.advice}</p>}
+                </div>
+              </LockedBlur>
+            )}
+            <div style={{ marginTop: 20 }}>
+              {m && objectives && on ? objectives.panel(m) : r.cardProps.results.length > 0 && (
+                <div style={{ borderRadius: 20, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", padding: "12px 10px 8px" }}>
+                  <TestEvolutionChart points={r.cardProps.results.map(x => ({ date: x.date, value: x.value }))} height={140} projectedDate={r.cardProps.results.length === 1 ? r.cardProps.projectedDate : undefined} />
+                </div>
+              )}
+            </div>
+            <div style={{ marginTop: 18 }}>
+              <TestCard {...r.cardProps} hideChart contextLast initialOpen={false} analysisLocked={locked} />
+              {r.valueNote && <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.5)", marginTop: 12 }}>Puissance estimée : <b style={{ color: "#fff" }}>{r.valueNote}</b></div>}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  })();
+
   return (
     <div style={onDarkPage ? { color: "#fff" } : { background: "linear-gradient(135deg,#161616,#282828 64%,#111)", borderRadius: 24, padding: "18px 18px 16px", color: "#fff" }}>
       {/* Une colonne, comme en prod : Recommandations (profil, filtres, verdict), test conseillé,
           tests faits groupés par qualité, tests du sport à faire, « Tous les tests » replié. Les
           filtres affinent la reco ET la liste. */}
-      <div style={recoCard}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#f04a08", marginBottom: 8, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>Recommandations d&apos;entraînement</div>
-        {onEditProfile && (
+      <div style={isObj ? { color: "#fff", marginBottom: 18 } : recoCard}>
+        {isObj ? (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <span style={{ fontSize: 20, fontWeight: 900, letterSpacing: "-0.01em" }}>{coachWords ? "Ses objectifs possibles" : "Choisis tes objectifs"}</span>
+            </div>
+          </>
+        ) : <div style={{ fontSize: 11, fontWeight: 700, color: "#f04a08", marginBottom: 8, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>Recommandations d&apos;entraînement</div>}
+        {isObj && onEditProfile && (!sexe || !poidsKg) && (
+          <button type="button" onClick={onEditProfile} style={{ display: "block", width: "100%", textAlign: "left", marginBottom: 12, border: "1px dashed rgba(255,255,255,.22)", background: "rgba(255,255,255,.04)", borderRadius: 14, padding: "10px 12px", color: "rgba(255,255,255,.8)", fontSize: 13, cursor: "pointer" }}>
+            Renseigne ton {!sexe && !poidsKg ? "sexe et ton poids" : !sexe ? "sexe" : "poids"} pour avoir tes repères <b style={{ color: "#f04a08" }}>›</b>
+          </button>
+        )}
+        {!isObj && onEditProfile && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "9px 12px", marginBottom: 10, fontSize: 12, color: "rgba(255,255,255,.75)" }}>
             <span>👤 <b style={{ color: "#fff" }}>{sport || "Sport non renseigné"}</b> · {sexeLabel(sexe ?? null)} · {poidsLabel(poidsKg)}</span>
             <button onClick={onEditProfile} style={{ background: "none", border: "none", color: "#f04a08", fontWeight: 800, fontSize: 12, cursor: "pointer", padding: 0 }}>✏️ Modifier</button>
           </div>
         )}
+        {isObj ? objChips : (
         <div style={{ marginBottom: hasVerdict ? 12 : 0 }}>
           <div style={{ ...KICKER, marginBottom: 8 }}>Filtrer par qualité physique</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -1887,8 +2121,8 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
             })}
           </div>
         </div>
-
-        {hasVerdict && (
+        )}
+        {hasVerdict && !(isObj && q) && (
           <LockedBlur locked={locked} surface="tests_verdict" onUnlock={() => lockedAnalysis?.onUnlock()} title="Tes forces et tes axes de travail" sub="Calculés sur les ratios de tes tests." cta="Débloquer l'analyse" radius={12}>
           <div style={{ position: "relative" }}>
             {(() => {
@@ -1896,7 +2130,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
               if (!v) return null;
               return (
                 <>
-                  <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, lineHeight: 1.3, marginBottom: 10 }}>{activeQuality ? `${QUALITY_META[activeQuality].emoji} ` : ""}{v.title}</div>
+                  {!isObj && <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, lineHeight: 1.3, marginBottom: 10 }}>{activeQuality ? `${QUALITY_META[activeQuality].emoji} ` : ""}{v.title}</div>}
                   <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "10px 12px", fontSize: 13, color: "rgba(255,255,255,.85)", lineHeight: 1.5 }}>
                     <b style={{ color: "#fff" }}>{v.emoji} {v.action} :</b>{v.focus && <b style={{ color: "#fff" }}> {v.focus}.</b>} {v.sub}
                   </div>
@@ -1907,12 +2141,12 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
           </div>
           </LockedBlur>
         )}
-        {sprintAxisRows.length > 0 && (
+        {!isObj && sprintAxisRows.length > 0 && (
           <div style={{ marginTop: 14 }}>
             {sprintAxisRows.map(c => <SprintAxisGauge key={c.axis} comp={c} analysisLocked={locked} />)}
           </div>
         )}
-        <LockedBlur locked={locked} surface="tests_signals" onUnlock={() => lockedAnalysis?.onUnlock()} bare radius={12}>
+        {!isObj && <LockedBlur locked={locked} surface="tests_signals" onUnlock={() => lockedAnalysis?.onUnlock()} bare radius={12}>
         {forceExtraWeak.length > 0 && (
           <div style={{ marginTop: sprintAxisRows.length > 0 ? 4 : 14, display: "flex", flexDirection: "column", gap: 8 }}>
             {forceExtraWeak.map((it, i) => (
@@ -1923,8 +2157,8 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
             ))}
           </div>
         )}
-        </LockedBlur>
-        {!fixture && (
+        </LockedBlur>}
+        {!fixture && !isObj && (
           <div style={{ marginTop: 14 }}>
             {addingCustomTest ? (
               <AddCustomTestForm
@@ -1946,6 +2180,32 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
         )}
       </div>
 
+      {isObj ? (
+        <>
+          {advised && !q && <div style={{ border: "1px solid rgba(240,74,8,.45)", background: "rgba(240,74,8,.08)", borderRadius: 16, padding: "12px 12px 12px", marginBottom: 16 }}><div style={{ ...KICKER, color: "#ff8a5c", marginBottom: 6 }}>Test conseillé</div>{objCard(advised)}</div>}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(158px,1fr))", gap: 12 }}>
+            {objRows.map(objCard)}
+            {objFilter === "all" && !activeQuality && objectives?.extraCards}
+            {!fixture && !addingCustomTest && (
+              <button type="button" onClick={() => setAddingCustomTest(true)} className="tpc-press"
+                style={{ height: 200, borderRadius: 24, border: "2px dashed rgba(255,255,255,.2)", background: "rgba(255,255,255,.03)", color: "rgba(255,255,255,.75)", cursor: "pointer", fontSize: 14, fontWeight: 700, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 12, textAlign: "center" }}>
+                <span style={{ fontSize: 30, lineHeight: 1 }}>+</span>Créer un test
+                <span style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,.5)" }}>Nom libre, ton unité</span>
+              </button>
+            )}
+          </div>
+          {!fixture && addingCustomTest && (
+            <div id="obj-create-test" style={{ marginTop: 14 }}>
+              <AddCustomTestForm
+                onSave={async (name, value, unit, date, qualities) => { await handleAddForNewRecommendedTest(name, value, unit, date, qualities); setAddingCustomTest(false); }}
+                onCancel={() => setAddingCustomTest(false)}
+              />
+            </div>
+          )}
+          {objRows.length === 0 && <div style={{ fontSize: 13.5, color: "rgba(255,255,255,.55)", padding: "8px 2px" }}>{q ? "Aucun test trouvé. Crée-le avec « Créer un test »." : "Aucun test pour ce filtre."}</div>}
+          {objPage && typeof document !== "undefined" && createPortal(objPage, document.body)}
+        </>
+      ) : (
       <div>
         {advised && (
           <div style={{ border: "1px solid rgba(240,74,8,.45)", background: "rgba(240,74,8,.08)", borderRadius: 16, padding: "12px 12px 12px", marginBottom: 16 }}>
@@ -2015,6 +2275,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

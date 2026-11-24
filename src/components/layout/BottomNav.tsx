@@ -34,7 +34,7 @@ const athleteTabs = [
   },
   {
     href: "/conseils",
-    label: "Performance",
+    label: "Objectifs",
     // "Analyses" → "Performance" (2026-09-24, "point 1" — voir POC poc-coach-context_4.html, NAV) :
     // Charge/Récupération/Comportements ont déménagé dans les onglets de l'accueil (HomeTabs.tsx),
     // cette page ("Analyses" avant) ne porte plus que le suivi de tests physiques.

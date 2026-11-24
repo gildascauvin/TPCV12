@@ -12,6 +12,7 @@ import { sessionResult, type SessionResult, type ResultSession, type WeekSession
 import type { StripCell, Lift } from "@/lib/bilan";
 import { loadCheckinContext, loadSessionContext, type TodaySession } from "@/lib/resultContext";
 import MiniBilan, { miniCard } from "@/components/physio/MiniBilan";
+import ObjectiveContribution from "@/components/objectives/ObjectiveContribution";
 import { sessionSlides, wellnessSlides } from "@/components/physio/miniSlides";
 import { createClient } from "@/lib/supabase/client";
 
@@ -227,7 +228,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
     ? wellnessSlides({ date: shown.date, checkin: shown.checkin ?? null, verdict: shown.verdict, mean, row: shown.row ?? null, history: shown.history ?? [], todaySession: shown.todaySession ?? null, restDay: shown.restDay ?? false, health: shown.health ?? [] }, sport)
     : sessionSlides({
         session: shown.session ?? null, summary: shown.summary ?? null, result: shown.result, mean, week: shown.week ?? [], before: shown.before ?? [], workout: shown.workout ?? null,
-        extras: shown.summary ? <SessionExtras r={shown.summary} onCorrect={correct} /> : null,
+        extras: shown.summary || shown.session ? <>{shown.summary && <SessionExtras r={shown.summary} onCorrect={correct} />}{shown.session && <ObjectiveContribution session={shown.session} sport={sport} />}</> : null,
         recal: shown.recal ? <RecalNote recal={shown.recal} onUndo={undoRecal} /> : null,
       }, sport);
   if (!slides.length) return null;

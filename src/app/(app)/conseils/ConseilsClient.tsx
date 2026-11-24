@@ -19,12 +19,14 @@ import type { SubscriptionStatus } from "@/types";
 // Import direct (2026-10-04) : c'est le contenu principal de la page, le charger à part ajoutait une
 // étape d'attente avant même de pouvoir afficher les tests.
 import TestsPanel from "@/components/tests/TestsPanel";
+import ObjectivesHub from "@/components/objectives/ObjectivesHub";
+import type { ObjectiveData, ObjectiveItem } from "@/lib/objectives";
 const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
 const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 
-export default function ConseilsClient({ subscriptionStatus, hasActiveCoach, userId, sandboxMode = false, sport = null, sexe = null, poidsKg = null, testsFixture, exampleTests, initialTests }: { subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; userId?: string; sandboxMode?: boolean; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null; testsFixture?: { merged: MergedTest[]; results: TestResultRow[] }; exampleTests?: { merged: MergedTest[]; results: TestResultRow[]; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null }; initialTests?: { ownTests: TestRow[]; ownResults: TestResultRow[]; strengthReps: StrengthRepRow[] } }) {
+export default function ConseilsClient({ subscriptionStatus, hasActiveCoach, userId, sandboxMode = false, sport = null, sexe = null, poidsKg = null, testsFixture, exampleTests, initialTests, objectives }: { subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; userId?: string; sandboxMode?: boolean; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null; testsFixture?: { merged: MergedTest[]; results: TestResultRow[] }; exampleTests?: { merged: MergedTest[]; results: TestResultRow[]; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null }; initialTests?: { ownTests: TestRow[]; ownResults: TestResultRow[]; strengthReps: StrengthRepRow[] }; objectives?: { initial: ObjectiveItem[]; weak: string[] | null; goal: string | null; data: ObjectiveData } }) {
   const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
   // Exemple affiché tant qu'aucun test n'est loggué ; "Ajouter mon 1er test" bascule sur le vrai panneau.
@@ -52,13 +54,42 @@ export default function ConseilsClient({ subscriptionStatus, hasActiveCoach, use
         marginBottom: -132, paddingBottom: 132,
       }}>
       <CalendarHeader
-        mode="title" title="Performance" seamless
+        mode="title" title="Objectifs" seamless
         selectedDate={new Date().toISOString().slice(0, 10)}
         onProfileClick={() => setProfileOpen(true)}
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
       <div className="page-shell">
-        {userId && showExample && exampleTests ? (
+        {userId && objectives ? (
+          <ObjectivesHub initial={objectives.initial} sport={sport} data={objectives.data} sexe={sexe} poidsKg={poidsKg} locked={!isActive && !sandboxMode}>
+            {api => showExample && exampleTests ? (
+              <>
+                <TestsPanel
+                  layout="objectives" objectives={api}
+                  ownerId="example" subject={{ subjectUserId: "example" }}
+                  sport={exampleTests.sport ?? sport} sexe={exampleTests.sexe ?? sexe} poidsKg={exampleTests.poidsKg ?? poidsKg}
+                  fixture={exampleTests} onDarkPage example
+                />
+                <button
+                  onClick={() => setShowExample(false)}
+                  style={{ display: "block", width: "100%", marginTop: 14, border: "none", cursor: "pointer", color: "#fff", fontSize: 14, fontWeight: 800, borderRadius: 12, padding: "12px 16px", background: "linear-gradient(180deg,#f04a08,#d44000)" }}
+                >
+                  Ajouter mon 1er test →
+                </button>
+              </>
+            ) : (
+              <TestsPanel
+                layout="objectives" objectives={api}
+                ownerId={userId} subject={{ subjectUserId: userId }} mergeCoach
+                initialData={initialTests}
+                sport={sport} sexe={sexe} poidsKg={poidsKg}
+                onEditProfile={() => setProfileOpen(true)}
+                onDarkPage
+                lockedAnalysis={!isActive && !sandboxMode ? { onUnlock: () => setPaywallStep("priming") } : null}
+              />
+            )}
+          </ObjectivesHub>
+        ) : userId && showExample && exampleTests ? (
           <>
             <TestsPanel
               ownerId="example" subject={{ subjectUserId: "example" }}

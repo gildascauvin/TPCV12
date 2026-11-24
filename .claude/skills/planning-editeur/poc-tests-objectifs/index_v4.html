@@ -1,0 +1,388 @@
+<title>Tests et objectifs</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,900&family=IBM+Plex+Mono:wght@500;700&display=swap">
+<style>
+/* Layout : téléphone à gauche (onglet Performance), carnet de bord à droite. Monde sombre de l'app. */
+:root{
+  color-scheme:dark;
+  --ground:#0b0e10; --panel:#141a1e; --line:rgba(255,255,255,.10); --ink:#f3f5f6; --muted:rgba(255,255,255,.64); --faint:rgba(255,255,255,.42);
+  --accent:#d44000; --accent-hi:#f04a08; --soft:#ff8a55; --cool:#8cc3d4; --gold:#ffc24a; --good:#7fdb8f; --bad:#ff6b5a;
+  --tink:#171b1f; --tmuted:#6b7177;
+  --sans:"DM Sans",system-ui,-apple-system,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --ease:cubic-bezier(.23,1,.32,1); --drawer:cubic-bezier(.32,.72,0,1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px}
+button,input{font-family:inherit;color:inherit}
+.wrap{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);gap:40px;align-items:start}
+@media (max-width:860px){.wrap{grid-template-columns:minmax(0,1fr)}.phone-col{justify-self:center;width:100%;max-width:400px;position:static!important}}
+.kicker{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--soft)}
+h1{font-size:28px;line-height:1.1;letter-spacing:-.02em;margin:6px 0 10px;text-wrap:balance}
+.lead{color:var(--muted);font-size:15px;line-height:1.5;max-width:62ch;margin:0 0 18px}
+.ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 auto 14px;max-width:400px}
+.ctl .mono{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-right:4px}
+.ctl button{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 11px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--muted)}
+.ctl button.on{background:#fff;color:var(--tink);border-color:#fff}
+.phone-col{position:sticky;top:20px}
+.device{width:100%;max-width:400px;aspect-ratio:400/846;border-radius:56px;padding:9px;background:linear-gradient(145deg,#3a3f44,#15181b 40%,#2a2e32);box-shadow:0 50px 120px rgba(0,0,0,.6),inset 0 0 0 1px rgba(255,255,255,.08)}
+.phone{position:relative;width:100%;height:100%;border-radius:47px;overflow:hidden;background:radial-gradient(ellipse 105% 65% at 50% -10%,rgba(56,189,248,.22) 0%,rgba(125,211,252,.08) 40%,transparent 65%),#070a0d;color:#fff;isolation:isolate}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:31%;height:30px;border-radius:20px;background:#000;z-index:60}
+.sb{position:absolute;top:0;left:0;right:0;height:50px;padding:16px 28px 0 32px;display:flex;justify-content:space-between;z-index:59;font-weight:700;font-size:15px;pointer-events:none}
+.homebar{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:36%;height:5px;border-radius:5px;background:rgba(255,255,255,.85);z-index:59}
+.scr{position:absolute;inset:0;display:flex;flex-direction:column;animation:scrIn .38s var(--ease)}
+.scr.still{animation:none}
+@keyframes scrIn{from{opacity:0;transform:translateX(14px)}}
+@media (prefers-reduced-motion:reduce){.scr,.sheet{animation:none!important}}
+.content{flex:1;overflow-y:auto;padding:54px 16px 96px;scrollbar-width:none}
+.content::-webkit-scrollbar{display:none}
+.mono{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.pagetitle{text-align:center;font-weight:900;font-size:17px;margin:4px 0 14px}
+.sec{display:flex;justify-content:space-between;align-items:baseline;margin:18px 2px 8px}
+.sec .mono{color:var(--soft)}
+.sec small{font-size:12px;color:var(--faint)}
+/* Ligne de test (format de prod) */
+.tc{display:grid;grid-template-columns:32px 1fr 92px;gap:10px;align-items:center;width:100%;text-align:left;border:0;border-top:1px solid rgba(255,255,255,.07);background:none;padding:12px 2px;cursor:pointer;transition:background .15s}
+.tc:hover{background:rgba(255,255,255,.03)}
+.tc .ic{width:32px;height:32px;border-radius:9px;background:rgba(255,255,255,.07);display:grid;place-items:center;font-size:16px}
+.tc .nm{font-size:14.5px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tc .val{font-size:19px;font-weight:900;margin-top:1px;font-variant-numeric:tabular-nums}
+.tc .sub{font-size:11.5px;color:var(--faint);margin-top:1px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.chip.red{background:rgba(255,107,90,.14);color:var(--bad)}
+.chip.amber{background:rgba(255,194,74,.14);color:var(--gold)}
+.chip.green{background:rgba(127,219,143,.14);color:var(--good)}
+.chip.obj{background:var(--accent);color:#fff}
+/* Objectifs épinglés : même ligne, encadrée */
+.objbox{border-radius:20px;background:rgba(255,255,255,.04);border:1px solid rgba(255,138,85,.28);padding:2px 12px}
+.objbox .tc:first-child{border-top:0}
+.objline{font-size:11.5px;color:var(--soft);font-weight:700;margin-top:2px}
+.addrow{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;border:1.5px dashed rgba(255,255,255,.18);background:none;border-radius:14px;padding:11px;margin-top:10px;font-size:13.5px;font-weight:700;color:var(--muted);cursor:pointer}
+.reco{border-radius:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:12px 14px}
+.reco p{margin:4px 0 0;font-size:13.5px;line-height:1.45;color:rgba(255,255,255,.85)}
+/* Détail (façon /o/) */
+.back{position:absolute;top:52px;left:14px;z-index:5;width:34px;height:34px;border-radius:50%;border:0;background:rgba(255,255,255,.1);font-size:17px;cursor:pointer}
+.dhead{text-align:center;margin-top:6px}
+.dhead .nm{font-size:15px;font-weight:700;color:var(--muted)}
+.dhead .big{font-size:46px;font-weight:900;letter-spacing:-.03em;line-height:1.05;margin-top:2px;font-variant-numeric:tabular-nums}
+.dhead .sub{font-size:13px;color:var(--faint);margin-top:2px}
+.chart{margin-top:12px;border-radius:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:10px 10px 6px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin:6px 4px 2px}
+.legend i{display:inline-block;width:16px;height:0;border-top:2.5px solid #fff;vertical-align:middle;margin-right:5px}
+.legend i.d{border-top:2px dashed rgba(255,255,255,.6)}
+.legend i.z{height:9px;border:0;border-radius:3px;background:rgba(255,138,85,.25)}
+.legend i.r{border-top:2px dotted var(--cool)}
+.ana{margin-top:12px;border-radius:18px;padding:13px 14px;background:linear-gradient(160deg,rgba(212,64,0,.2),rgba(212,64,0,.05));border:1px solid rgba(255,138,85,.28)}
+.ana .mono{color:var(--soft)}
+.ana h3{margin:5px 0 0;font-size:17px;font-weight:900;line-height:1.2}
+.ana p{margin:6px 0 0;font-size:13.5px;line-height:1.45;color:rgba(255,255,255,.85)}
+.bar{position:relative;height:10px;border-radius:5px;background:rgba(255,255,255,.1);margin:12px 0 4px}
+.bar b{position:absolute;top:-3px;width:3px;height:16px;border-radius:2px;background:#fff}
+.bar i{position:absolute;top:0;height:100%;border-radius:5px}
+.barx{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+.inrow{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:12px}
+.inrow .in{border-radius:14px;background:#fff;color:var(--tink);padding:12px 14px;font-size:16px;font-weight:700;display:flex;justify-content:space-between}
+.inrow .in span{color:var(--tmuted);font-weight:500}
+.btn{border:0;border-radius:14px;padding:12px 16px;font-size:15px;font-weight:700;color:#fff;background:linear-gradient(180deg,#f04a08,#d44000);cursor:pointer;transition:transform .12s,filter .12s}
+.btn:active{transform:scale(.98)}
+.btn.ghost{background:rgba(255,255,255,.1)}
+.btn.wide{width:100%;margin-top:10px}
+.hist{margin-top:12px}
+.hist .h{display:flex;justify-content:space-between;font-size:13px;padding:8px 2px;border-top:1px solid rgba(255,255,255,.06);color:var(--muted)}
+.hist .h b{color:#fff;font-variant-numeric:tabular-nums}
+/* Feuille */
+.dim{position:absolute;inset:0;z-index:20;background:rgba(7,10,13,.6)}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:21;max-height:84%;display:flex;flex-direction:column;background:#fff;color:var(--tink);border-radius:26px 26px 0 0;animation:sheetUp .42s var(--drawer)}
+@keyframes sheetUp{from{transform:translateY(100%)}}
+.sheet .sh{padding:10px 20px 6px;flex-shrink:0}
+.sheet .sc{overflow:auto;padding:0 20px 26px}
+.grab{width:36px;height:4px;border-radius:9px;background:rgba(0,0,0,.14);margin:0 auto 12px}
+.sheet h3{font-size:21px;font-weight:900;letter-spacing:-.02em;margin:0;line-height:1.15}
+.sheet .sub{font-size:13.5px;color:var(--tmuted);margin:4px 0 0;line-height:1.4}
+.k2{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8a8f94;margin:14px 0 8px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{border:1.5px solid rgba(0,0,0,.12);background:#fff;color:var(--tink);border-radius:10px;padding:8px 11px;font-size:13px;font-weight:700;cursor:pointer}
+.chips button.on{background:var(--tink);color:#fff;border-color:var(--tink)}
+.chips button small{display:block;font-weight:500;font-size:11px;color:inherit;opacity:.7}
+.why2{font-size:12.5px;color:var(--tmuted);margin-top:8px;line-height:1.4}
+.li{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;width:100%;text-align:left;border:0;border-top:1px solid rgba(0,0,0,.07);background:none;padding:11px 0;cursor:pointer;color:var(--tink)}
+.li b{font-size:15px;display:block}
+.li small{display:block;font-size:12.5px;color:var(--tmuted);margin-top:2px}
+/* Nav */
+.bnav{position:absolute;left:0;right:0;bottom:0;z-index:6;display:grid;background:#fff;color:#8a8f94;border-top:1px solid rgba(0,0,0,.06);padding:8px 6px 26px;font-size:10.5px;font-weight:700;text-align:center}
+.bnav span{display:flex;flex-direction:column;align-items:center;gap:4px}
+.bnav span i{width:20px;height:20px;border-radius:6px;background:rgba(0,0,0,.1)}
+.bnav .on{color:var(--accent)}
+.bnav .on i{background:var(--accent)}
+/* Fusion */
+.servi{margin-top:4px;border-radius:18px;padding:13px 14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}
+.servi .nm{font-size:16px;font-weight:900;margin-top:3px}
+.servi .sub{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.35}
+.blk{display:flex;gap:4px;margin-top:10px}
+.blk span{display:flex;flex-direction:column;gap:4px}
+.blk i{height:8px;border-radius:4px;background:rgba(255,255,255,.12);display:block}
+.blk .done i{background:rgba(255,255,255,.55)}
+.blk .cur i{background:linear-gradient(90deg,#f04a08,#d44000)}
+.blk small{font-size:10px;color:var(--muted)}
+.prep{margin-top:6px}
+.prep .bar2{position:relative;height:8px;border-radius:4px;background:rgba(255,255,255,.1);overflow:hidden;display:flex;gap:2px}
+.prep .bar2 i{flex:1;border-radius:2px;background:rgba(255,255,255,.1)}
+.prep .bar2 i.f{background:linear-gradient(90deg,#f04a08,#ff8a55)}
+.prep .bar2 i.m{background:rgba(255,107,90,.55)}
+.prep .bar2 i.now{outline:1.5px solid #fff;outline-offset:-1.5px}
+.prep .pl{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:4px}
+.prep .pl b{color:#fff}
+.bigprep{margin-top:12px;border-radius:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:13px 14px}
+.bigprep .v{font-size:34px;font-weight:900;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.bigprep .bar2{height:12px}
+.counts{margin-top:10px}
+.counts .c{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.06);font-size:13px}
+.counts .c .s{font-weight:900;text-align:center}
+.counts .c small{color:var(--faint)}
+.proj{margin-top:10px;font-size:13.5px;color:rgba(255,255,255,.85);line-height:1.45}
+.proj b{color:#fff}
+.done-scr{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 24px}
+.done-scr .ring{font-size:13px;color:var(--muted)}
+.gain{margin-top:18px;width:100%;border-radius:20px;padding:14px 16px;background:linear-gradient(160deg,rgba(212,64,0,.24),rgba(212,64,0,.06));border:1px solid rgba(255,138,85,.35);text-align:left}
+.gain .plus{font-size:28px;font-weight:900;color:#fff;letter-spacing:-.02em}
+.tag3{display:inline-block;font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:6px;background:rgba(140,195,212,.16);color:var(--cool);margin-left:6px;vertical-align:2px}
+
+/* v3 : cartes Opal, deux bibliothèques liées, coach */
+.orail{display:flex;gap:10px;overflow-x:auto;margin:0 -16px;padding:2px 16px 6px;scrollbar-width:none;scroll-snap-type:x mandatory}
+.orail::-webkit-scrollbar{display:none}
+.oc{flex:0 0 210px;scroll-snap-align:start;border-radius:22px;padding:4px;border:2px solid #fff;background:none;cursor:pointer;text-align:left;color:#fff}
+.oc.add{border:2px dashed rgba(255,255,255,.22);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--muted);font-weight:700;font-size:13.5px;flex-basis:120px;min-height:214px}
+.oc-in{position:relative;border-radius:18px;overflow:hidden;height:202px;display:flex;flex-direction:column;justify-content:space-between}
+.oc-in img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.1) brightness(.55)}
+.oc-in::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,10,13,.15),rgba(7,10,13,.2) 35%,rgba(7,10,13,.92))}
+.oc-in>*{position:relative;z-index:2}
+.oc .chain{display:flex;align-items:center;gap:6px;padding:10px}
+.oc .chip2{width:30px;height:30px;border-radius:9px;background:#fff;color:#111;display:grid;place-items:center;font-size:15px}
+.oc .chip2.acc{background:var(--accent);color:#fff}
+.oc .arr{color:rgba(255,255,255,.7);font-size:14px}
+.oc .txt{padding:0 12px 12px}
+.oc .w{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.7)}
+.oc .h{font-size:16px;font-weight:900;line-height:1.15;margin-top:3px}
+.oc .prep{margin-top:6px}
+.segs{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(255,255,255,.07);border-radius:12px;padding:3px;margin:18px 0 10px}
+.segs button{border:0;background:none;border-radius:9px;padding:8px;font-size:13.5px;font-weight:700;color:var(--muted);cursor:pointer}
+.segs button.on{background:#fff;color:var(--tink)}
+.libgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.lc{position:relative;border-radius:16px;overflow:hidden;min-height:128px;display:flex;flex-direction:column;justify-content:flex-end;padding:10px;border:0;cursor:pointer;text-align:left;color:#fff;background:#11161a}
+.lc img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.1) brightness(.5)}
+.lc::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 15%,rgba(7,10,13,.92) 80%)}
+.lc>*:not(img){position:relative;z-index:2}
+.lc .t1{font-size:14px;font-weight:900;line-height:1.15}
+.lc .t2{font-size:11px;color:rgba(255,255,255,.7);margin-top:3px}
+.lc .on{position:absolute;top:8px;left:8px;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:6px;background:var(--accent)}
+.lc .for{position:absolute;top:8px;left:8px;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:6px;background:rgba(0,0,0,.5)}
+.pc{display:grid;grid-template-columns:56px 1fr auto;gap:12px;align-items:center;width:100%;border:0;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:9px;margin-top:8px;cursor:pointer;text-align:left;color:#fff}
+.pc img{width:56px;height:56px;border-radius:12px;object-fit:cover;filter:grayscale(1) brightness(.75)}
+.pc b{display:block;font-size:14.5px}
+.pc small{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+.serves{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.serves span{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(255,138,85,.14);color:var(--soft)}
+.serves span.mine{background:var(--accent);color:#fff}
+.hero{position:relative;margin:-54px -16px 0;height:210px;overflow:hidden}
+.hero img{width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.1) brightness(.55)}
+.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,10,13,.2),#070a0d 96%)}
+.hero .ht{position:absolute;left:16px;right:16px;bottom:12px;z-index:2}
+.hero .ht .mono{color:var(--soft)}
+.hero .ht h2{margin:4px 0 0;font-size:25px;font-weight:900;letter-spacing:-.02em;line-height:1.1}
+.way{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;width:100%;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);border-radius:14px;padding:11px 12px;margin-top:8px;cursor:pointer;text-align:left;color:#fff}
+.way .n{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.08);display:grid;place-items:center;font-size:16px}
+.way b{display:block;font-size:14.5px}
+.way small{display:block;font-size:12px;color:var(--muted);margin-top:2px;line-height:1.35}
+.way.on{border-color:rgba(255,138,85,.5);background:rgba(212,64,0,.12)}
+.served{display:grid;grid-template-columns:1fr auto;gap:8px;padding:9px 0;border-top:1px solid rgba(255,255,255,.06);font-size:13px}
+.served small{color:var(--faint)}
+.served .pl{font-family:var(--mono);font-weight:700;color:var(--soft)}
+.ath{display:grid;grid-template-columns:40px 1fr;gap:10px;align-items:center;margin:6px 0 10px}
+.ath .av{width:40px;height:40px;border-radius:50%;background:#2a3238;display:grid;place-items:center;font-weight:900}
+/* v4 : simplifié */
+.g{margin-top:8px}
+.gb{height:6px;border-radius:3px;background:rgba(255,255,255,.14);overflow:hidden}
+.gb i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,#f04a08,#ff8a55)}
+.gl{display:flex;justify-content:space-between;font-size:11.5px;color:rgba(255,255,255,.7);margin-top:4px}
+.gl b{color:#fff}
+.g.big{margin-top:16px}
+.g.big .gb{height:10px;border-radius:5px}
+.g.big .gl{font-size:13px}
+.kv{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:10px;margin-top:12px}
+.kv small{display:block;font-size:12px;color:var(--faint)}
+.kv b{display:block;font-size:30px;font-weight:900;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+.kv>div:last-child{text-align:right}
+.kv .to{font-size:20px;color:var(--faint);padding-bottom:4px}
+.one{font-size:14px;color:rgba(255,255,255,.78);line-height:1.45;margin:10px 0 0}
+.link{display:block;border:0;background:none;color:var(--soft);font-size:13.5px;font-weight:700;padding:10px 0 0;cursor:pointer}
+.srv{display:grid;grid-template-columns:44px 1fr;gap:12px;align-items:center;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);padding:9px}
+.srv img,.srv .ico{width:44px;height:44px;border-radius:11px;object-fit:cover;filter:grayscale(1) brightness(.75);display:grid;place-items:center;background:rgba(255,255,255,.08);font-size:20px}
+.srv b{display:block;font-size:14px}
+.srv small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.more{position:absolute;top:52px;right:14px;z-index:5;width:34px;height:34px;border-radius:50%;border:0;background:rgba(255,255,255,.1);font-size:17px;cursor:pointer}
+.week2{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.week2 div{border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);padding:9px 8px}
+.week2 small{display:block;font-family:var(--mono);font-size:10px;color:var(--faint);text-transform:uppercase}
+.week2 b{display:block;font-size:12px;margin-top:3px;line-height:1.25}
+.gr{display:flex;justify-content:space-between;align-items:baseline;margin-top:12px;font-weight:700}
+.gr:first-child{margin-top:0}
+.gr b{font-size:22px;font-weight:900}
+.oc .h{margin-top:0}
+.oc .w{margin-top:3px}
+/* Carnet */
+.log{display:flex;flex-direction:column;gap:8px}
+.step{display:grid;grid-template-columns:30px minmax(0,1fr);gap:12px;padding:14px 16px;border-radius:16px;border:1px solid var(--line);background:var(--panel);cursor:pointer;text-align:left;width:100%;color:var(--ink)}
+.step.on{border-color:rgba(255,138,85,.55);background:#1a1512}
+.step .n{font-family:var(--mono);font-size:12px;color:var(--faint);padding-top:2px}
+.step .h{font-size:15px;font-weight:700}
+.step .p{font-size:13.5px;color:var(--muted);line-height:1.5;margin-top:4px}
+.box{margin-top:22px;padding:16px 18px;border-radius:16px;border:1px solid var(--line)}
+.box .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--soft);margin-bottom:8px}
+.box ul{margin:0;padding-left:18px;color:var(--muted);font-size:13.5px;line-height:1.55}
+.box li+li{margin-top:6px}
+.box b{color:var(--ink)}
+</style>
+
+<div class="wrap">
+  <div class="phone-col"><div class="ctl" id="ctl"></div><div class="device"><div class="phone" id="phone"></div></div></div>
+  <div>
+    <div class="kicker">POC · objectifs et programmes · v4 simplifiée</div>
+    <h1>Tes objectifs, et deux bibliothèques liées</h1>
+    <p class="lead">Même modèle, moins de choses à lire. Un objectif = aujourd'hui → cible à une date, une jauge de préparation, une phrase. Les séances comptent pareil qu'elles viennent d'un programme ou du planning. Les programmes restent une bibliothèque à part, reliée aux objectifs.</p>
+    <div class="log" id="log"></div>
+    <div class="box">
+      <div class="k">Règles</div>
+      <ul>
+        <li><b>Préparation</b> : la part des séances attendues que tu as faites dans la zone et qui travaillent cet objectif. Attendues = ton programme, sinon tes jours d'entraînement. Un seul chiffre, une seule jauge.</li>
+        <li><b>La phrase</b> remplace la projection chiffrée : « À ce rythme, tu y es le 18 janvier », ou la date probable et ce qui remet dans les temps.</li>
+        <li><b>Une séance compte</b> si ses exercices travaillent l'objectif (familles de mouvement du générateur), programme ou pas.</li>
+        <li><b>Supprimé</b> : le détail semaine par semaine, la liste « cette semaine », les trois chemins de « Pour y arriver », « Tous tes tests » en haut (les tests vivent dans les pages objectif et la bibliothèque).</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+(()=>{
+const MONTHS=["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+const TODAY=new Date(2026,10,23);
+const fd=n=>{const d=new Date(TODAY.getTime()+n*864e5);return `${d.getDate()===1?"1er":d.getDate()} ${MONTHS[d.getMonth()]}`};
+const num=(v,u)=>`${String(Math.round(v*10)/10).replace(".",",")} ${u}`;
+
+/* Bibliothèque d'objectifs (haltérophile) : repère = test, familles de mouvement qui le servent */
+const OBJ={
+  fs:{date:"18 janvier",nm:"Front squat plus lourd",q:"Force",img:"img/halterophilie.jpg",ic:["🏋️","⬆️"],unit:"kg",cur:105,target:112.5,ref:"cible vs back squat : 112,5 kg",status:"red",chip:"▼ Ton maillon faible",serves:"front squat (en plein), autres squats (à moitié)",desc:"Ton front squat est à 81 % de ton back squat (repère 85 à 90 %). C'est lui qui limite ton épaulé-jeté.",hist:[[-70,97.5],[-42,100],[-14,105]]},
+  cj:{date:"18 janvier",nm:"Épaulé-jeté plus lourd",q:"Puissance",img:"img/crossfit.jpg",ic:["🏋️","⬆️"],unit:"kg",cur:103,target:107.5,ref:"cible vs front squat : 105 kg",status:"amber",chip:"◆ Proche",serves:"épaulé, jeté, front squat",desc:"Ton épaulé-jeté suit ton front squat.",hist:[[-70,100],[-42,102],[-14,103]]},
+  cmj:{date:"dans 6 semaines",nm:"Sauter plus haut",q:"Puissance",img:"img/pliometrie.jpg",ic:["🦘","⬆️"],unit:"cm",cur:45.5,target:48,ref:"repère haltérophilie : 47 cm",status:"amber",chip:"◆ Proche",serves:"squats sautés, box jumps, pliométrie",desc:"Ta détente porte ton tirage.",hist:[[-56,44],[-28,45.5]]},
+  sn:{date:"dans 6 semaines",nm:"Arraché plus lourd",q:"Puissance",img:"img/halterophilie.jpg",ic:["🏋️","⬆️"],unit:"kg",cur:84,target:87,ref:"82 % de ton épaulé-jeté",status:"green",chip:"✓ Point fort",serves:"arraché, tirage arraché, squat bras tendus",desc:"Déjà au-dessus du repère.",hist:[[-70,80],[-42,82],[-14,84]]},
+  mob:{date:"dans 6 semaines",nm:"Chevilles plus mobiles",q:"Mobilité",img:"img/mobilite.jpg",ic:["🦶","↔️"],unit:"cm",cur:9,target:12,ref:"repère : 10 cm (knee-to-wall)",status:"amber",chip:"◆ Proche",serves:"mobilité chevilles, squat cosaque",desc:"Plus de profondeur en réception.",hist:[[-30,9]]},
+  reg:{date:"4 janvier",nm:"Tenir 4 séances par semaine",q:"Régularité",img:"img/groupe.jpg",ic:["📅","✓"],unit:"séances",cur:8,target:24,ref:"ton rythme : 4 par semaine",status:"green",chip:"✓ Dans le couloir",serves:"toutes tes séances",desc:"La base de tout le reste.",hist:[[-14,0],[0,8]]},
+  rec:{date:"dans 6 semaines",nm:"Mieux récupérer",q:"Récupération",img:"img/recuperation.jpg",ic:["🌙","⬆️"],unit:"",cur:58,target:63,ref:"ta récupération / ta norme",status:"amber",chip:"◆ Sous ta norme",serves:"tes points forme",desc:"Tes nuits courtes pèsent sur tes semaines chargées.",hist:[[-21,55],[-7,58]]},
+};
+const PROGS=[
+  {id:"p1",nm:"Haltérophilie · force de jambes",img:"img/halterophilie.jpg",w:8,s:4,serves:["fs","cj"],mine:true},
+  {id:"p2",nm:"Détente et tirage",img:"img/pliometrie.jpg",w:6,s:3,serves:["cmj","sn"]},
+  {id:"p3",nm:"Technique arraché",img:"img/crossfit.jpg",w:8,s:4,serves:["sn"]},
+  {id:"p4",nm:"Force générale 5×5",img:"img/powerlifting.jpg",w:12,s:3,serves:["fs"]},
+  {id:"p5",nm:"Mobilité du squat",img:"img/mobilite.jpg",w:4,s:2,serves:["mob"]},
+];
+const PREP={fs:{pct:72,ok:true,arrive:"18 janvier"},cj:{pct:64,ok:false,arrive:"1er février"},reg:{pct:92,ok:true,arrive:"4 janvier"},cmj:{pct:0}};
+const S={i:0,lib:"obj",open:null,prog:null,mine:["fs","cj","reg"],way:"planning",role:"athlete"};
+
+/* Une seule jauge : la préparation. Pleine = tu fais ce qu'il faut pour y être à la date. */
+function gauge(id,big){const p=PREP[id]||{pct:0};return `<div class="g ${big?"big":""}"><div class="gb"><i style="width:${p.pct}%"></i></div><div class="gl"><span>Préparation</span><b>${p.pct} %</b></div></div>`}
+function card(id){const o=OBJ[id];return `<button class="oc" data-obj="${id}"><div class="oc-in"><img src="${o.img}" alt=""><div class="chain"><span class="chip2">${o.ic[0]}</span><span class="arr">→</span><span class="chip2 acc">${o.ic[1]}</span></div><div class="txt"><div class="h">${o.nm}</div><div class="w">${o.unit==="séances"?"4 par semaine":num(o.target,o.unit)} · ${o.date}</div>${gauge(id)}</div></div></button>`}
+function chart(o){
+  const W=330,H=150,p={l:30,r:10,t:10,b:20}, xs=o.hist.map(q=>q[0]), x0=Math.min(...xs)-4, x1=56;
+  const ys=[...o.hist.map(q=>q[1]),o.target], lo=Math.min(...ys), hi=Math.max(...ys), sp=(hi-lo)||1, ml=lo-sp*.2, mh=hi+sp*.2;
+  const X=x=>p.l+(x-x0)/(x1-x0)*(W-p.l-p.r), Y=v=>p.t+(1-(v-ml)/(mh-ml))*(H-p.t-p.b), lp=o.hist[o.hist.length-1];
+  return `<svg width="100%" viewBox="0 0 ${W} ${H}" role="img" aria-label="Courbe">
+    ${[.25,.5,.75].map(f=>{const v=ml+(mh-ml)*f;return `<line x1="${p.l}" x2="${W-p.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="rgba(255,255,255,.07)"/><text x="${p.l-5}" y="${Y(v)+3}" font-size="9.5" text-anchor="end" fill="rgba(255,255,255,.45)" font-family="IBM Plex Mono">${Math.round(v*2)/2}</text>`}).join("")}
+    <polygon points="${X(lp[0])},${Y(lp[1]+sp*.08)} ${X(x1)},${Y(o.target+sp*.08)} ${X(x1)},${Y(o.target-sp*.08)} ${X(lp[0])},${Y(lp[1]-sp*.08)}" fill="rgba(255,138,85,.2)"/>
+    <line x1="${X(lp[0])}" y1="${Y(lp[1])}" x2="${X(x1)}" y2="${Y(o.target)}" stroke="rgba(255,255,255,.65)" stroke-width="2" stroke-dasharray="5 5"/><circle cx="${X(x1)}" cy="${Y(o.target)}" r="5" fill="none" stroke="#fff" stroke-width="2"/>
+    <polyline points="${o.hist.map(q=>`${X(q[0])},${Y(q[1])}`).join(" ")}" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>${o.hist.map(q=>`<circle cx="${X(q[0])}" cy="${Y(q[1])}" r="3" fill="#fff"/>`).join("")}
+    <circle cx="${X(lp[0])}" cy="${Y(lp[1])}" r="5.5" fill="#f04a08" stroke="#fff" stroke-width="2"/></svg>`;
+}
+const serves=ids=>`<div class="serves">${ids.map(i=>`<span class="${S.mine.includes(i)?"mine":""}">${S.mine.includes(i)?"🎯 ":""}${OBJ[i].nm}</span>`).join("")}</div>`;
+const nav=()=>`<div class="bnav" style="grid-template-columns:repeat(3,1fr)"><span><i></i>Accueil</span><span><i></i>Planning</span><span class="on"><i></i>${S.role==="coach"?"Groupe":"Objectifs"}</span></div>`;
+
+function home(){
+  const libs={};Object.entries(OBJ).forEach(([id,o])=>{(libs[o.q]=libs[o.q]||[]).push(id)});
+  return `<div class="content"><div class="pagetitle">Objectifs</div>
+    <div class="orail">${S.mine.map(card).join("")}${S.mine.length<3?`<button class="oc add" data-lib="obj"><span style="font-size:28px">+</span>Nouvel objectif</button>`:""}</div>
+    <div class="segs" role="tablist"><button class="${S.lib==="obj"?"on":""}" data-lib="obj">Objectifs</button><button class="${S.lib==="prog"?"on":""}" data-lib="prog">Programmes</button></div>
+    ${S.lib==="obj"?Object.entries(libs).map(([q,ids])=>`<div class="sec"><span class="mono">${q}</span></div><div class="libgrid">${ids.map(id=>{const o=OBJ[id];return `<button class="lc" data-obj="${id}"><img src="${o.img}" alt="">${S.mine.includes(id)?`<span class="on">✓ Suivi</span>`:o.status==="red"?`<span class="for">Pour toi</span>`:""}<span class="t1">${o.nm}</span><span class="t2">${o.chip}</span></button>`}).join("")}</div>`).join("")
+    :`${PROGS.filter(p=>p.mine).map(progRow).join("")}<div class="sec"><span class="mono">Pour tes objectifs</span></div>${PROGS.filter(p=>!p.mine&&p.serves.some(i=>S.mine.includes(i))).map(progRow).join("")}<div class="sec"><span class="mono">Tous les programmes</span></div>${PROGS.filter(p=>!p.mine&&!p.serves.some(i=>S.mine.includes(i))).map(progRow).join("")}`}
+  </div>${nav()}`;
+}
+const progRow=p=>{const n=p.serves.filter(i=>S.mine.includes(i)).length;return `<button class="pc" data-prog="${p.id}"><img src="${p.img}" alt=""><span><b>${p.nm}</b><small>${p.mine?"En cours · semaine 3 sur 8":`${p.w} semaines · ${p.s} séances par semaine`}</small>${n?`<small style="color:var(--soft);font-weight:700">Sert ${n>1?`${n} de tes objectifs`:"ton objectif"}</small>`:""}</span><span style="color:var(--faint)">›</span></button>`};
+function objPage(){
+  const id=S.open,o=OBJ[id],mine=S.mine.includes(id),p=PREP[id],progs=PROGS.filter(x=>x.serves.includes(id)),cur=PROGS.find(x=>x.mine&&x.serves.includes(id));
+  const val=v=>o.unit==="séances"?`${v} séances`:o.unit?num(v,o.unit):v;
+  return `<button class="back" data-back="1" aria-label="Retour">‹</button>${mine?`<button class="more" aria-label="Modifier l'objectif">⋯</button>`:""}<div class="content"><div class="hero"><img src="${o.img}" alt=""><div class="ht"><div class="mono">${o.q}</div><h2>${o.nm}</h2></div></div>
+    <div class="kv"><div><small>Aujourd'hui</small><b>${val(o.cur)}</b></div><span class="to">→</span><div><small>${mine?`Le ${o.date}`:"Cible"}</small><b>${o.unit==="séances"?"4 / semaine":val(o.target)}</b></div></div>
+    <p class="one">${o.desc}</p>
+    ${mine?`${gauge(id,true)}<p class="one" style="margin-top:6px">${p.ok?`À ce rythme, tu y es le ${p.arrive}.`:`À ce rythme, plutôt le ${p.arrive} : une séance de plus par semaine te remet dans les temps.`}</p>`:""}
+    <div class="chart">${chart(o)}</div>
+    ${o.unit&&o.unit!=="séances"?`<button class="link">+ Ajouter une valeur</button>`:""}
+    <div class="sec" style="margin-top:16px"><span class="mono">${mine?"Ce qui le sert":"Pour y arriver"}</span></div>
+    ${mine?`<div class="srv">${cur?`<img src="${cur.img}" alt=""><span><b>${cur.nm}</b><small>et toutes tes séances qui travaillent ${o.serves.split(" (")[0].split(",")[0]}</small></span>`:`<span class="ico">🗓</span><span><b>Tes séances du planning</b><small>Celles qui travaillent ${o.serves.split(" (")[0].split(",")[0]} comptent.</small></span>`}</div>`
+      :`<p class="one" style="margin-top:0">Tes séances comptent déjà quand elles le travaillent. Pour aller plus vite :</p>${progs.slice(0,2).map(progRow).join("")}${progs.length>2?`<button class="link">Voir les ${progs.length} programmes ›</button>`:""}`}
+    ${mine?"":`<button class="btn wide" style="margin-top:16px" data-add="${id}" ${S.mine.length>=3?"disabled":""}>${S.mine.length>=3?"Tu suis déjà 3 objectifs":"Suivre cet objectif"}</button>`}
+  </div>${nav()}`;
+}
+function progPage(){
+  const p=PROGS.find(x=>x.id===S.prog);
+  return `<button class="back" data-back="1" aria-label="Retour">‹</button><div class="content"><div class="hero"><img src="${p.img}" alt=""><div class="ht"><div class="mono">Programme · ${p.w} semaines · ${p.s} séances par semaine</div><h2>${p.nm}</h2></div></div>
+    <div class="sec"><span class="mono">Il sert</span></div>
+    <div class="orail">${p.serves.map(card).join("")}</div>
+    <div class="sec"><span class="mono">Une semaine type</span></div>
+    <div class="week2">${[["Lun","Force jambes"],["Mer","Épaulé-jeté technique"],["Ven","Force jambes lourde"],["Sam","Haut du corps"]].map(([d,n])=>`<div><small>${d}</small><b>${n}</b></div>`).join("")}</div>
+    <button class="btn wide" style="margin-top:16px">${p.mine?"En cours · semaine 3":"Activer ce programme"}</button>
+    ${p.mine?"":`<p class="one" style="text-align:center;font-size:12.5px">Ses objectifs s'ajoutent aux tiens.</p>`}
+  </div>${nav()}`;
+}
+function coach(){
+  return `<div class="content"><div class="pagetitle">Thomas</div>
+    <div class="ath"><span class="av">T</span><span><b>Thomas · haltérophilie</b><br><small style="color:var(--muted)">Point forme fait · séance allégée</small></span></div>
+    <div class="orail">${["fs","cj"].map(card).join("")}<button class="oc add"><span style="font-size:28px">+</span>Lui fixer un objectif</button></div>
+    <div class="sec"><span class="mono">Son programme</span></div>${progRow(PROGS[0])}
+    <p class="one">Les mêmes bibliothèques que le sportif. Assigne un programme : ses objectifs suivent.</p>
+  </div><div class="bnav" style="grid-template-columns:repeat(3,1fr)"><span><i></i>Accueil</span><span><i></i>Planning</span><span class="on"><i></i>Groupe</span></div>`;
+}
+function done(){
+  return `<div class="done-scr"><div class="mono" style="color:var(--soft)">Séance terminée</div><div style="font-size:26px;font-weight:900;margin-top:6px">Force jambes</div><div class="ring">Dans la zone.</div>
+    <div class="gain">${[["fs","+8 %"],["reg","+8 %"]].map(([id,g])=>`<div class="gr"><span>${OBJ[id].nm}</span><b>${g}</b></div>${gauge(id)}`).join("")}</div>
+    <button class="btn wide" style="margin-top:16px" data-step="0">Continuer</button></div>`;
+}
+const STEPS=[
+  {h:"Objectifs",p:"Tes objectifs en cartes façon Opal (nom, cible et date, une jauge). Puis deux onglets : la bibliothèque d'objectifs, celle des programmes.",go:()=>{S.lib="obj";S.v="home";S.role="athlete"}},
+  {h:"Programmes",p:"Comme aujourd'hui. Une ligne par programme ; s'il sert tes objectifs, il le dit en une ligne.",go:()=>{S.lib="prog";S.v="home";S.role="athlete"}},
+  {h:"Un objectif de la bibliothèque",p:"Aujourd'hui → cible, une phrase d'analyse, la courbe. « Pour y arriver » : tes séances comptent déjà, ou deux programmes qui le servent. Un bouton : Suivre cet objectif.",go:()=>{S.open="cmj";S.v="obj";S.role="athlete"}},
+  {h:"Un objectif suivi",p:"Aujourd'hui → la date, une jauge, une phrase (« À ce rythme, tu y es le 18 janvier »), la courbe, « Ce qui le sert » en une ligne. Modifier dans le menu ⋯.",go:()=>{S.open="fs";S.v="obj";S.role="athlete"}},
+  {h:"Un programme",p:"Les objectifs qu'il sert, en cartes ; une semaine type ; Activer. Ses objectifs s'ajoutent aux tiens.",go:()=>{S.prog="p2";S.v="prog";S.role="athlete"}},
+  {h:"Fin de séance",p:"Une ligne par objectif servi, avec sa jauge qui monte. Identique avec ou sans programme : seule compte la séance faite.",go:()=>{S.v="done";S.role="athlete"}},
+  {h:"Côté coach",p:"Les objectifs du sportif, « Lui fixer un objectif », son programme. Les mêmes bibliothèques.",go:()=>{S.v="coach";S.role="coach"}},
+];
+const phone=document.getElementById("phone"), log=document.getElementById("log");
+const frame=()=>`<div class="island"></div><div class="sb"><span>9:41</span><span>●●● 4G</span></div><div class="homebar"></div>`;
+const V={home,obj:objPage,prog:progPage,done,coach};
+function render(still){
+  document.getElementById("ctl").innerHTML=`<span class="mono">Voir</span>${STEPS.map((s,i)=>`<button class="${i===S.i?"on":""}" data-step="${i}">${i+1}</button>`).join("")}`;
+  phone.innerHTML=`<div class="scr ${still?"still":""}">${V[S.v]()}</div>${frame()}`;
+  log.innerHTML=STEPS.map((st,i)=>`<button class="step ${i===S.i?"on":""}" data-step="${i}"><span class="n">${String(i+1).padStart(2,"0")}</span><span><div class="h">${st.h}</div><div class="p">${st.p}</div></span></button>`).join("");
+}
+function goStep(i){S.i=i;STEPS[i].go();render()}
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-step],[data-lib],[data-obj],[data-prog],[data-back],[data-way],[data-add]");if(!t)return;const d=t.dataset;
+  if(d.step!==undefined)return goStep(+d.step);
+  if(d.lib){S.lib=d.lib;S.v="home";S.i=d.lib==="obj"?0:1;return render(true)}
+  if(d.obj){S.open=d.obj;S.v="obj";S.i=S.mine.includes(d.obj)?3:2;S.added=false;return render()}
+  if(d.prog){S.prog=d.prog;S.v="prog";S.i=4;return render()}
+  if(d.back){S.v=S.role==="coach"?"coach":"home";S.i=S.role==="coach"?6:(S.lib==="obj"?0:1);return render()}
+  if(d.way){S.way=d.way;return render(true)}
+  if(d.add&&S.mine.length<3){S.mine.push(d.add);S.i=3;return render(true)}
+});
+{const h=location.hash.match(/^#s(\d)$/);goStep(h?+h[1]-1:0)}
+})();
+</script>

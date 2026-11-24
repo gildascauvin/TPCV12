@@ -26,6 +26,7 @@ const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
 const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 const TestsPanel = dynamic(() => import("@/components/tests/TestsPanel"));
+const CoachObjectivesTests = dynamic(() => import("@/components/objectives/CoachObjectivesTests"));
 import type { CoachAthlete, SubscriptionStatus } from "@/types";
 import type { AthleteSignature } from "@/lib/fatigueSignature";
 import type { LastTestByAthlete, AthleteTestVerdictByAthlete } from "@/lib/testSummary";
@@ -258,6 +259,9 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
               {/* Pas de titre "Performance / {nom}" ici (2026-09-24, retour de Gildas) — le nom du
                  sportif est déjà visible via la puce active dans AthleteFilterBar juste au-dessus,
                  le répéter est redondant. */}
+              {a.user_id && !sandboxMode ? (
+                <CoachObjectivesTests coachId={userId} athlete={{ ...a, user_id: a.user_id }} locked={analysisLocked} onUnlock={() => setPaywallStep("priming")} />
+              ) : (
               <TestsPanel
                 ownerId={userId} subject={{ subjectCoachAthleteId: a.id }} linkedUserId={a.user_id}
                 emptyHint={`Aucun test enregistré pour ${a.name} — marque une ligne d'exercice comme test (menu ⋯) dans une de ses séances.`}
@@ -265,6 +269,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                 onDarkPage
                 lockedAnalysis={analysisLocked ? { onUnlock: () => setPaywallStep("priming") } : null}
               />
+              )}
             </>
           );
         })() : (
