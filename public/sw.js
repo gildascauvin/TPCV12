@@ -1,10 +1,26 @@
+/* En local (localhost), ce service worker se désinstalle tout seul (25/11) : les fichiers JS du serveur de
+   développement gardent le même nom d'une version à l'autre et le cache-first servait du code figé. Le
+   navigateur revérifie sw.js à chaque visite : cette version remplace l'ancienne, vide les caches, se
+   désinscrit et recharge les onglets ouverts. Sans effet en production. */
+const IS_LOCAL = ["localhost", "127.0.0.1", "[::1]"].includes(self.location.hostname) || self.location.hostname.endsWith(".localhost");
+if (IS_LOCAL) {
+  self.addEventListener("install", () => self.skipWaiting());
+  self.addEventListener("activate", (event) => {
+    event.waitUntil((async () => {
+      for (const k of await caches.keys()) await caches.delete(k);
+      await self.registration.unregister();
+      for (const c of await self.clients.matchAll({ type: "window" })) c.navigate(c.url);
+    })());
+  });
+}
+
 const CACHE = "theperfclub-v4";
 /* Mode hors ligne (2026-10-02) : /offline.html est la page affichée quand une page ne peut pas
    se charger sans réseau (séances de la semaine + file d'attente, voir public/offline.html). */
 const PRECACHE_URLS = ["/offline.html"];
 const STATIC_ASSET_RE = /^\/_next\/static\/|\.(png|jpg|jpeg|svg|webp|gif|ico|woff2?)$/;
 
-self.addEventListener("install", (event) => {
+if (!IS_LOCAL) self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE)
       .then((cache) => cache.addAll(PRECACHE_URLS).catch(() => {}))
@@ -12,7 +28,7 @@ self.addEventListener("install", (event) => {
   );
 });
 
-self.addEventListener("activate", (event) => {
+if (!IS_LOCAL) self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
       .then((keys) =>
@@ -22,7 +38,7 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-self.addEventListener("fetch", (event) => {
+if (!IS_LOCAL) self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   if (!event.request.url.startsWith(self.location.origin)) return;
 

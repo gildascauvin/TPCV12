@@ -103,7 +103,7 @@ export default function StreakPill() {
         <>
           <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 2147483090, background: "rgba(4,6,8,.45)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }} />
           <div role="dialog" aria-modal="true" aria-label="Ta série" style={{
-            position: "fixed", left: "50%", bottom: 0, transform: "translateX(-50%)", zIndex: 2147483095, width: `min(${SHEET_W}px, 100vw)`,
+            position: "fixed", left: 0, right: 0, bottom: 0, marginLeft: "auto", marginRight: "auto", zIndex: 2147483095, width: `min(${SHEET_W}px, 100vw)`,
             maxHeight: "88dvh", overflowY: "auto", animation: "sheetInUp .32s cubic-bezier(.32,.72,0,1)",
             background: "#1a1f24", borderTop: "1px solid rgba(255,255,255,.14)", borderRadius: "28px 28px 0 0",
             padding: "10px 18px calc(22px + env(safe-area-inset-bottom, 0px))",

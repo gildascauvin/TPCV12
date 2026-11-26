@@ -8,6 +8,8 @@ import { programCover } from "@/lib/programCovers";
 import { sportShortLabel, DEFAULT_SHORT_LABEL } from "@/lib/sportShortLabel";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useFollowedObjectives } from "@/lib/objectivesClient";
+import { serveFamily } from "@/lib/programServes";
+import type { MetricKey } from "@/lib/testNorms";
 
 /* Page Programmes façon boutique (2026-10-03/04, POC poc-programme-header-v3.html) : création en
    premier, mes programmes, "Pour toi" (sport de l'utilisateur, masqué s'il est inconnu), puis tous
@@ -190,7 +192,7 @@ function ServeTags({ p, mine, light = false }: { p: LibraryProgram; mine: string
   if (!p.serves?.length) return null;
   return (
     <span style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-      {p.serves.map(s => <ServeTag key={s.metric} label={s.label} mine={!!mine?.includes(`metric:${s.metric}`)} light={light} />)}
+      {p.serves.slice(0, 3).map(s => <ServeTag key={s.metric} label={s.label} mine={!!mine?.some(id => id === `metric:${s.metric}` || (id.startsWith("metric:") && serveFamily(id.slice(7) as MetricKey) === s.metric))} light={light} />)}
     </span>
   );
 }

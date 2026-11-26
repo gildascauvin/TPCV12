@@ -60,7 +60,7 @@ export default function ProgramTemplateDetail({ program: p, role, onBack, onStar
 
   const weeks = useMemo(() => template?.weeks ?? [], [template]);
   /* « Il sert » (P2, 24/11) : ce que le programme travaille, tes objectifs suivis marqués 🎯. */
-  const serves = useMemo(() => programServes(template), [template]);
+  const serves = useMemo(() => programServes(template), [template]); // tout ce qu'il sert : même liste que les fiches objectif
   const totalSessions = useMemo(() => weeks.reduce((t, w) => t + DAYS.reduce((u, d) => u + (w[d]?.length ?? 0), 0), 0), [weeks]);
   const trainingDays = useMemo(() => DAYS.filter(d => (weeks[0]?.[d]?.length ?? 0) > 0), [weeks]);
   const level = p.level ? LEVEL_LABELS[p.level] : null;
@@ -131,7 +131,7 @@ export default function ProgramTemplateDetail({ program: p, role, onBack, onStar
 
           {serves.length > 0 && (
             <>
-              <h2 style={h2}>Il sert</h2>
+              <h2 style={h2}>Il fait progresser</h2>
               {coach ? (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{serves.map(sv => <ServeTag key={sv.metric} label={sv.label} />)}</div>
               ) : <ServeObjectiveCards serves={serves} weeks={p.weeks_count} />}

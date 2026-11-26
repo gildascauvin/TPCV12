@@ -4,7 +4,7 @@ import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { coachIsPaying } from "@/lib/access";
 import ProgramLibraryStandalone from "@/components/programs/ProgramLibraryStandalone";
 
-export default async function ProgrammesPage({ searchParams }: { searchParams?: { step?: string; focus?: string } }) {
+export default async function ProgrammesPage({ searchParams }: { searchParams?: { step?: string; focus?: string; modele?: string; objectif?: string; semaines?: string } }) {
   const supabase = await createClient();
   const user = await getAuthUser();
 
@@ -25,6 +25,8 @@ export default async function ProgrammesPage({ searchParams }: { searchParams?: 
       hasActiveCoach={hasActiveCoach}
       backHref="/week"
       focusProgramId={searchParams?.focus}
+      openTemplateId={searchParams?.modele}
+      objectivePrefill={searchParams?.objectif ? { objective: searchParams.objectif, weeks: Number(searchParams.semaines) || undefined } : undefined}
       userSport={(profile as { sport?: string | null } | null)?.sport ?? null}
       initialStep={searchParams?.step === "import" ? "import" : searchParams?.step === "new" ? "new" : undefined}
     />

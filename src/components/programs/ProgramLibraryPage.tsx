@@ -3,16 +3,19 @@
 import { isThePerfClubProgram, revealLabel, NOT_STARTED_LABEL } from "@/lib/programReveal";
 import { effectiveAnchor, addDaysStr } from "@/lib/programSchedule";
 import { Skel } from "@/components/ui/Skeleton";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { Program, CoachAthlete, ProgramAssignment } from "@/types";
 import ProgramCriteriaModal, { type ProgramMeta } from "./ProgramCriteriaModal";
 import ProgramCreatePicker from "./ProgramCreatePicker";
 import ProgramLibraryBrowser, { type LibraryProgram, fetchLibraryTemplate } from "./ProgramLibraryBrowser";
-import { CreateTiles, TemplateSections, Cover, Carousel, SectionHeader } from "./ProgramStoreSections";
+import { CreateTiles, TemplateSections, Cover, Carousel, SectionHeader, loadLibrary } from "./ProgramStoreSections";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { DARK_CARD_BG } from "@/lib/theme";
 import ProgramTemplateDetail from "./ProgramTemplateDetail";
+import { weaknessForMetric } from "@/lib/objectives";
+import { rememberProgramObjective } from "@/components/objectives/FollowProgramObjectives";
+import { METRIC_DISPLAY, type MetricKey } from "@/lib/testNorms";
 import { programWeekIndex } from "@/lib/programAssignment";
 import ProgramBuilderModal from "./ProgramBuilderModal";
 import ProgramAssignModal from "./ProgramAssignModal";
@@ -69,6 +72,9 @@ interface Props {
   initialStep?: "new" | "import";
   /* "Modifier →" du bandeau programme (2026-10-01) : la liste s'ouvre centrée sur ce programme. */
   focusProgramId?: string;
+  openTemplateId?: string;
+  /** ?objectif=metric:X&semaines=N : ouvre le générateur pré-rempli pour cet objectif (P3, 24/11). */
+  objectivePrefill?: { objective: string; weeks?: number };
   /* Onglet "Programmes" de la bottom nav (2026-09-01) — true uniquement depuis
      ProgramLibraryStandalone (route /programmes). L'écran liste devient alors une page normale
      (plus de position:fixed plein écran, plus de flèche retour) pour laisser la bottom nav
@@ -98,7 +104,7 @@ const AVATAR_COLORS = ["#d44000", "#2f9e44", "#1d6fdb", "#7c3aed", "#b96500"];
 
 const WEEK_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
-export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, requireSubscription, isActive, onClose, sandboxMode = false, initialStep, focusProgramId, standalone = false, userSport }: Props) {
+export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, requireSubscription, isActive, onClose, sandboxMode = false, initialStep, focusProgramId, openTemplateId, objectivePrefill, standalone = false, userSport }: Props) {
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const router = useRouter();
   const { isMd } = useBreakpoint();
@@ -107,7 +113,17 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
   const [programs, setPrograms] = useState<Program[]>([]);
   const [assignments, setAssignments] = useState<ProgramAssignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [step, setStep] = useState<UIStep>(initialStep === "new" ? { type: "new" } : initialStep === "import" ? { type: "criteria", mode: "import" } : { type: "list" });
+  const [step, setStep] = useState<UIStep>(objectivePrefill ? { type: "criteria", mode: "criteria" } : initialStep === "new" ? { type: "new" } : initialStep === "import" ? { type: "criteria", mode: "import" } : { type: "list" });
+  /* Générateur depuis un objectif : sport du profil, progresser en intensité, durée la plus proche de
+     l'échéance, point faible qui travaille la mesure. */
+  const generatorPrefill = useMemo(() => {
+    if (!objectivePrefill?.objective.startsWith("metric:")) return undefined;
+    const m = objectivePrefill.objective.slice(7) as MetricKey;
+    const w = objectivePrefill.weeks ?? 8;
+    const duration = ([4, 8, 12] as const).reduce((best, d) => Math.abs(d - w) < Math.abs(best - w) ? d : best, 8 as 4 | 8 | 12);
+    const weak = weaknessForMetric(userSport ?? null, m);
+    return { sport: userSport ?? undefined, focus: "intensite" as const, duration, weaknesses: weak ? [weak] : [], objective: `metric:${m}` };
+  }, [objectivePrefill, userSport]);
   const [linkCopied, setLinkCopied] = useState<Record<string, boolean>>({});
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   /* Menus "⋯" en position fixe (2026-10-04) : la liste "Mes programmes" est un carrousel qui défile
@@ -159,6 +175,11 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
   }
 
   useEffect(() => { fetchPrograms(); }, []);
+  useEffect(() => {
+    if (!openTemplateId) return;
+    loadLibrary().then(list => { const t = list.find(x => x.id === openTemplateId); if (t) setStep({ type: "detail", program: t }); }).catch(() => {});
+  }, [openTemplateId]);
+
   useEffect(() => {
     if (loading || !focusProgramId) return;
     document.getElementById(`program-${focusProgramId}`)?.scrollIntoView({ behavior: "smooth", block: "center", inline: "start" });
@@ -387,6 +408,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
     return (
       <ProgramCriteriaModal
         mode={mode}
+        prefill={mode === "criteria" ? generatorPrefill : undefined}
         onClose={closeOrList}
         onBack={backToCreate}
         onGenerate={(template, meta) => {
@@ -440,6 +462,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
           if (isEdit) await updateProgram(id!, name, template);
           else id = await saveProgram(name, template, step.meta) ?? undefined;
           await fetchPrograms();
+          if (id && step.meta.objective) rememberProgramObjective(id, step.meta.objective);
           if (id) setStep({ type: "assign", programId: id, programName: name });
           else closeOrList();
         }}

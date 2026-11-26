@@ -7,9 +7,11 @@ import { createClient } from "@/lib/supabase/client";
 import { mediaForLine, ytFrame } from "@/lib/exerciseDemos";
 import { serveLine, type ProgramServe } from "@/lib/programServes";
 import { useFollowedObjectives, refreshFollowedObjectives } from "@/lib/objectivesClient";
+import { notifyFollowObjective } from "@/components/objectives/FollowProgramObjectives";
+import { Carousel } from "@/components/programs/ProgramStoreSections";
 
 /* « Il sert » sur la fiche d'un programme (P2, 24/11/2026, Gildas : « le composant des cartes d'objectif,
-   qu'on peut ouvrir et ajouter directement ») : mêmes cartes photo que l'onglet Objectifs. Tap sur la
+   qu'on peut ouvrir et ajouter directement ») : mêmes cartes photo que l'onglet Objectifs, en carrousel (comme les programmes sur la fiche d'un objectif). Tap sur la
    carte = sa fiche dans l'onglet Objectifs ; « + » = la suivre (échéance = fin du programme), ✓ = la retirer.
    Limite de 3 objectifs, comme l'onglet Objectifs. */
 
@@ -38,9 +40,10 @@ export default function ServeObjectiveCards({ serves, weeks }: { serves: Program
 
   async function toggle(s: ProgramServe) {
     const id = `metric:${s.metric}`, on = followed.includes(id);
-    if (!on && full) return;
+    /* Déjà 3 objectifs : on propose sur place lequel remplacer (FollowProgramObjectives). */
+    if (!on && full) { notifyFollowObjective(s.metric, weeks); return; }
     setBusy(s.metric); setErr(null);
-    if (!on && (await refreshFollowedObjectives()).length >= MAX) { setBusy(null); return; }
+    if (!on && (await refreshFollowedObjectives()).length >= MAX) { setBusy(null); notifyFollowObjective(s.metric, weeks); return; }
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setBusy(null); return; }
@@ -55,11 +58,11 @@ export default function ServeObjectiveCards({ serves, weeks }: { serves: Program
 
   return (
     <div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
+      <Carousel itemWidth="200px" gap={12}>
         {serves.map(s => {
-          const id = `metric:${s.metric}`, on = followed.includes(id), blocked = !on && full;
+          const id = `metric:${s.metric}`, on = followed.includes(id), blocked = false;
           return (
-            <div key={s.metric} style={{ position: "relative", height: 172, borderRadius: 20, overflow: "hidden", background: "#11161a", border: on ? "2px solid #d44000" : "1px solid rgba(0,0,0,.08)" }}>
+            <div key={s.metric} style={{ position: "relative", width: "100%", height: 200, borderRadius: 22, overflow: "hidden", background: "#11161a", border: on ? "2px solid #d44000" : "1px solid rgba(0,0,0,.08)" }}>
               <button type="button" onClick={() => router.push(`/conseils?open=${id}`)} aria-label={`Voir ${s.label}`}
                 style={{ position: "absolute", inset: 0, border: 0, padding: 0, background: "none", color: "#fff", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -79,8 +82,7 @@ export default function ServeObjectiveCards({ serves, weeks }: { serves: Program
             </div>
           );
         })}
-      </div>
-      {full && serves.some(s => !followed.includes(`metric:${s.metric}`)) && <div style={{ fontSize: 12.5, color: "#62686e", marginTop: 8 }}>Tu suis déjà 3 objectifs : retires-en un pour en ajouter.</div>}
+      </Carousel>
       {err && <div role="alert" style={{ fontSize: 12.5, color: "#d44000", marginTop: 8 }}>{err}</div>}
     </div>
   );

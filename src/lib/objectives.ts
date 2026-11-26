@@ -355,3 +355,11 @@ export function servedSessionsText(def: ObjectiveDef, n: number): string {
   const w = SERVE_WORDS[m.metric] ?? (/^sprint|^fly/.test(m.metric) ? "avec des sprints" : /^time|vma|vo2/.test(m.metric) ? "de course" : `avec du ${def.label.toLowerCase()}`);
   return `${s} ${w}`;
 }
+
+/** Point faible du générateur qui travaille cette mesure, pour le sport (P3, 24/11) : pré-remplit « un
+    programme fait pour cet objectif ». null si aucun point faible du sport ne la vise. */
+export function weaknessForMetric(sport: string | null | undefined, metric: MetricKey): string | null {
+  const fam = familyFor(sport);
+  const entry = Object.entries(BY_WEAKNESS[fam] ?? {}).find(([, d]) => d.measure.kind === "metric" && d.measure.metric === metric);
+  return entry ? entry[0] : null;
+}

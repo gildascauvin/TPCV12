@@ -41,6 +41,6 @@ export async function GET() {
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
   /* « Il sert » (P2, 24/11) : calculé ici depuis le contenu, puis le contenu est retiré de la réponse. */
-  const programs = (data ?? []).map(({ template, ...p }) => ({ ...p, serves: programServes(template as ProgramTemplate).map(s => ({ metric: s.metric, label: s.label, line: serveLine(s) })) }));
+  const programs = (data ?? []).map(({ template, ...p }) => ({ ...p, serves: programServes(template as ProgramTemplate).map(s => ({ metric: s.metric, label: s.label, line: serveLine(s), perWeek: s.perWeek })) }));
   return Response.json({ programs });
 }

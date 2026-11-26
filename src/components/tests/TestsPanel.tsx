@@ -525,7 +525,17 @@ function RowMenu({ mergeSuggestions, onMerge, onDeleteWhole }: {
    entier, jamais un détail caché derrière une sélection préalable. */
 /* Feuille du bas sombre (onglet Objectifs, 24/11) : portail dans <body> (le conteneur animé de la page casse
    position:fixed), Échap ferme, le fond ne défile pas. */
-function BottomSheet({ title, subtitle, onClose, children, dark = false }: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode; dark?: boolean }) {
+/** Verdict en une phrase simple (fiche Objectifs) : où tu en es par rapport à ton repère, sans ratio ni source. */
+function plainVerdict(pc: CardInsight, target: string | null): string {
+  const c = pc.compareLabel.trim();
+  const comp = /^poids/i.test(c) ? "ton poids de corps" : /moyenne|internationa|élite|niveau/i.test(c) ? c.charAt(0).toLowerCase() + c.slice(1) : `ton ${c}`;
+  const t = target ? ` (${target})` : "";
+  if (pc.status === "red") return `Tu es en dessous du repère${t} attendu par rapport à ${comp}.`;
+  if (pc.status === "amber") return `Tu es proche du repère${t}, calculé par rapport à ${comp}.`;
+  return `Tu es au niveau du repère par rapport à ${comp}.`;
+}
+
+export function BottomSheet({ title, subtitle, onClose, children, dark = false }: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode; dark?: boolean }) {
   /* Thème de l'app : feuille blanche (CLAUDE.md, modales #fff). `dark` : « Comment on te compare » (Gildas). */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -539,7 +549,7 @@ function BottomSheet({ title, subtitle, onClose, children, dark = false }: { tit
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 2147483190, background: "rgba(4,6,8,.55)" }} />
       <div role="dialog" aria-modal="true" aria-label={title} style={{
-        position: "fixed", left: "50%", bottom: 0, transform: "translateX(-50%)", zIndex: 2147483195, width: "min(560px, 100vw)", maxHeight: "88dvh", overflowY: "auto",
+        position: "fixed", left: 0, right: 0, bottom: 0, marginLeft: "auto", marginRight: "auto", zIndex: 2147483195, width: "min(560px, 100vw)", maxHeight: "88dvh", overflowY: "auto",
         background: dark ? "#1a1f24" : "#fff", color: dark ? "#fff" : "#171b1f", borderRadius: "28px 28px 0 0", borderTop: dark ? "1px solid rgba(255,255,255,.14)" : "none",
         padding: "10px 20px calc(24px + env(safe-area-inset-bottom, 0px))", boxShadow: "0 -20px 50px rgba(0,0,0,.55)", animation: "sheetInUp .32s cubic-bezier(.32,.72,0,1)",
       }}>
@@ -558,13 +568,19 @@ function BottomSheet({ title, subtitle, onClose, children, dark = false }: { tit
   );
 }
 
-function TestCard({ hideChart = false, contextLast = false, title, unit, results, comparisons, onAdd, onAddNew, onAddPair, readOnly, batteryInfo, onDeleteResult, metric, sscProfile, secondaryByDate, ftctInfo, repEntries, onAddRepEntry, onDeleteRepEntry, initialOpen, analysisLocked = false, exampleNote, projectedDate }: {
+function TestCard({ planTest, topSlot = null, beforeContext = null, hideChart = false, contextLast = false, title, unit, results, comparisons, onAdd, onAddNew, onAddPair, readOnly, batteryInfo, onDeleteResult, metric, sscProfile, secondaryByDate, ftctInfo, repEntries, onAddRepEntry, onDeleteRepEntry, initialOpen, analysisLocked = false, exampleNote, projectedDate }: {
   /** Prochain test (ISO) : un 1er résultat montre déjà sa courbe avec le point à venir en pointillés. */
   projectedDate?: string;
   /** Fiche objectif (23/11) : la page hôte affiche déjà la courbe en grand. */
   hideChart?: boolean;
   /** Fiche objectif : description, calculateur et comparaisons après l'historique et la saisie. */
   contextLast?: boolean;
+  /** Fiche objectif : contenu inséré entre la saisie et « Comment on te compare » (« Pour y arriver »). */
+  beforeContext?: React.ReactNode;
+  /** Fiche objectif : la courbe, posée en tête de l'encadré qui contient aussi l'historique et l'ajout. */
+  topSlot?: React.ReactNode;
+  /** Fiche objectif : feuille de préparation du 1er test en séance. */
+  planTest?: (metric: MetricKey, onClose: () => void) => React.ReactNode;
   /* Freemium : comparaisons, profil et courbe floutés ; l'historique brut et l'ajout restent libres. */
   analysisLocked?: boolean;
   /** Tests d'exemple (2026-10-01) : mention centrée sur la courbe d'évolution. */
@@ -629,9 +645,29 @@ function TestCard({ hideChart = false, contextLast = false, title, unit, results
   const [open, setOpen] = useState(!!initialOpen);
   const [infoOpen, setInfoOpen] = useState(false);
   /* Fiche de l'onglet Objectifs : l'ajout d'un résultat se fait dans une feuille du bas (24/11, Gildas). */
-  const asSheet = (node: React.ReactNode) => contextLast
-    ? <BottomSheet title={results.length ? "Ajouter un résultat" : "Ton 1er test"} subtitle={title} onClose={() => setOpen(false)}>{node}</BottomSheet>
-    : node;
+  /* 1er test (25/11) : un seul bouton, puis le choix « Je connais ma valeur » (saisie) ou « Je le teste en
+     séance » (feuille PlanTestSheet). */
+  const [firstChoice, setFirstChoice] = useState<"ask" | "value" | "plan">("ask");
+  useEffect(() => { if (!open) setFirstChoice("ask"); }, [open]);
+  const asSheet = (node: React.ReactNode) => {
+    if (!contextLast) return node;
+    if (!results.length && planTest && metric && firstChoice === "plan") return planTest(metric, () => setOpen(false));
+    if (!results.length && planTest && metric && firstChoice === "ask") {
+      const opt = (k: "value" | "plan", t: string, sub: string) => (
+        <button type="button" onClick={() => setFirstChoice(k)} style={{ display: "block", width: "100%", textAlign: "left", padding: "14px 16px", borderRadius: 14, border: "1px solid rgba(0,0,0,.1)", background: "#fff", color: "#171b1f", fontFamily: "inherit", cursor: "pointer", marginTop: 8 }}>
+          <span style={{ display: "block", fontSize: 15, fontWeight: 800 }}>{t}</span>
+          <span style={{ display: "block", fontSize: 12.5, color: "#62686e", marginTop: 2 }}>{sub}</span>
+        </button>
+      );
+      return (
+        <BottomSheet title="Ton 1er test" subtitle={title} onClose={() => setOpen(false)}>
+          {opt("value", "Je connais ma valeur", "Tu l'as testé récemment : saisis-la maintenant.")}
+          {opt("plan", "Je le teste en séance", "Choisis le jour : le test est préparé dans ta séance.")}
+        </BottomSheet>
+      );
+    }
+    return <BottomSheet title={results.length ? "Ajouter un résultat" : "Ton 1er test"} subtitle={title} onClose={() => setOpen(false)}>{node}</BottomSheet>;
+  };
   const [value, setValue] = useState("");
   const [contactValue, setContactValue] = useState("");
   const [newUnit, setNewUnit] = useState<string>("kg");
@@ -800,31 +836,8 @@ function TestCard({ hideChart = false, contextLast = false, title, unit, results
       </LockedBlur>
     </>
   );
-  return (
-    <div>
-      {!contextLast && contextBlock}
-
-      {/* Courbe et premier/dernier = tes propres résultats (des entrées) : toujours lisibles, même
-          en compte gratuit (2026-10-01). Seuls les repères et l'analyse au-dessus sont floutés. */}
-      {hideChart ? null : results.length >= 2 || (projectedDate && results.length === 1) ? (
-        <div style={{ marginTop: 10 }}>
-          <div style={{ position: "relative" }}>
-            <TestEvolutionChart points={results.map(r => ({ date: r.date, value: r.value }))} height={exampleNote ? 96 : 70} projectedDate={results.length === 1 ? projectedDate : undefined} />
-            {exampleNote && <ExampleNote text={exampleNote} top="50%" />}
-          </div>
-          {results.length >= 2 && <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-            <span style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "5px 9px", fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,.65)" }}>
-              Premier : <b style={{ color: "#fff" }}>{formatRawValue(metric, results[0].value, results[0].unit, results[0].date, secondaryByDate)}</b>
-            </span>
-            <span style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "5px 9px", fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,.65)" }}>
-              Dernier : <b style={{ color: "#fff" }}>{formatRawValue(metric, last!.value, last!.unit, last!.date, secondaryByDate)}</b>
-            </span>
-          </div>}
-        </div>
-      ) : results.length === 1 ? null : (
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginTop: results.length || comparisons || sscProfile || batteryInfo ? 10 : 0 }}>Aucun résultat encore.</div>
-      )}
-
+  const historyBlock = (
+    <>
       {/* Historique affiché par défaut (2026-09, suite — retour de Gildas) : plus de 2e niveau de
           repli, la carte entière n'étant déjà montée qu'au dépli de la ligne (voir TestsPanel), un
           toggle supplémentaire ici était redondant. */}
@@ -865,6 +878,40 @@ function TestCard({ hideChart = false, contextLast = false, title, unit, results
         + Ajouter un résultat
       </button>
       ))}
+    </>
+  );
+  return (
+    <div>
+      {!contextLast && contextBlock}
+
+      {/* Courbe et premier/dernier = tes propres résultats (des entrées) : toujours lisibles, même
+          en compte gratuit (2026-10-01). Seuls les repères et l'analyse au-dessus sont floutés. */}
+      {hideChart ? null : results.length >= 2 || (projectedDate && results.length === 1) ? (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ position: "relative" }}>
+            <TestEvolutionChart points={results.map(r => ({ date: r.date, value: r.value }))} height={exampleNote ? 96 : 70} projectedDate={results.length === 1 ? projectedDate : undefined} />
+            {exampleNote && <ExampleNote text={exampleNote} top="50%" />}
+          </div>
+          {results.length >= 2 && <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <span style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "5px 9px", fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,.65)" }}>
+              Premier : <b style={{ color: "#fff" }}>{formatRawValue(metric, results[0].value, results[0].unit, results[0].date, secondaryByDate)}</b>
+            </span>
+            <span style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "5px 9px", fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,.65)" }}>
+              Dernier : <b style={{ color: "#fff" }}>{formatRawValue(metric, last!.value, last!.unit, last!.date, secondaryByDate)}</b>
+            </span>
+          </div>}
+        </div>
+      ) : results.length === 1 ? null : (
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginTop: results.length || comparisons || sscProfile || batteryInfo ? 10 : 0 }}>Aucun résultat encore.</div>
+      )}
+
+      {contextLast ? (
+        /* Fiche Objectifs (25/11, Gildas) : courbe, historique et ajout d'un résultat dans le même encadré. */
+        <div style={{ marginTop: 4, borderRadius: 20, padding: "12px 14px 14px", background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)" }}>
+          {topSlot}
+          {historyBlock}
+        </div>
+      ) : historyBlock}
       {!readOnly && open && asSheet(
         <div style={{ marginTop: 9, paddingTop: 10, borderTop: contextLast ? "none" : "1px dashed rgba(255,255,255,.12)" }}>
           {sameJumpNote && (
@@ -1032,6 +1079,7 @@ function TestCard({ hideChart = false, contextLast = false, title, unit, results
           </div>
         );
       })()}
+      {beforeContext}
       {/* Repères, calculateur et comparaisons : intéressants mais experts (24/11, Gildas) → une ligne qui ouvre une feuille. */}
       {contextLast && (
         <button type="button" onClick={() => setInfoOpen(true)}
@@ -1195,6 +1243,10 @@ export interface TestsObjectivesAdapter {
   headline?: (metric: MetricKey) => { target: string; date: string; reached: boolean; current: string | null; pct: number; remaining: string | null; sessions: string | null } | null;
   /** Bloc objectif dans la fiche (cible, échéance, avancement, courbe projetée) ; null si pas suivi. */
   panel: (metric: MetricKey) => React.ReactNode;
+  /** Feuille « Le jour de ton test » (choix « Je le teste en séance » d'un test sans valeur). */
+  planTest?: (metric: MetricKey, onClose: () => void) => React.ReactNode;
+  /** Bloc « Pour y arriver », placé après l'historique et avant « Comment on te compare ». */
+  ways?: (metric: MetricKey) => React.ReactNode;
   /** Cartes hors test (régularité, récupération, jour J), ajoutées à « Tous ». */
   extraCards?: React.ReactNode;
   /** Ouvre la fiche d'une mesure (depuis le carrousel des objectifs). */
@@ -1264,6 +1316,8 @@ export default function TestsPanel({ layout = "list", objectives, ownerId, subje
   const [objFilter, setObjFilter] = useState<"foryou" | "all">("foryou");
   const [objQuery, setObjQuery] = useState("");
   const [pageKey, setPageKey] = useState<string | null>(null);
+  const [expertOpen, setExpertOpen] = useState(false);
+  useEffect(() => { setExpertOpen(false); }, [pageKey]);
   const objRowsRef = useRef<UnifiedRow[]>([]);
   // Ligne dépliée (accordion, 2026-09, suite) — une seule à la fois, `key` = UnifiedRow.key. La carte
   // complète (TestCard) n'est montée QUE quand sa ligne est ouverte : `autoAddKey` mémorise que
@@ -1880,7 +1934,8 @@ export default function TestsPanel({ layout = "list", objectives, ownerId, subje
   /* Objectif suivi sans aucune ligne (ex. back squat d'un sprinteur sans test) : une ligne à remplir,
      sinon sa fiche ne s'ouvre pas et rien ne permet d'ajouter la 1re valeur (bug 24/11, compte +liv). */
   const haveMetric = (m: MetricKey) => [...interpretedRows, ...uninterpretedRows, ...recommendedRows, ...rawRows].some(r => r.cardProps.metric === m || r.key === `insight-${m}` || r.key === `metric-${m}`);
-  const followedRows: UnifiedRow[] = (layout === "objectives" ? objectives?.followedMetrics ?? [] : []).filter(m => METRIC_DISPLAY[m] && !haveMetric(m)).map(m => {
+  /* Filtre de qualité appliqué comme aux autres lignes (Gildas : « mes objectifs présents même hors catégorie »). */
+  const followedRows: UnifiedRow[] = (layout === "objectives" ? objectives?.followedMetrics ?? [] : []).filter(m => METRIC_DISPLAY[m] && !haveMetric(m) && (!activeQuality || (METRIC_QUALITY[m] ?? []).includes(activeQuality))).map(m => {
     const name = METRIC_DISPLAY[m].name;
     const cardProps: TestCardProps = {
       title: name, unit: METRIC_DISPLAY[m].unit, results: [],
@@ -2099,7 +2154,10 @@ export default function TestsPanel({ layout = "list", objectives, ownerId, subje
             {(() => { const h = m && on ? objectives?.headline?.(m) ?? null : null; return (
               <>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 40, fontWeight: 900, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{h?.current ?? val ?? "?"}</span>
+                  {/* Sans valeur : pas de « ? » (Gildas), un libellé discret ; le bouton « Renseigne ton 1er test » suit. */}
+                  {(h?.current ?? val)
+                    ? <span style={{ fontSize: 40, fontWeight: 900, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{h?.current ?? val}</span>
+                    : <span style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,.55)" }}>Pas encore testé</span>}
                   {h && <><span style={{ fontSize: 26, color: "rgba(255,255,255,.4)" }}>→</span><span style={{ fontSize: 40, fontWeight: 900, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", lineHeight: 1, color: "#ff8a55" }}>{h.target}</span></>}
                 </div>
                 {h && !h.reached && (
@@ -2129,19 +2187,21 @@ export default function TestsPanel({ layout = "list", objectives, ownerId, subje
                     </div>
                   ) : r.cardio ? <CardioZonesBlock z={r.cardio} />
                     : r.cardioHint ? <div style={{ fontSize: 12, color: "rgba(255,255,255,.5)" }}>{r.cardioHint}</div> : null}
-                  {pc && <p style={{ fontSize: 14.5, color: "rgba(255,255,255,.82)", lineHeight: 1.5, margin: "12px 0 0" }}>{pc.desc} {pc.advice}</p>}
+                  {/* Une phrase simple sur la fiche ; le texte expert (ratio, source, conseil technique) dans une feuille
+                      (Gildas, 25/11 : « incompréhensible »). */}
+                  {pc && <p style={{ fontSize: 14.5, color: "rgba(255,255,255,.82)", lineHeight: 1.5, margin: "12px 0 0" }}>{plainVerdict(pc, targetRealUnitDisplay(pc))}</p>}
+                  {pc && <button type="button" onClick={() => setExpertOpen(true)} style={{ border: 0, background: "none", padding: "8px 0 0", color: "#ff8a55", fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Pourquoi et comment progresser ›</button>}
+                  {pc && expertOpen && <BottomSheet dark title="Pourquoi et comment progresser" subtitle={r.name} onClose={() => setExpertOpen(false)}>
+                    <p style={{ fontSize: 14.5, lineHeight: 1.55, color: "rgba(255,255,255,.85)", margin: 0 }}>{pc.advice}</p>
+                    <p style={{ fontSize: 12.5, lineHeight: 1.5, color: "rgba(255,255,255,.5)", margin: "12px 0 0" }}>{pc.desc}</p>
+                  </BottomSheet>}
                 </div>
               </LockedBlur>
             )}
-            <div style={{ marginTop: 20 }}>
-              {m && objectives && on ? objectives.panel(m) : r.cardProps.results.length > 0 && (
-                <div style={{ borderRadius: 20, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", padding: "12px 10px 8px" }}>
-                  <TestEvolutionChart points={r.cardProps.results.map(x => ({ date: x.date, value: x.value }))} height={140} projectedDate={r.cardProps.results.length === 1 ? r.cardProps.projectedDate : undefined} />
-                </div>
-              )}
-            </div>
+
             <div style={{ marginTop: 18 }}>
-              <TestCard {...r.cardProps} hideChart contextLast initialOpen={false} analysisLocked={locked} />
+              <TestCard {...r.cardProps} hideChart contextLast initialOpen={false} analysisLocked={locked} beforeContext={m && objectives ? objectives.ways?.(m) : null} planTest={objectives?.planTest}
+                topSlot={m && objectives && on ? objectives.panel(m) : r.cardProps.results.length > 0 ? <TestEvolutionChart points={r.cardProps.results.map(x => ({ date: x.date, value: x.value }))} height={140} projectedDate={r.cardProps.results.length === 1 ? r.cardProps.projectedDate : undefined} /> : null} />
               {r.valueNote && <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.5)", marginTop: 12 }}>Puissance estimée : <b style={{ color: "#fff" }}>{r.valueNote}</b></div>}
             </div>
           </div>

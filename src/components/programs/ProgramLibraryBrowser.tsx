@@ -38,7 +38,7 @@ export interface LibraryProgram {
   weeks_count: number;
   sessions_per_week: number;
   /* « Il sert » (P2, 24/11) : calculé côté serveur depuis le contenu (programServes.ts). */
-  serves?: { metric: string; label: string; line: string }[];
+  serves?: { metric: string; label: string; line: string; perWeek?: number }[];
   /* Absent de la liste (perf) : chargé à la demande par fetchLibraryTemplate. */
   template?: ProgramTemplate;
 }

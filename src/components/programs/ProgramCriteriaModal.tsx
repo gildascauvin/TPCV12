@@ -10,6 +10,7 @@ import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 import { DARK_CARD_BG } from "@/lib/theme";
 import { guessSportChip, WEAKNESSES_BY_SPORT } from "@/lib/sportCategories";
 import { PlanningPreview } from "@/components/paywall/FrisePreviews";
+import { METRIC_DISPLAY, type MetricKey } from "@/lib/testNorms";
 
 const IMPORT_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -57,6 +58,8 @@ export interface ProgramMeta {
   duration: 4 | 8 | 12;
   /* Origine enregistrée avec le programme (programReveal.ts). */
   origin?: "template" | "generated" | "imported" | "blank";
+  /* Objectif choisi dans « Pour quel objectif ? » (P3, 24/11) : suivi au démarrage du programme. */
+  objective?: string;
 }
 
 // Sport libre non couvert par les 9 cartes ci-dessus (2026-08-06, carte "Autre") — /api/sports/custom
@@ -93,18 +96,22 @@ interface Props {
      qu'offrir une sortie, "←" (onBack) reste le seul moyen de reculer. Absent = comportement
      inchangé (usage in-app). */
   hideClose?: boolean;
+  /* « Un programme fait pour cet objectif » (P3, 24/11) : critères pré-remplis depuis l'objectif
+     (sport, progresser en intensité, durée calée sur l'échéance, point faible qui le travaille). */
+  prefill?: { sport?: string | null; focus?: ProgramFocus; duration?: 4 | 8 | 12; weaknesses?: string[]; objective?: string };
 }
 
-export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate, lockedSport, wizardHero, hideClose }: Props) {
+export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate, lockedSport, wizardHero, hideClose, prefill }: Props) {
   const { isMd } = useBreakpoint();
   const { close, exitClass } = useExitAnimation(onClose);
   const heroOnLeft = !!wizardHero && isMd;
   const importMode = mode === "import";
-  const [sport, setSport] = useState(lockedSport || "");
-  const [focus, setFocus] = useState<ProgramFocus | "">("");
+  const [sport, setSport] = useState(lockedSport || prefill?.sport || "");
+  const [focus, setFocus] = useState<ProgramFocus | "">(prefill?.focus ?? "");
   const [days, setDays] = useState<string[]>(["Lun", "Mer", "Ven"]);
-  const [duration, setDuration] = useState<4 | 8 | 12>(8);
-  const [weaknesses, setWeaknesses] = useState<string[]>([]);
+  const [duration, setDuration] = useState<4 | 8 | 12>(prefill?.duration ?? 8);
+  const [weaknesses, setWeaknesses] = useState<string[]>(prefill?.weaknesses ?? []);
+  const objective = prefill?.objective?.startsWith("metric:") ? prefill.objective : null;
   const [loading, setLoading] = useState(false);
   const [sportDescription, setSportDescription] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
@@ -242,7 +249,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
       });
       if (!res.ok) return;
       const { template } = await res.json();
-      const meta: ProgramMeta = { sport: effectiveSport, level: NEUTRAL_LEVEL, focus: focus as ProgramFocus, days, duration, origin: "generated" };
+      const meta: ProgramMeta = { sport: effectiveSport, level: NEUTRAL_LEVEL, focus: focus as ProgramFocus, days, duration, origin: "generated", objective: objective ?? undefined };
       onGenerate(template, meta);
     } finally {
       setLoading(false);
@@ -297,6 +304,14 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
           </div>
           {!hideClose && <button onClick={close} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8a8f94", fontSize: 20 }}>✕</button>}
         </div>
+        {/* Venu de la fiche d'un objectif : un bandeau, pas de choix d'objectif dans le générateur (Gildas, 25/11 :
+            « confus vs la faiblesse ») ; les points à travailler restent le réglage. */}
+        {!importMode && objective && (
+          <div style={{ marginBottom: 18, padding: "12px 14px", borderRadius: 14, background: "rgba(212,64,0,.08)", border: "1px solid rgba(212,64,0,.3)", fontSize: 13.5, fontWeight: 700, color: "#171b1f", lineHeight: 1.4 }}>
+            🎯 Pour ton objectif : {METRIC_DISPLAY[objective.slice(7) as MetricKey]?.name ?? objective}
+            <div style={{ fontSize: 12, fontWeight: 500, color: "#62686e", marginTop: 3 }}>Critères pré-remplis depuis ton objectif. Tu peux tout ajuster.</div>
+          </div>
+        )}
 
         {/* Plus de tabs (2026-08-29, même simplification que l'onboarding — voir OnboardingFlow.tsx,
             sport_2a) : un textarea toujours visible + un badge fichier à côté, texte et fichier

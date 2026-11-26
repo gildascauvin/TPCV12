@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import ProgramLibraryStandalone from "@/components/programs/ProgramLibraryStandalone";
 import type { CoachAthlete } from "@/types";
 
-export default async function CoachProgrammesPage({ searchParams }: { searchParams?: { step?: string; focus?: string } }) {
+export default async function CoachProgrammesPage({ searchParams }: { searchParams?: { step?: string; focus?: string; modele?: string } }) {
   const supabase = await createClient();
   const user = await getAuthUser();
   if (!user) redirect("/login");
@@ -27,6 +27,7 @@ export default async function CoachProgrammesPage({ searchParams }: { searchPara
       athletes={(rawAthletes || []) as CoachAthlete[]}
       backHref="/coach/planning"
       focusProgramId={searchParams?.focus}
+      openTemplateId={searchParams?.modele}
       userSport={profile.sport ?? null}
       initialStep={searchParams?.step === "import" ? "import" : searchParams?.step === "new" ? "new" : undefined}
     />

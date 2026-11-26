@@ -8,6 +8,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { loadLibrary, Carousel, Cover } from "@/components/programs/ProgramStoreSections";
+import { servedBy } from "@/lib/programServes";
+import { notifyFollowObjective } from "@/components/objectives/FollowProgramObjectives";
+import PlanTestSheet from "@/components/objectives/PlanTestSheet";
+import type { LibraryProgram } from "@/components/programs/ProgramLibraryBrowser";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import { createClient } from "@/lib/supabase/client";
@@ -116,6 +121,72 @@ function RewardCard({ index, photo, label, current, target, hint, pct, gain, day
   );
 }
 
+/* « Pour y arriver » (P3, 24/11/2026) : trois moyens, du plus simple au plus engageant. 1) Tes séances
+   comptent déjà (avec ou sans programme). 2) Un programme fait pour cet objectif (générateur). 3) Les
+   modèles de la bibliothèque qui le servent, triés par séances par semaine (programServes, P2). */
+function ObjectiveWays({ metric, coach, deadline, followed = true }: { d: ObjectiveDef; metric: MetricKey; coach: boolean; counted: number; since: string; deadline: string; noValue: boolean; followed?: boolean }) {
+  const router = useRouter();
+  const [lib, setLib] = useState<LibraryProgram[] | null>(null);
+  useEffect(() => { let alive = true; loadLibrary().then(l => { if (alive) setLib(l); }).catch(() => { if (alive) setLib([]); }); return () => { alive = false; }; }, []);
+  /* Mêmes données et même seuil que les tags d'un programme (programServes, ≥ ~1 séance/semaine) : un
+     programme tagué avec ce mouvement apparaît toujours ici (Gildas : « des fois j'ai les objectifs sur un
+     programme mais pas l'inverse »). Famille principale d'abord, puis les familles voisines (poids 0,5),
+     bonus si le nom du programme cite le mouvement (spécialisation). */
+  const fams = servedBy(metric);
+  const name = (METRIC_DISPLAY[metric]?.name ?? "").toLowerCase().replace(/\(.*\)/, "").trim();
+  const serving = (lib ?? [])
+    .map(p => {
+      let score = 0, best: { line: string; w: number } | null = null;
+      for (const [fam, w] of fams) {
+        const sv = p.serves?.find(x => x.metric === fam);
+        if (!sv) continue;
+        const pw = sv.perWeek ?? (parseFloat(sv.line) || 0);
+        score += w * pw;
+        if (!best || w > best.w) best = { line: sv.line, w };
+      }
+      if (best && name && p.name.toLowerCase().includes(name.split(" ")[0])) score += 2;
+      return best ? { p, s: { line: best.line }, score, primary: best.w === 1 } : null;
+    })
+    .filter((x): x is { p: LibraryProgram; s: { line: string }; score: number; primary: boolean } => !!x)
+    .sort((a, b) => Number(b.primary) - Number(a.primary) || b.score - a.score)
+    .slice(0, 8);
+  const weeks = Math.max(2, Math.round((Date.parse(deadline) - Date.now()) / (7 * 86400000)));
+  return (
+    <div style={{ marginTop: 22 }}>
+
+      <div style={{ fontSize: 18, fontWeight: 900, letterSpacing: "-0.01em" }}>{followed ? "Pour y arriver" : "Pour le faire progresser"}</div>
+
+      {/* Programmes (24/11, Gildas) : le carrousel de cartes de la bibliothèque, avec en 1re carte « Créer un
+          programme pour cet objectif » (générateur pré-rempli) à la place d'une ligne à part. */}
+      <div style={{ height: 10 }} />
+      <Carousel itemWidth="200px" gap={12}>
+        {[
+          ...(!coach ? [(
+            <button key="create" type="button" onClick={() => router.push(`/programmes?objectif=${encodeURIComponent(`metric:${metric}`)}&semaines=${weeks}`)}
+              style={{ width: "100%", height: 200, borderRadius: 22, border: "2px dashed rgba(255,138,85,.5)", background: "rgba(212,64,0,.08)", color: "#fff", cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "flex-end", gap: 4, padding: 16, textAlign: "left" }}>
+              <span style={{ fontSize: 26 }}>✨</span>
+              <span style={{ fontSize: 16, fontWeight: 800, lineHeight: 1.2 }}>Créer un programme pour cet objectif</span>
+              <span style={{ fontSize: 12.5, color: "rgba(255,255,255,.65)" }}>{weeks} semaines, jusqu&apos;à ton échéance</span>
+            </button>
+          )] : []),
+          ...serving.map(({ p, s }) => (
+            <button key={p.id} type="button" onClick={() => router.push(coach ? `/coach/programmes?modele=${p.id}` : `/programmes?modele=${p.id}`)} className="tpc-lift"
+              style={{ width: "100%", border: "none", padding: 0, cursor: "pointer", textAlign: "left", fontFamily: "inherit", background: "none" }}>
+              <Cover id={p.id} sport={p.sport} sizes="200px" emojiSize={56} style={{ height: 200, borderRadius: 22 }}>
+                <span style={{ position: "absolute", inset: 0, background: "linear-gradient(transparent 30%, rgba(0,0,0,.85))" }} />
+                <span style={{ position: "absolute", left: 14, right: 14, bottom: 14, color: "#fff" }}>
+                  <span style={{ display: "block", fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, lineHeight: 1.2, letterSpacing: "-0.01em" }}>{p.name}</span>
+                  <span style={{ display: "block", fontSize: 11.5, color: "rgba(255,255,255,.8)", marginTop: 4, lineHeight: 1.3 }}>{s.line}</span>
+                </span>
+              </Cover>
+            </button>
+          )),
+        ]}
+      </Carousel>
+    </div>
+  );
+}
+
 /* Courbe de l'objectif : toutes les valeurs + le tracé jusqu'à la cible. */
 function Curve({ p, deadline }: { p: ObjectiveProgress; deadline: string }) {
   const W = 330, H = 160, pad = { l: 36, r: 14, t: 12, b: 22 };
@@ -176,6 +247,9 @@ export default function ObjectivesHub({ initial, sport, data, sexe = null, poids
   const router = useRouter();
   const T = (tu: string, il: string) => (coach ? il : tu);
   const [items, setItems] = useState<ObjectiveItem[]>(initial);
+  /* Une écriture faite ailleurs (remplacement sur place, programme démarré) revient par router.refresh(). */
+  const initialKey = JSON.stringify(initial);
+  useEffect(() => { setItems(JSON.parse(initialKey)); }, [initialKey]);
   const [openMetric, setOpenMetric] = useState<MetricKey | null>(initialOpenMetric);
   const [openOther, setOpenOther] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -264,8 +338,14 @@ export default function ObjectivesHub({ initial, sport, data, sexe = null, poids
   const api: TestsObjectivesAdapter = {
     isFollowed: m => items.some(i => i.id === metricId(m)),
     followedMetrics: items.filter(i => i.id.startsWith("metric:")).map(i => i.id.slice(7) as MetricKey),
-    canFollow: items.length < MAX_OBJECTIVES,
-    onFollow: m => { const d = defById(metricId(m), sport); if (d) follow(d); },
+    canFollow: items.length < MAX_OBJECTIVES || !coach,
+    onFollow: m => {
+      const d = defById(metricId(m), sport);
+      if (!d) return;
+      /* Déjà 3 objectifs : remplacement sur place (feuille FollowProgramObjectives), plus de bouton grisé. */
+      if (items.length >= MAX_OBJECTIVES && !coach) { notifyFollowObjective(m, d.defaultWeeks || 8); return; }
+      follow(d);
+    },
     onUnfollow: m => unfollow(metricId(m)),
     onEdit: m => setEditing(metricId(m)),
     headline: m => {
@@ -281,7 +361,21 @@ export default function ObjectivesHub({ initial, sport, data, sexe = null, poids
         sessions: n > 0 ? servedSessionsText(d, n) : null,
       };
     },
-    panel: m => { const d = defById(metricId(m), sport); return d && items.some(i => i.id === d.id) ? objectiveBlock(d) : null; },
+    /* « Je le teste en séance » depuis « Renseigne ton 1er test » (pas côté coach). */
+    planTest: coach ? undefined : (m, onClose) => <PlanTestSheet metric={m} onClose={onClose} />,
+    /* La courbe seule : TestsPanel la pose dans l'encadré qui contient aussi l'historique et l'ajout. */
+    panel: m => { const d = defById(metricId(m), sport); if (!d || !items.some(i => i.id === d.id)) return null; const p = measure(d); return p.points.length ? <Curve p={p} deadline={itemFor(d.id).deadline} /> : null; },
+    /* « Pour y arriver » : sous l'historique et l'ajout d'un résultat (Gildas, 25/11 : historique juste sous la courbe). */
+    /* Sur TOUTE fiche de test (Gildas, 25/11 : un test non suivi doit aussi montrer ses programmes). Non suivi :
+       pas de compte de séances ni de test à préparer, échéance par défaut pour le générateur. */
+    ways: m => {
+      const d = defById(metricId(m), sport);
+      if (!d) return null;
+      const on = items.some(i => i.id === d.id);
+      return on
+        ? <ObjectiveWays d={d} metric={m} coach={!!coach} counted={counted(d)} since={fmtDate(countFrom(d))} deadline={itemFor(d.id).deadline} noValue={!measure(d).points.length} />
+        : <ObjectiveWays d={d} metric={m} coach={!!coach} counted={0} since="" deadline={addDays(today, (d.defaultWeeks || 8) * 7)} noValue={false} followed={false} />;
+    },
     openMetric,
     onOpenMetricHandled: () => setOpenMetric(null),
     onDataChanged: () => { if (!coach) router.refresh(); },

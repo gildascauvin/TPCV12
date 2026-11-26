@@ -20,6 +20,9 @@ interface Props {
   sandboxMode?: boolean;
   initialStep?: "new" | "import";
   focusProgramId?: string;
+  /** ?modele=<id> : ouvre la fiche de ce modèle (lien « Pour y arriver » d'un objectif, 24/11). */
+  openTemplateId?: string;
+  objectivePrefill?: { objective: string; weeks?: number };
   userSport?: string | null;
 }
 
@@ -29,7 +32,7 @@ interface Props {
    rend accessible comme vraie page (/programmes, /coach/programmes), avec le même câblage
    paywall (usePaywall/useSandboxGate → PrimingJourneyModal/PaywallModal/SandboxGateModal) que
    ces deux fichiers, pour ne jamais bypasser le gating "Enregistrer en librairie"/"Assigner". */
-export default function ProgramLibraryStandalone({ mode, userId, subscriptionStatus, hasActiveCoach = false, athletes = [], backHref, sandboxMode = false, initialStep, focusProgramId, userSport }: Props) {
+export default function ProgramLibraryStandalone({ mode, userId, subscriptionStatus, hasActiveCoach = false, athletes = [], backHref, sandboxMode = false, initialStep, focusProgramId, openTemplateId, objectivePrefill, userSport }: Props) {
   const router = useRouter();
   const realPaywall = usePaywall(subscriptionStatus, hasActiveCoach);
   const sandboxPaywall = useSandboxGate(mode);
@@ -48,6 +51,8 @@ export default function ProgramLibraryStandalone({ mode, userId, subscriptionSta
         standalone
         initialStep={initialStep}
         focusProgramId={focusProgramId}
+        openTemplateId={openTemplateId}
+        objectivePrefill={objectivePrefill}
         userSport={userSport}
         onClose={() => router.push(backHref)}
       />
