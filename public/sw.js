@@ -14,7 +14,27 @@ if (IS_LOCAL) {
   });
 }
 
-const CACHE = "theperfclub-v4";
+/* v5 (27/11) : le cache v4 gardait toutes les réponses sans jamais rien effacer (chaque préchargement de page
+   `?_rsc=…` a une adresse unique) ; sur les comptes les plus actifs, l'Accueil de l'app iOS attendait 6 à 9 s ses
+   fichiers (app_boot_timing). Changer le nom vide l'ancien cache ; trimCache le borne désormais. */
+const CACHE = "theperfclub-v5";
+const MAX_ENTRIES = 300;
+const KEEP = new Set(["/today", "/offline.html"]);
+
+async function trimCache() {
+  const cache = await caches.open(CACHE);
+  const keys = await cache.keys();
+  const extra = keys.filter((r) => !KEEP.has(new URL(r.url).pathname)).slice(0, Math.max(0, keys.length - MAX_ENTRIES));
+  for (const r of extra) await cache.delete(r);
+}
+let trimTimer = null;
+function scheduleTrim() {
+  if (trimTimer) return;
+  trimTimer = setTimeout(() => { trimTimer = null; trimCache().catch(() => {}); }, 10000);
+}
+function putInCache(request, response) {
+  caches.open(CACHE).then((cache) => cache.put(request, response)).then(scheduleTrim).catch(() => {});
+}
 /* Mode hors ligne (2026-10-02) : /offline.html est la page affichée quand une page ne peut pas
    se charger sans réseau (séances de la semaine + file d'attente, voir public/offline.html). */
 const PRECACHE_URLS = ["/offline.html"];
@@ -34,6 +54,7 @@ if (!IS_LOCAL) self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
       )
+      .then(() => trimCache().catch(() => {}))
       .then(() => self.clients.claim())
   );
 });
@@ -57,7 +78,7 @@ if (!IS_LOCAL) self.addEventListener("fetch", (event) => {
                ou une extension qui coupe le flux de la réponse fait échouer cache.put() —
                écriture en cache best-effort, jamais critique pour l'affichage réel de la page,
                ne doit donc jamais remonter comme une exception non gérée dans la console. */
-            caches.open(CACHE).then((cache) => cache.put(event.request, clone)).catch(() => {});
+            putInCache(event.request, clone);
           }
           return response;
         });
@@ -97,12 +118,15 @@ if (!IS_LOCAL) self.addEventListener("fetch", (event) => {
     return;
   }
 
+  /* Données de page de Next (préchargements et navigations internes) : jamais en cache, adresse unique à chaque
+     fois et inutiles hors ligne (une navigation sans réseau tombe sur la page hors ligne). */
+  if (event.request.headers.get("RSC") || new URL(event.request.url).searchParams.has("_rsc")) return;
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
         if (response.ok && response.type === "basic") {
-          const clone = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(event.request, clone)).catch(() => {});
+          putInCache(event.request, response.clone());
         }
         return response;
       })

@@ -12,6 +12,19 @@ declare global { interface Window { __tpcBoot?: Probe } }
 const marks: Record<string, number> = {};
 let sent = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
+const cacheInfo: Record<string, unknown> = {};
+
+/* Taille du cache du service worker à l'ouverture (27/11) : vérifie que le cache borné (sw.js v5) règle l'attente. */
+async function readCache() {
+  try {
+    const names = await caches.keys();
+    let entries = 0;
+    for (const n of names) entries += (await (await caches.open(n)).keys()).length;
+    const t = performance.now();
+    await caches.match("/offline.html");
+    Object.assign(cacheInfo, { sw_caches: names.join(","), sw_cache_entries: entries, sw_cache_match_ms: Math.round(performance.now() - t) });
+  } catch { /* pas de Cache API */ }
+}
 
 export function markBoot(name: string) {
   if (!(name in marks)) marks[name] = Math.round(performance.now());
@@ -52,6 +65,7 @@ function send() {
       blocked_before_hydrated_ms: hydrated != null ? blockedBefore(hydrated, p) : null,
       blocked_total_ms: p ? Math.round(p.blocked) : null,
       max_freeze_ms: p ? Math.round(p.maxGap) : null,
+      ...cacheInfo,
       freezes: p ? p.samples.slice(0, 15).map(([s, g]) => `${s}+${g}`).join(" ") : null,
     });
   } catch { /* mesure best-effort */ }
@@ -61,6 +75,7 @@ function send() {
    ou part dès que l'app passe en arrière-plan. */
 export function scheduleBootReport(waitHealth: boolean) {
   if (timer || sent) return;
+  readCache();
   timer = setTimeout(send, waitHealth ? 20000 : 8000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") send(); });
 }
