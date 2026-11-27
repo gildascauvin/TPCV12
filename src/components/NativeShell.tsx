@@ -5,11 +5,7 @@ import { Capacitor, SystemBars, SystemBarsStyle } from "@capacitor/core";
 import { useRouter } from "next/navigation";
 import { hideSplash } from "@/lib/native";
 import { initNativeNotifications } from "@/lib/notifications";
-import { markBoot, scheduleBootReport } from "@/lib/bootTiming";
-import { canSyncHealth } from "@/lib/healthSync";
 import "@/lib/pwaInstall"; // démarre l'écoute de l'invite d'installation de Chrome au chargement
-
-if (typeof window !== "undefined") markBoot("js_start");
 
 /* App iOS (2026-10-03) : masque l'écran de lancement une fois la page affichée (gardé jusque-là pour
    éviter le flash et l'écran vide du chargement), et pose la classe `native` sur <html> pour
@@ -18,8 +14,6 @@ export default function NativeShell() {
   const router = useRouter();
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-    markBoot("hydrated");
-    scheduleBootReport(location.pathname !== "/login" && canSyncHealth());
     document.documentElement.classList.add("native");
     /* Pas de zoom dans l'app (2026-10-06) : iOS zoome sur un champ dont le texte fait moins de 16px
        et on ne pouvait plus dézoomer. Dans l'app seulement : le web garde le zoom (accessibilité). */

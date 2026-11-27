@@ -3,7 +3,6 @@ import { DM_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import NativeShell from "@/components/NativeShell";
-import { BOOT_PROBE_SCRIPT } from "@/lib/bootProbe";
 import DemoSheetLauncher from "@/components/sessions/DemoSheetLauncher";
 import { PHProvider } from "@/providers/PostHogProvider";
 import { PostHogPageview } from "@/components/PostHogPageview";
@@ -59,7 +58,6 @@ export default function RootLayout({
   return (
     <html lang="fr" className={`${dmSans.variable} ${plexMono.variable}`}>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: BOOT_PROBE_SCRIPT }} />
         <link rel="icon" type="image/x-icon" href="/favicon.ico" />
         <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />

@@ -16,7 +16,7 @@ if (IS_LOCAL) {
 
 /* v5 (27/11) : le cache v4 gardait toutes les réponses sans jamais rien effacer (chaque préchargement de page
    `?_rsc=…` a une adresse unique) ; sur les comptes les plus actifs, l'Accueil de l'app iOS attendait 6 à 9 s ses
-   fichiers (app_boot_timing). Changer le nom vide l'ancien cache ; trimCache le borne désormais. */
+   fichiers (mesure app_boot_timing du 25-27/11, retirée depuis). Changer le nom vide l'ancien cache ; trimCache le borne désormais. */
 const CACHE = "theperfclub-v5";
 const MAX_ENTRIES = 300;
 const KEEP = new Set(["/today", "/offline.html"]);

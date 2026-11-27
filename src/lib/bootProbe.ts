@@ -1,2 +1,0 @@
-/* Démarré dans le <head>, avant tout le JS de Next : compte les trous de plus de 100 ms entre deux ticks. */
-export const BOOT_PROBE_SCRIPT = `(function(){if(!/TPCHeart/.test(navigator.userAgent))return;var p={blocked:0,maxGap:0,samples:[]};window.__tpcBoot=p;var last=performance.now();var id=setInterval(function(){var n=performance.now(),g=n-last;if(g>100){p.blocked+=g-50;if(g>p.maxGap)p.maxGap=g;if(p.samples.length<40)p.samples.push([Math.round(last),Math.round(g)]);}last=n;if(n>30000)clearInterval(id);},50);})();`;
